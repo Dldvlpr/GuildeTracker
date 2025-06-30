@@ -1,21 +1,17 @@
 <script setup lang="ts">
-import { RouterView } from 'vue-router'
+import { RouterView } from 'vue-router';
+import Header from '@/components/layout/Header.vue';
+import Footer from '@/components/layout/Footer.vue';
 </script>
 
 <template>
-  <div class="h-screen grid grid-rows-[auto_1fr_auto] md:grid-rows-[1fr_auto] md:grid-cols-[250px_1fr]">
-    <aside class="p-4 md:row-span-2 ring-inset ring-8 ring-blue-500">
-      Sidebar
-    </aside>
+  <div class="h-screen grid grid-rows-[auto_1fr_auto] bg-background text-default">
+    <Header />
 
-    <main class="overflow-auto p-0 ring-inset ring-8 ring-amber-400">
-      <div class="w-full h-full p-4">
-        <RouterView />
-      </div>
+    <main class="overflow-auto p-4">
+      <RouterView />
     </main>
 
-    <footer class="p-4 text-center ring-inset ring-8 ring-fuchsia-500">
-      Footer
-    </footer>
+    <Footer />
   </div>
 </template>
