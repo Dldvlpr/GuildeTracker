@@ -1,2 +1,47 @@
 @import './base.css';
 @import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-primary: 87 101 230;
+    --color-secondary: 255 171 105;
+    --color-background: 249 250 251;
+    --color-text: 31 41 55;
+    --color-accent: 244 114 182;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-background: 30 30 47;
+      --color-text: 229 231 235;
+      --color-primary: 129 140 248;
+      --color-secondary: 253 186 116;
+      --color-accent: 232 121 249;
+    }
+  }
+}
+
+@layer utilities {
+  .bg-primary {
+    background-color: rgb(var(--color-primary));
+  }
+  .text-primary {
+    color: rgb(var(--color-primary));
+  }
+  .bg-secondary {
+    background-color: rgb(var(--color-secondary));
+  }
+  .text-secondary {
+    color: rgb(var(--color-secondary));
+  }
+  .bg-accent {
+    background-color: rgb(var(--color-accent));
+  }
+  .bg-background {
+    background-color: rgb(var(--color-background));
+  }
+
+  .text-default {
+    color: rgb(var(--color-text));
+  }
+}
