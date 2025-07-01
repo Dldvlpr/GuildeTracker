@@ -13,7 +13,7 @@
   @media (prefers-color-scheme: dark) {
     :root {
       --color-primary:      30  34  42;
-      --color-secondary:    ninety five  ninety  ninety;
+      --color-secondary:    95  90  90;
       --color-accent:       64 180 191;
       --color-background:   18  23  34;
       --color-text:        226 228 231;
@@ -31,4 +31,10 @@
   .text-secondary  { color: rgb(var(--color-secondary)); }
   .text-accent     { color: rgb(var(--color-accent)); }
   .text-default    { color: rgb(var(--color-text)); }
+
+  .hover\:bg-primary:hover    { background-color: rgb(var(--color-primary)); }
+  .hover\:bg-secondary:hover  { background-color: rgb(var(--color-secondary)); }
+  .hover\:bg-accent:hover     { background-color: rgb(var(--color-accent)); }
+  .hover\:text-accent:hover   { color: rgb(var(--color-accent)); }
+  .hover\:text-primary:hover  { color: rgb(var(--color-primary)); }
 }
