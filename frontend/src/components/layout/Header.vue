@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { fetchDiscordAuthUrl } from '@/services/auth';
+import { redirectToDiscordAuth } from '@/services/auth';
 
-async function loginWithDiscord() {
+function loginWithDiscord() {
   try {
-    const res = await fetchDiscordAuthUrl();
-    console.log('response: ' + res.data.url);
-  } catch (err) {
-    console.error('Impossible de récupérer l’URL d’auth Discord', err);
+    redirectToDiscordAuth();
+  } catch (error) {
+    console.error('Erreur lors de la redirection Discord:', error);
   }
 }
 </script>
@@ -14,7 +13,7 @@ async function loginWithDiscord() {
 <template>
   <header class="flex items-center justify-between p-4 text-default">
     <router-link to="/" class="picture focus:outline-none focus:ring-0">
-        <img src="../../../public/logo.png" alt="Logo" class="image">
+        <img src="logo" alt="Logo" class="image">
     </router-link>
     <nav>
       <ul class="flex items-center space-x-6">

@@ -10,6 +10,7 @@ use KnpU\OAuth2ClientBundle\Security\Authenticator\OAuth2Authenticator;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Routing\RouterInterface;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
@@ -49,12 +50,10 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
 
         return new SelfValidatingPassport(
             new UserBadge($discordId, function() use ($discordId, $email, $username) {
-                // Recherche d'un user existant par Discord ID
                 $existing = $this->userRepository->findOneBy(['discordId' => $discordId]);
                 if ($existing) {
                     return $existing;
                 }
-                // Sinon, liaison possible via email
                 if ($email) {
                     $existing = $this->userRepository->findOneBy(['email' => $email]);
                 }
@@ -67,12 +66,11 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
                     $this->em->flush();
                     return $existing;
                 }
-                // Création d'un nouvel utilisateur
                 $user = new User();
                 $user->setDiscordId($discordId)
                     ->setEmail($email)
                     ->setUsername($username)
-                    ->setRoles([]);
+                    ->setRoles(['ROLE_USER']);
                 $this->em->persist($user);
                 $this->em->flush();
                 return $user;
@@ -84,7 +82,7 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
     {
         $targetUrl = $this->getTargetPath($request->getSession(), $firewallName);
         if (!$targetUrl) {
-            $targetUrl = $this->router->generate('app_homepage');
+            $targetUrl = 'https://localhost:5173';
         }
         return new RedirectResponse($targetUrl);
     }
