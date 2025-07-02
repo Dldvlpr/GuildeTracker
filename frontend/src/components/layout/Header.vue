@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { redirectToDiscordAuth } from '@/services/auth';
+import logo from '@/assets/image/logo.png'
+import { useUserStore } from '@/stores/userStore';
+import axios from "axios";
+
+const userStore = useUserStore();
 
 function loginWithDiscord() {
   try {
@@ -8,16 +13,30 @@ function loginWithDiscord() {
     console.error('Erreur lors de la redirection Discord:', error);
   }
 }
+async function logoutWithDiscord() {
+  try {
+    await axios.get('/api/logout', { withCredentials: true });
+    userStore.logout();
+  } catch (error) {
+    console.error('Erreur lors de la déconnexion :', error);
+  }
+}
 </script>
 
 <template>
   <header class="flex items-center justify-between p-4 text-default">
     <router-link to="/" class="picture focus:outline-none focus:ring-0">
-        <img src="logo" alt="Logo" class="image">
+        <img :src=logo alt="Logo" class="image">
     </router-link>
     <nav>
       <ul class="flex items-center space-x-6">
-        <li>
+        <li v-if="userStore.isAuthenticated">
+          <button @click="logoutWithDiscord"
+                  class="cursor-pointer text-secondary hover:text-accent transition-colors">
+            Deconnexion
+          </button>
+        </li>
+        <li v-else>
           <button @click="loginWithDiscord"
                   class="cursor-pointer text-secondary hover:text-accent transition-colors">
             Connexion

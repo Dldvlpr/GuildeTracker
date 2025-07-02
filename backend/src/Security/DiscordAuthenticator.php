@@ -40,6 +40,7 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
     {
         $client = $this->clientRegistry->getClient('discord');
         $accessToken = $this->fetchAccessToken($client);
+        $request->getSession()->set('discord_access_token', $accessToken->getToken());
 
         /** @var DiscordResourceOwner $discordUser */
         $discordUser = $client->fetchUserFromToken($accessToken);
@@ -84,8 +85,29 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
         if (!$targetUrl) {
             $targetUrl = 'https://localhost:5173';
         }
-        return new RedirectResponse($targetUrl);
-    }
+
+        $accessToken = $request->getSession()->get('discord_access_token');
+
+        if (!$accessToken) {
+            return new Response("Aucun token OAuth Discord trouvé", Response::HTTP_UNAUTHORIZED);
+        }
+
+        $response = new RedirectResponse($targetUrl);
+
+        $response->headers->setCookie(
+            new \Symfony\Component\HttpFoundation\Cookie(
+                name: 'DISCORD_TOKEN',
+                value: $accessToken,
+                expire: time() + 3600,
+                path: '/',
+                domain: null,
+                secure: true,
+                httpOnly: true,
+                sameSite: 'Lax'
+            )
+        );
+
+        return $response;    }
 
     public function onAuthenticationFailure(Request $request, AuthenticationException $exception): ?Response
     {
