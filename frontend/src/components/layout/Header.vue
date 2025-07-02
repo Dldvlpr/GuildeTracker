@@ -2,7 +2,6 @@
 import { redirectToDiscordAuth } from '@/services/auth';
 import logo from '@/assets/image/logo.png'
 import { useUserStore } from '@/stores/userStore';
-import axios from "axios";
 
 const userStore = useUserStore();
 
@@ -13,10 +12,23 @@ function loginWithDiscord() {
     console.error('Erreur lors de la redirection Discord:', error);
   }
 }
+
 async function logoutWithDiscord() {
   try {
-    await axios.get('/api/logout', { withCredentials: true });
-    userStore.logout();
+    const response = await fetch('/api/logout', {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      console.log('Déconnexion réussie');
+      userStore.logout();
+    } else {
+      console.error('Erreur lors de la déconnexion, status:', response.status);
+    }
   } catch (error) {
     console.error('Erreur lors de la déconnexion :', error);
   }
@@ -26,11 +38,16 @@ async function logoutWithDiscord() {
 <template>
   <header class="flex items-center justify-between p-4 text-default">
     <router-link to="/" class="picture focus:outline-none focus:ring-0">
-        <img :src=logo alt="Logo" class="image">
+      <img :src=logo alt="Logo" class="image">
     </router-link>
     <nav>
       <ul class="flex items-center space-x-6">
-        <li v-if="userStore.isAuthenticated">
+        <li v-if="userStore.isLoading">
+          <div class="cursor-default text-secondary opacity-50">
+            Chargement...
+          </div>
+        </li>
+        <li v-else-if="userStore.isAuthenticated">
           <button @click="logoutWithDiscord"
                   class="cursor-pointer text-secondary hover:text-accent transition-colors">
             Deconnexion

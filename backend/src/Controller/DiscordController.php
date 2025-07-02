@@ -43,11 +43,35 @@ class DiscordController extends AbstractController
         }
     }
 
-    #[Route('/api/logout', name: 'api_logout', methods: ['GET'])]
-    public function logout(): JsonResponse
+    #[Route('/api/logout', name: 'api_logout', methods: ['GET', 'POST'])]
+    public function logout(Request $request): JsonResponse
     {
-        $response = new JsonResponse(['message' => 'Déconnecté']);
-        $response->headers->clearCookie('DISCORD_TOKEN', '/', null, true, true, true, 'Lax');
+        error_log('=== LOGOUT DEBUG ===');
+        error_log('Method: ' . $request->getMethod());
+        error_log('URL: ' . $request->getUri());
+        error_log('Headers: ' . json_encode($request->headers->all()));
+        error_log('Cookies: ' . json_encode($request->cookies->all()));
+
+        $token = $request->cookies->get('DISCORD_TOKEN');
+        error_log('Discord Token: ' . ($token ? 'Present' : 'Missing'));
+
+        $response = new JsonResponse(['message' => 'Déconnexion réussie'], 200);
+
+        $response->headers->set('Access-Control-Allow-Origin', $request->headers->get('Origin', 'https://localhost:5173'));
+        $response->headers->set('Access-Control-Allow-Credentials', 'true');
+        $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        $response->headers->set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+        $response->headers->clearCookie(
+            'DISCORD_TOKEN',
+            '/',
+            null,
+            true,
+            true,
+            'Lax'
+        );
+
+        error_log('Response status: 200');
         return $response;
     }
 

@@ -26,10 +26,29 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'https://localhost',
+        target: 'https://localhost:443',
         changeOrigin: true,
         secure: false,
-        cookieDomainRewrite: '',
+        rewrite: (path) => {
+          console.log('🔄 Rewriting path:', path);
+          return path;
+        },
+        configure: (proxy, options) => {
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            console.log('🚀 Proxying request:', req.method, req.url, '-> https://localhost:443' + req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            console.log('📨 Proxy response:', proxyRes.statusCode, 'for', req.url);
+          });
+          proxy.on('error', (err, req, res) => {
+            console.error('❌ Proxy error:', err.message, 'for', req.url);
+          });
+        }
+      },
+      '/connect': {
+        target: 'https://localhost:443',
+        changeOrigin: true,
+        secure: false,
       }
     }
   }
