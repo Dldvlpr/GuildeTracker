@@ -41,19 +41,29 @@ async function logoutWithDiscord() {
       <img :src=logo alt="Logo" class="image">
     </router-link>
     <nav>
-      <ul class="flex items-center space-x-6">
-        <li v-if="userStore.isLoading">
+      <ul class="flex items-center space-x-6" v-if="userStore.isLoading">
+        <li>
           <div class="cursor-default text-secondary opacity-50">
             Chargement...
           </div>
         </li>
-        <li v-else-if="userStore.isAuthenticated">
+      </ul>
+      <ul class="flex items-center space-x-6" v-else-if="userStore.isAuthenticated">
+        <li>
+          <button>
+                  class="cursor-pointer text-secondary hover:text-accent transition-colors">
+            add player
+          </button>
+        </li>
+        <li>
           <button @click="logoutWithDiscord"
                   class="cursor-pointer text-secondary hover:text-accent transition-colors">
             Deconnexion
           </button>
         </li>
-        <li v-else>
+      </ul>
+      <ul class="flex items-center space-x-6" v-else>
+        <li>
           <button @click="loginWithDiscord"
                   class="cursor-pointer text-secondary hover:text-accent transition-colors">
             Connexion
