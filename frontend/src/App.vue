@@ -31,6 +31,7 @@ onMounted(async () => {
 </script>
 
 <template>
+  <div class="h-screen grid grid-rows-[auto_1fr_auto] bg-background text-default">
     <Header />
 
     <main class="overflow-auto p-4">
