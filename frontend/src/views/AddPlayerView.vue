@@ -10,7 +10,7 @@
     </div>
     <div>
       <form>
-        <div class="form-group">
+        <div class="form">
           <label for="name">name</label>
           <input>
           <label for="class">class</label>
