@@ -6,10 +6,10 @@
       href="https://github.com/dldvlpr"
       target="_blank"
       rel="noopener noreferrer"
-      class="inline-flex items-center space-x-2 text-accent hover:text-secondary transition-colors transform hover:-translate-y-0.5 hover:scale-105"
+      class="inline-flex items-center space-x-2 text-accent hover:text-secondary transition-colors hover:scale-110 transition-transform duration-300 ease-in-out"
     >
       <svg
-        class="w-5 h-5"
+        class="w-5 h-5 "
         fill="currentColor"
         viewBox="0 0 24 24"
         aria-hidden="true"
@@ -28,8 +28,9 @@
              c0-6.627-5.373-12-12-12z"
         />
       </svg>
-      <span>Blast off to my GitHub!</span>
-    </a>
+      <span>
+  Blast off to my GitHub!
+</span>    </a>
   </footer>
 </template>
 
