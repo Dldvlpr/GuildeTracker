@@ -20,7 +20,6 @@ export interface GameSpec {
 export interface GameClass {
   readonly name: string;
   readonly specs: readonly GameSpec[];
-  readonly description?: string;
 }
 
 export interface Character {

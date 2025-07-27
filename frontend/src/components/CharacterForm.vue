@@ -11,7 +11,7 @@
 
       <div class="form-group">
         <label for="character-name" class="form-label required">
-          Nom du personnage
+          Player name
         </label>
         <input
           id="character-name"
@@ -29,13 +29,13 @@
           {{ fieldErrors.name }}
         </div>
         <div v-else class="field-hint">
-          Maximum 50 caractères, lettres et chiffres uniquement
+          50 chars maximum
         </div>
       </div>
 
       <div class="form-group">
         <label for="class-select" class="form-label required">
-          Classe
+          Class
         </label>
         <select
           id="class-select"
@@ -67,7 +67,7 @@
         :class="{ 'form-group--disabled': !hasSelectedClass }"
       >
         <label for="spec-select" class="form-label required">
-          Spécialisation
+          Class spec
         </label>
         <select
           id="spec-select"
@@ -93,97 +93,6 @@
         </div>
       </div>
 
-      <!-- Niveau (optionnel) -->
-      <div class="form-group">
-        <label for="character-level" class="form-label">
-          Niveau (optionnel)
-        </label>
-        <input
-          id="character-level"
-          v-model.number="characterLevel"
-          type="number"
-          class="form-input"
-          :class="{ 'is-invalid': fieldErrors.level }"
-          min="1"
-          max="80"
-          placeholder="1-80"
-          @blur="validateLevel"
-          @input="clearFieldError('level')"
-        />
-        <div v-if="fieldErrors.level" class="field-error">
-          {{ fieldErrors.level }}
-        </div>
-        <div v-else class="field-hint">
-          Niveau entre 1 et 80
-        </div>
-      </div>
-
-      <div class="form-section">
-        <h3 class="section-title">Exploration par rôle</h3>
-
-        <div class="form-group">
-          <label for="role-filter" class="form-label">
-            Filtrer par rôle
-          </label>
-          <select
-            id="role-filter"
-            v-model="selectedRole"
-            class="form-select"
-            @change="handleRoleChange"
-          >
-            <option value="">-- Tous les rôles --</option>
-            <option
-              v-for="role in roleOptions"
-              :key="role.value"
-              :value="role.value"
-            >
-              {{ role.label }}
-            </option>
-          </select>
-        </div>
-
-        <div v-if="selectedRole" class="role-classes">
-          <h4 class="subsection-title">
-            Classes disponibles pour {{ selectedRole }}
-          </h4>
-          <div class="class-cards">
-            <div
-              v-for="gameClass in classesByRole"
-              :key="gameClass.name"
-              class="class-card"
-              :class="{ 'class-card--selected': selectedClass === gameClass.name }"
-            >
-              <h5 class="class-card__title">
-                <button
-                  type="button"
-                  @click="selectClassFromRole(gameClass.name)"
-                  class="class-button"
-                  :class="{ 'active': selectedClass === gameClass.name }"
-                >
-                  {{ gameClass.name }}
-                </button>
-              </h5>
-              <div class="class-card__specs">
-                <span
-                  v-for="spec in getSpecsForRole(gameClass)"
-                  :key="spec.name"
-                  class="spec-tag"
-                  :class="{ 'spec-tag--selected': selectedSpec === spec.name }"
-                >
-                  <button
-                    type="button"
-                    @click="selectSpecFromRole(gameClass.name, spec.name)"
-                    class="spec-button"
-                  >
-                    {{ spec.name }}
-                  </button>
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div v-if="hasSelectedClass" class="form-section">
         <h3 class="section-title">Récapitulatif</h3>
 
@@ -206,11 +115,7 @@
               <span class="summary-value role-badge" :data-role="currentSpecRole">
                 {{ getRoleDisplay(currentSpecRole) }}
               </span>
-            </div>
-            <div v-if="characterLevel" class="summary-item">
-              <span class="summary-label">Niveau :</span>
-              <span class="summary-value">{{ characterLevel }}</span>
-            </div>
+          </div>
           </div>
 
           <div class="validation-status">
@@ -271,8 +176,6 @@ import { ref, computed, watch } from 'vue';
 import { useGameData } from '../composables/useGameData.ts';
 import type {
   Role,
-  GameClass,
-  GameSpec,
   Character,
   FormSubmitEvent,
   ClassChangeEvent,
@@ -306,13 +209,10 @@ const emit = defineEmits<Emits>();
 const {
   selectedClass,
   selectedSpec,
-  selectedRole,
   availableSpecs,
-  classesByRole,
   currentSpecRole,
   classOptions,
   specOptions,
-  roleOptions,
   hasSelectedClass,
   hasSelectedSpec,
   canSelectSpec,
@@ -350,15 +250,6 @@ const getClassDescription = (className: string): string => {
   const gameClass = classOptions.value.find(opt => opt.value === className);
   return gameClass ? `${gameClass.specCount} spécialisations disponibles` : '';
 };
-
-const getSpecsForRole = (gameClass: GameClass): GameSpec[] => {
-  if (!selectedRole.value) return [...gameClass.specs];
-
-  return gameClass.specs.filter(spec =>
-    spec.role === selectedRole.value
-  );
-};
-
 const getRoleDisplay = (role: Role): string => {
   return `${ROLE_ICONS[role]} ${role}`;
 };
@@ -390,7 +281,7 @@ const validateCharacterName = (): boolean => {
     return false;
   }
 
-  if (!/^[a-zA-Z0-9\s\-_àáâãäåçèéêëìíîïñòóôõöùúûüýÿ]+$/u.test(name)) {
+  if (!/^[a-zA-Z0-9\s\-_]+$/u.test(name)) {
     fieldErrors.value.name = 'Le nom contient des caractères invalides';
     return false;
   }
@@ -399,29 +290,8 @@ const validateCharacterName = (): boolean => {
   return true;
 };
 
-const validateLevel = (): boolean => {
-  if (characterLevel.value === undefined) {
-    clearFieldError('level');
-    return true;
-  }
-
-  if (!Number.isInteger(characterLevel.value)) {
-    fieldErrors.value.level = 'Le niveau doit être un nombre entier';
-    return false;
-  }
-
-  if (characterLevel.value < 1 || characterLevel.value > 80) {
-    fieldErrors.value.level = 'Le niveau doit être entre 1 et 80';
-    return false;
-  }
-
-  clearFieldError('level');
-  return true;
-};
-
 const validateForm = (): boolean => {
   const nameValid = validateCharacterName();
-  const levelValid = validateLevel();
   const selectionValid = isValidSelection.value;
 
   if (!selectionValid && validationErrors.value.class) {
@@ -432,7 +302,7 @@ const validateForm = (): boolean => {
     fieldErrors.value.spec = validationErrors.value.spec;
   }
 
-  return nameValid && levelValid && selectionValid;
+  return nameValid && selectionValid;
 };
 
 /**
@@ -459,22 +329,6 @@ const handleSpecChange = (): void => {
     });
   }
 };
-
-const handleRoleChange = (): void => {
-};
-
-const selectClassFromRole = (className: string): void => {
-  if (setClass(className)) {
-    clearAllErrors();
-  }
-};
-
-const selectSpecFromRole = (className: string, specName: string): void => {
-  if (setClass(className) && setSpec(specName)) {
-    clearAllErrors();
-  }
-};
-
 const handleReset = (): void => {
   characterName.value = '';
   characterLevel.value = undefined;
@@ -507,7 +361,6 @@ const handleSubmit = (): void => {
 
   emit('submit', formData);
 
-  // handleReset();
 };
 
 if (props.enableAutoValidation) {

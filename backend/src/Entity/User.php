@@ -3,6 +3,8 @@
 namespace App\Entity;
 
 use App\Repository\UserRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -35,6 +37,17 @@ class User implements UserInterface
 
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $blizzardId = null;
+
+    /**
+     * @var Collection<int, GameCharacter>
+     */
+    #[ORM\OneToMany(targetEntity: GameCharacter::class, mappedBy: 'userPlayer')]
+    private Collection $gameCharacters;
+
+    public function __construct()
+    {
+        $this->gameCharacters = new ArrayCollection();
+    }
 
     public function getId(): ?int
     {
@@ -126,6 +139,36 @@ class User implements UserInterface
     public function setBlizzardId(?string $blizzardId): static
     {
         $this->blizzardId = $blizzardId;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, GameCharacter>
+     */
+    public function getGameCharacters(): Collection
+    {
+        return $this->gameCharacters;
+    }
+
+    public function addGameCharacter(GameCharacter $gameCharacter): static
+    {
+        if (!$this->gameCharacters->contains($gameCharacter)) {
+            $this->gameCharacters->add($gameCharacter);
+            $gameCharacter->setUserPlayer($this);
+        }
+
+        return $this;
+    }
+
+    public function removeGameCharacter(GameCharacter $gameCharacter): static
+    {
+        if ($this->gameCharacters->removeElement($gameCharacter)) {
+            // set the owning side to null (unless already changed)
+            if ($gameCharacter->getUserPlayer() === $this) {
+                $gameCharacter->setUserPlayer(null);
+            }
+        }
 
         return $this;
     }

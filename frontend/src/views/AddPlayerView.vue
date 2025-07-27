@@ -1,8 +1,7 @@
 <template>
   <div class="app">
     <header class="app-header">
-      <h1>Gestionnaire de Personnages WoW</h1>
-      <p>Créez et gérez vos personnages pour les raids</p>
+      <h1>Character manager</h1>
     </header>
 
     <nav class="app-nav">
@@ -11,22 +10,21 @@
         class="nav-button"
         :class="{ active: currentView === 'form' }"
       >
-        ➕ Nouveau personnage
+        ➕ Add player
       </button>
       <button
         @click="currentView = 'list'"
         class="nav-button"
         :class="{ active: currentView === 'list' }"
       >
-        📋 Liste ({{ characters.length }})
+        📋 List ({{ characters.length }})
       </button>
     </nav>
 
     <main class="app-main">
       <section v-if="currentView === 'form'" class="view-section">
         <CharacterForm
-          form-title="Créer un nouveau personnage"
-          form-description="Remplissez les informations de votre personnage"
+          form-title="Add character"
           :enable-auto-validation="true"
           @submit="handleCharacterSubmit"
           @class-change="handleClassChange"

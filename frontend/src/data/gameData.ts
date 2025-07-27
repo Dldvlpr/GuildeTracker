@@ -18,7 +18,6 @@ export const GAME_CLASSES = [
       { name: 'Fury', role: Role.MELEE },
       { name: 'Protection', role: Role.TANKS }
     ],
-    description: 'Combattant au corps à corps robuste'
   },
   {
     name: 'Druid',
@@ -29,7 +28,6 @@ export const GAME_CLASSES = [
       { name: 'Restoration', role: Role.HEALERS },
       { name: 'Guardian', role: Role.TANKS }
     ],
-    description: 'Maître des formes et de la nature'
   },
   {
     name: 'Paladin',
@@ -38,7 +36,6 @@ export const GAME_CLASSES = [
       { name: 'Protection', role: Role.TANKS },
       { name: 'Retribution', role: Role.MELEE }
     ],
-    description: 'Guerrier saint alliant combat et guérison'
   },
   {
     name: 'Rogue',
@@ -47,7 +44,6 @@ export const GAME_CLASSES = [
       { name: 'Combat', role: Role.MELEE },
       { name: 'Subtlety', role: Role.MELEE }
     ],
-    description: 'Assassin furtif et agile'
   },
   {
     name: 'Hunter',
@@ -56,7 +52,6 @@ export const GAME_CLASSES = [
       { name: 'Marksmanship', role: Role.RANGED },
       { name: 'Survival', role: Role.RANGED }
     ],
-    description: 'Chasseur à distance avec familier'
   },
   {
     name: 'Priest',
@@ -66,7 +61,6 @@ export const GAME_CLASSES = [
       { name: 'Shadow', role: Role.RANGED },
       { name: 'Smite', role: Role.RANGED }
     ],
-    description: 'Maître de la magie divine'
   },
   {
     name: 'Mage',
@@ -75,7 +69,6 @@ export const GAME_CLASSES = [
       { name: 'Fire', role: Role.RANGED },
       { name: 'Frost', role: Role.RANGED }
     ],
-    description: 'Lanceur de sorts arcanes'
   },
   {
     name: 'Warlock',
@@ -84,7 +77,6 @@ export const GAME_CLASSES = [
       { name: 'Demonology', role: Role.RANGED },
       { name: 'Destruction', role: Role.RANGED }
     ],
-    description: 'Utilisateur de magie corrompue'
   },
   {
     name: 'Shaman',
@@ -93,7 +85,6 @@ export const GAME_CLASSES = [
       { name: 'Enhancement', role: Role.MELEE },
       { name: 'Restoration', role: Role.HEALERS }
     ],
-    description: 'Maître des éléments'
   }
 ] as const satisfies readonly GameClass[];
 
