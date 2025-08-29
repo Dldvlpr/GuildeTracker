@@ -1,15 +1,12 @@
 <template>
   <div class="app">
     <main class="app-main">
-      <div class="toolbar">
-        <button class="btn btn-outline" @click="showImport = true">Import JSON</button>
-      </div>
-
       <CharacterForm
-        form-title="Add character"
         :enable-auto-validation="true"
-        @submit="handleCharacterSubmit"
-        @error="handleFormError"
+        :existing-names="characters.map(c => c.name)"
+      @submit="handleCharacterSubmit"
+      @bulkImport="handleBulkImport"
+      @notify="({type, message}) => toast(message, type)"
       />
     </main>
 
@@ -41,8 +38,7 @@ interface Notification {
 
 const characters = ref<Character[]>([])
 const notifications = ref<Notification[]>([])
-const showImport = ref(false)
-
+ref(false)
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2)
 const toast = (m: string, t: ToastType = 'info') => {
   const id = genId()
@@ -94,9 +90,20 @@ const handleCharacterSubmit = (event: FormSubmitEvent) => {
   }
 }
 
-const handleFormError = (errors: FormErrors) => {
-  if (errors.general) toast(errors.general, 'error')
-  else toast('Please fix the form errors.', 'error')
+const handleBulkImport = (items: Omit<Character,'id'|'createdAt'>[]) => {
+  const existing = new Set(characters.value.map(c => c.name.toLowerCase()))
+  const now = new Date().toISOString()
+  const toAdd: Character[] = []
+  for (const it of items) {
+    const key = it.name.toLowerCase()
+    if (existing.has(key)) continue
+    existing.add(key)
+    toAdd.push({ id: genId(), createdAt: now, ...it })
+  }
+  if (!toAdd.length) { toast('Nothing to import (duplicates).', 'warning'); return }
+  characters.value.push(...toAdd)
+  save()
+  toast(`Imported ${toAdd.length} character(s).`, 'success')
 }
 
 onMounted(load)
