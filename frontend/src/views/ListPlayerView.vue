@@ -1,5 +1,5 @@
 <template>
-  <section class="page">
+  <section class="max-w-screen-xl mx-auto flex flex-col gap-4 p-4">
     <PlayersHeaderStats
       :total="characters.length"
       :tanks="getCharactersByRole('Tanks').length"
@@ -9,16 +9,25 @@
 
     <PlayersFilters :classes="availableClasses" v-model="filters" @clear="clearFilters" />
 
-    <div v-if="filteredCharacters.length === 0" class="empty-state">
-      <div class="empty-content" role="status" aria-live="polite">
-        <span class="empty-icon">👤</span>
-        <h3>No characters found</h3>
-        <p v-if="characters.length === 0">You haven’t created any characters yet.</p>
-        <p v-else>No characters match the selected filters.</p>
+    <div
+      v-if="filteredCharacters.length === 0"
+      class="flex justify-center items-center min-h-[280px] p-8"
+      role="status"
+      aria-live="polite"
+    >
+      <div class="text-center max-w-md">
+        <span class="text-4xl mb-3 block">👤</span>
+        <h3 class="text-xl font-bold text-primary mb-2">No characters found</h3>
+        <p v-if="characters.length === 0" class="text-secondary">
+          You haven’t created any characters yet.
+        </p>
+        <p v-else class="text-secondary">
+          No characters match the selected filters.
+        </p>
       </div>
     </div>
 
-    <div v-else class="characters-grid">
+    <div v-else class="grid gap-5 p-5 sm:grid-cols-2 lg:grid-cols-3">
       <CharacterCard
         v-for="c in filteredCharacters"
         :key="c.id"
@@ -125,52 +134,4 @@ onMounted(loadFromLocalStorage)
 </script>
 
 <style scoped>
-.page {
-  max-width: 1200px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.empty-state {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 280px;
-  padding: 2rem;
-}
-.empty-content {
-  text-align: center;
-  max-width: 420px;
-}
-.empty-icon {
-  font-size: 3.2rem;
-  display: block;
-  margin-bottom: 0.75rem;
-}
-.empty-content h3 {
-  font-size: 1.3rem;
-  font-weight: 700;
-  color: #0f172a;
-  margin: 0 0 0.5rem 0;
-}
-.empty-content p {
-  color: #64748b;
-  margin: 0;
-}
-
-.characters-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1.25rem;
-  padding: 1.25rem;
-}
-
-@media (max-width: 768px) {
-  .characters-grid {
-    grid-template-columns: 1fr;
-    padding: 1rem;
-  }
-}
 </style>
