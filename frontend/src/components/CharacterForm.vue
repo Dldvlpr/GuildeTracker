@@ -1,15 +1,15 @@
 <template>
   <div class="character-form" role="form" aria-labelledby="character-form-title">
     <form @submit.prevent="handleSubmit" class="form" novalidate>
-      <!-- Header (optional) -->
       <div class="form-header">
         <h2 id="character-form-title">Create a Character</h2>
         <p class="form-description" id="character-form-desc">
           Fill in the fields below and select a class and specialization.
         </p>
+        <p>OR</p>
+        <p>Import Json data from raid helper</p>
       </div>
 
-      <!-- Character name -->
       <div class="form-group">
         <label for="character-name" class="form-label required"> Player name </label>
         <input
@@ -36,7 +36,6 @@
         <div v-else class="field-hint" id="character-name-hint">50 characters maximum</div>
       </div>
 
-      <!-- Class select -->
       <div class="form-group">
         <label for="class-select" class="form-label required"> Class </label>
         <select
@@ -64,7 +63,6 @@
         </div>
       </div>
 
-      <!-- Spec select -->
       <div
         v-if="canSelectSpec"
         class="form-group"
@@ -97,7 +95,6 @@
         </div>
       </div>
 
-      <!-- General errors -->
       <div v-if="hasGeneralErrors" class="general-errors" role="alert" aria-live="assertive">
         <div class="error-list">
           <div v-for="error in generalErrors" :key="error" class="error-item">
@@ -106,7 +103,6 @@
         </div>
       </div>
 
-      <!-- Actions (centered) -->
       <div class="form-actions form-actions--center">
         <button type="button" @click="handleReset" class="btn btn-secondary">Reset</button>
 
@@ -115,6 +111,7 @@
         </button>
       </div>
     </form>
+    <button class="btn btn-primary" >Json</button>
   </div>
 </template>
 

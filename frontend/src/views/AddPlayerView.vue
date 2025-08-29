@@ -1,152 +1,162 @@
 <template>
   <div class="app">
     <main class="app-main">
+      <div class="toolbar">
+        <button class="btn btn-outline" @click="showImport = true">Import JSON</button>
+      </div>
+
       <CharacterForm
         form-title="Add character"
         :enable-auto-validation="true"
         @submit="handleCharacterSubmit"
-        @class-change="handleClassChange"
-        @spec-change="handleSpecChange"
         @error="handleFormError"
       />
     </main>
 
     <div class="notifications">
-      <div
-        v-for="notification in notifications"
-        :key="notification.id"
-        class="notification"
-        :class="notification.type"
-      >
-        {{ notification.message }}
+      <div v-for="n in notifications" :key="n.id" class="notification" :class="n.type">
+        {{ n.message }}
       </div>
     </div>
+
+    <EventJsonImportModal v-model="showImport" @confirm="onImportConfirm" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import CharacterForm from '@/components/CharacterForm.vue'
+import EventJsonImportModal from '@/components/EventJsonImportModal.vue'
 import type {
   Character,
   FormSubmitEvent,
-  ClassChangeEvent,
   SpecChangeEvent,
   FormErrors,
   CharacterStatus,
-} from '../interfaces/game.interface'
+} from '@/interfaces/game.interface'
 
+type ToastType = 'success' | 'error' | 'warning' | 'info'
 interface Notification {
   id: string
   message: string
-  type: 'success' | 'error' | 'warning' | 'info'
+  type: ToastType
 }
 
 const characters = ref<Character[]>([])
 const notifications = ref<Notification[]>([])
+const showImport = ref(false)
 
-const generateId = (): string => {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2)
+const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2)
+const toast = (m: string, t: ToastType = 'info') => {
+  const id = genId()
+  notifications.value.push({ id, message: m, type: t })
+  setTimeout(() => (notifications.value = notifications.value.filter((n) => n.id !== id)), 3000)
+}
+const save = () => {
+  try {
+    localStorage.setItem('wow-characters', JSON.stringify(characters.value))
+  } catch {
+    toast('An error occurred while saving.', 'error')
+  }
+}
+const load = () => {
+  try {
+    const s = localStorage.getItem('wow-characters')
+    if (s) {
+      const arr = JSON.parse(s)
+      if (Array.isArray(arr)) {
+        characters.value = arr
+        toast(`${arr.length} character(s) loaded.`, 'info')
+      }
+    }
+  } catch {
+    toast('An error occurred while loading saved data.', 'warning')
+  }
 }
 
-const showNotification = (message: string, type: Notification['type'] = 'info'): void => {
-  const notification: Notification = {
-    id: generateId(),
-    message,
-    type,
+const onImportConfirm = (items: Omit<Character, 'id' | 'createdAt' | 'status'>[]) => {
+  const existing = new Set(characters.value.map((c) => c.name.toLowerCase()))
+  const now = new Date().toISOString()
+
+  const merged: Character[] = items
+    .map((i) => ({
+      id: genId(),
+      createdAt: now,
+      status: 'active' as CharacterStatus,
+      ...i,
+    }))
+    .filter((i) => {
+      const key = i.name.toLowerCase()
+      if (existing.has(key)) return false
+      existing.add(key)
+      return true
+    })
+
+  if (merged.length === 0) {
+    toast('Nothing to import (duplicates or filtered).', 'warning')
+    return
   }
 
-  notifications.value.push(notification)
-
-  setTimeout(() => {
-    const index = notifications.value.findIndex((n) => n.id === notification.id)
-    if (index >= 0) notifications.value.splice(index, 1)
-  }, 3000)
+  characters.value.push(...merged)
+  save()
+  toast(`Imported ${merged.length} character(s).`, 'success')
 }
 
-const handleCharacterSubmit = (event: FormSubmitEvent): void => {
+const handleCharacterSubmit = (event: FormSubmitEvent) => {
   try {
-    const existingNames = characters.value.map((char) => char.name.toLowerCase())
-    if (existingNames.includes(event.character.name.toLowerCase())) {
-      showNotification('A character with this name already exists.', 'error')
+    const exists = new Set(characters.value.map((c) => c.name.toLowerCase()))
+    if (exists.has(event.character.name.toLowerCase())) {
+      toast('A character with this name already exists.', 'error')
       return
     }
-
-    const newCharacter: Character = {
-      id: generateId(),
+    const newChar: Character = {
+      id: genId(),
       createdAt: new Date().toISOString(),
       status: 'active' as CharacterStatus,
       ...event.character,
     }
-
-    characters.value.push(newCharacter)
-    saveToLocalStorage()
-
-    showNotification(`Character "${newCharacter.name}" created successfully!`, 'success')
-  } catch (error) {
-    console.error('Error while creating character:', error)
-    showNotification('An error occurred while creating the character.', 'error')
+    characters.value.push(newChar)
+    save()
+    toast(`Character "${newChar.name}" created successfully!`, 'success')
+  } catch (e) {
+    console.error(e)
+    toast('An error occurred while creating the character.', 'error')
   }
 }
 
-const handleClassChange = (event: ClassChangeEvent): void => {
-  console.log('Class changed:', event.className)
+const handleFormError = (errors: FormErrors) => {
+  if (errors.general) toast(errors.general, 'error')
+  else toast('Please fix the form errors.', 'error')
 }
 
-const handleSpecChange = (event: SpecChangeEvent): void => {
-  console.log('Spec changed:', event.specName, 'Role:', event.role)
-}
-
-const handleFormError = (errors: FormErrors): void => {
-  console.error('Form errors:', errors)
-  if (errors.general) {
-    showNotification(errors.general, 'error')
-  } else {
-    showNotification('Please fix the form errors.', 'error')
-  }
-}
-
-
-const saveToLocalStorage = (): void => {
-  try {
-    localStorage.setItem('wow-characters', JSON.stringify(characters.value))
-  } catch (error) {
-    console.error('Save error:', error)
-    showNotification('An error occurred while saving.', 'error')
-  }
-}
-
-const loadFromLocalStorage = (): void => {
-  try {
-    const saved = localStorage.getItem('wow-characters')
-    if (saved) {
-      const parsed = JSON.parse(saved)
-      if (Array.isArray(parsed)) {
-        characters.value = parsed
-        showNotification(`${parsed.length} character(s) loaded.`, 'info')
-      }
-    }
-  } catch (error) {
-    console.error('Load error:', error)
-    showNotification('An error occurred while loading saved data.', 'warning')
-  }
-}
-
-onMounted(() => {
-  loadFromLocalStorage()
-})
+onMounted(load)
 </script>
 
 <style scoped>
-.app {
-  max-height: 100vh;
-  font-family: 'Inter', 'Segoe UI', sans-serif;
-}
-
 .app-main {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 2rem 2rem 2rem;
+  padding: 0 2rem 2rem;
+}
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 1rem 0;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.1rem;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid #cbd5e1;
+  background: transparent;
+  color: #334155;
+}
+.btn:hover {
+  background: #f8fafc;
 }
 
 .notifications {
@@ -158,32 +168,26 @@ onMounted(() => {
   flex-direction: column;
   gap: 0.5rem;
 }
-
 .notification {
-  padding: 1rem 1.5rem;
-  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  border-radius: 10px;
   color: white;
-  font-weight: 500;
+  font-weight: 600;
   min-width: 300px;
-  animation: slideIn 0.3s ease;
+  animation: slideIn 0.25s ease;
 }
-
 .notification.success {
   background: #10b981;
 }
-
 .notification.error {
   background: #ef4444;
 }
-
 .notification.warning {
   background: #f59e0b;
 }
-
 .notification.info {
   background: #3b82f6;
 }
-
 @keyframes slideIn {
   from {
     transform: translateX(100%);
@@ -192,21 +196,6 @@ onMounted(() => {
   to {
     transform: translateX(0);
     opacity: 1;
-  }
-}
-
-@media (max-width: 768px) {
-  .app-main {
-    padding: 0 1rem 1rem 1rem;
-  }
-
-  .notifications {
-    left: 1rem;
-    right: 1rem;
-  }
-
-  .notification {
-    min-width: auto;
   }
 }
 </style>
