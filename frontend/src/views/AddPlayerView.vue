@@ -5,6 +5,7 @@
       :enable-auto-validation="true"
       @submit="handleCharacterSubmit"
       @error="handleFormError"
+      @bulkImport="handleBulkImport"
     />
 
     <Toaster :items="notifications" />
@@ -37,6 +38,10 @@ const toast = (m: string, t: ToastType = 'info') => {
   const id = genId()
   notifications.value.push({ id, message: m, type: t })
   setTimeout(() => (notifications.value = notifications.value.filter((n) => n.id !== id)), 3000)
+}
+const handleFormError = (errors: FormErrors) => {
+  console.error(errors)
+  toast('Please fix the highlighted errors.', 'error')
 }
 const save = () => {
   try {
@@ -71,7 +76,6 @@ const handleCharacterSubmit = (event: FormSubmitEvent) => {
     const newChar: Character = {
       id: genId(),
       createdAt: new Date().toISOString(),
-      status: 'active' as CharacterStatus,
       ...event.character,
     }
     characters.value.push(newChar)

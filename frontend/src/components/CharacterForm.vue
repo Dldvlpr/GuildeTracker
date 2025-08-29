@@ -172,6 +172,13 @@
           >
             Use selection
           </button>
+          <button
+            class="btn btn-primary"
+            :disabled="!parsedPlayers.length"
+            @click="importAllPlayers"
+          >
+            Import all
+          </button>
         </footer>
       </div>
     </div>
@@ -188,6 +195,7 @@ import type {
   SpecChangeEvent,
   FormErrors,
   CharacterStatus,
+  Role,
 } from '../interfaces/game.interface'
 
 interface Props {
@@ -201,6 +209,7 @@ interface Emits {
   (event: 'classChange', data: ClassChangeEvent): void
   (event: 'specChange', data: SpecChangeEvent): void
   (event: 'error', errors: FormErrors): void
+  (event: 'bulkImport', data: Omit<Character, 'id' | 'createdAt'>[]): void
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -259,19 +268,19 @@ const validateCharacterName = (): boolean => {
   const name = characterName.value.trim()
 
   if (!name) {
-    fieldErrors.value.name = 'Name is required.'
+    fieldErrors.value = { ...fieldErrors.value, name: 'Name is required.' }
     return false
   }
   if (name.length < 2) {
-    fieldErrors.value.name = 'The name must contain at least 2 characters.'
+    fieldErrors.value = { ...fieldErrors.value, name: 'The name must contain at least 2 characters.' }
     return false
   }
   if (name.length > 50) {
-    fieldErrors.value.name = 'The name cannot exceed 50 characters.'
+    fieldErrors.value = { ...fieldErrors.value, name: 'The name cannot exceed 50 characters.' }
     return false
   }
   if (!/^[a-zA-Z0-9\s\-_]+$/u.test(name)) {
-    fieldErrors.value.name = 'The name contains invalid characters.'
+    fieldErrors.value = { ...fieldErrors.value, name: 'The name contains invalid characters.' }
     return false
   }
 
@@ -453,6 +462,22 @@ function applySelectedPlayer() {
 
   clearAllErrors()
   showImport.value = false
+}
+
+function importAllPlayers() {
+  if (!parsedPlayers.value.length) return
+
+  const items: Omit<Character, 'id' | 'createdAt'>[] = parsedPlayers.value.map((p) => ({
+    name: p.name,
+    class: p.class,
+    spec: p.spec,
+    role: p.role as Role | undefined,
+    level: p.level,
+    status: 'active' as CharacterStatus,
+  }))
+
+  emit('bulkImport', items)
+  closeImport()
 }
 </script>
 
