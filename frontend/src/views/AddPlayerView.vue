@@ -83,9 +83,20 @@ const handleCharacterSubmit = (event: FormSubmitEvent) => {
   }
 }
 
-const handleFormError = (errors: FormErrors) => {
-  if (errors.general) toast(errors.general, 'error')
-  else toast('Please fix the form errors.', 'error')
+const handleBulkImport = (items: Omit<Character,'id'|'createdAt'>[]) => {
+  const existing = new Set(characters.value.map(c => c.name.toLowerCase()))
+  const now = new Date().toISOString()
+  const toAdd: Character[] = []
+  for (const it of items) {
+    const key = it.name.toLowerCase()
+    if (existing.has(key)) continue
+    existing.add(key)
+    toAdd.push({ id: genId(), createdAt: now, ...it })
+  }
+  if (!toAdd.length) { toast('Nothing to import (duplicates).', 'warning'); return }
+  characters.value.push(...toAdd)
+  save()
+  toast(`Imported ${toAdd.length} character(s).`, 'success')
 }
 
 onMounted(load)
