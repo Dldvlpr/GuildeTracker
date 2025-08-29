@@ -14,6 +14,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'AppToaster' })
 type ToastType = 'success' | 'error' | 'warning' | 'info'
 interface Notification {
   id: string
