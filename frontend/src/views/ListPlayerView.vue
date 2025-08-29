@@ -1,38 +1,35 @@
 <template>
-  <div class="app">
-    <main class="app-main">
-      <PlayersHeaderStats
-        :total="characters.length"
-        :tanks="getCharactersByRole('Tanks').length"
-        :healers="getCharactersByRole('Healers').length"
-        :dps="getDpsCount()"
+  <section class="page">
+    <PlayersHeaderStats
+      :total="characters.length"
+      :tanks="getCharactersByRole('Tanks').length"
+      :healers="getCharactersByRole('Healers').length"
+      :dps="getDpsCount()"
+    />
+
+    <PlayersFilters :classes="availableClasses" v-model="filters" @clear="clearFilters" />
+
+    <div v-if="filteredCharacters.length === 0" class="empty-state">
+      <div class="empty-content" role="status" aria-live="polite">
+        <span class="empty-icon">👤</span>
+        <h3>No characters found</h3>
+        <p v-if="characters.length === 0">You haven’t created any characters yet.</p>
+        <p v-else>No characters match the selected filters.</p>
+      </div>
+    </div>
+
+    <div v-else class="characters-grid">
+      <CharacterCard
+        v-for="c in filteredCharacters"
+        :key="c.id"
+        :character="c"
+        @edit="editCharacter"
+        @delete="deleteCharacter"
       />
+    </div>
 
-      <PlayersFilters :classes="availableClasses" v-model="filters" @clear="clearFilters" />
-
-      <div v-if="filteredCharacters.length === 0" class="empty-state">
-        <div class="empty-content" role="status" aria-live="polite">
-          <span class="empty-icon">👤</span>
-          <h3>No characters found</h3>
-          <p v-if="characters.length === 0">You haven’t created any characters yet.</p>
-          <p v-else>No characters match the selected filters.</p>
-        </div>
-      </div>
-
-      <div v-else class="characters-grid">
-        <CharacterCard
-          v-for="c in filteredCharacters"
-          :key="c.id"
-          :character="c"
-          @edit="editCharacter"
-          @delete="deleteCharacter"
-        />
-      </div>
-    </main>
-
-    <!-- Toaster -->
     <Toaster :items="notifications" />
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">
@@ -42,8 +39,7 @@ import PlayersFilters from '@/components/PlayersFilters.vue'
 import CharacterCard from '@/components/CharacterCard.vue'
 import Toaster from '@/components/Toaster.vue'
 
-import type { Character, Role } from '@/interfaces/game.interface'
-import { ROLE_ICONS } from '@/interfaces/game.interface'
+import type { Character } from '@/interfaces/game.interface'
 
 type ToastType = 'success' | 'error' | 'warning' | 'info'
 interface Notification {
@@ -73,15 +69,6 @@ const getCharactersByRole = (role: string) => characters.value.filter((c) => c.r
 
 const getDpsCount = () => getCharactersByRole('Melee').length + getCharactersByRole('Ranged').length
 
-const getRoleDisplay = (role: Role) => `${ROLE_ICONS[role]} ${role}`
-
-const formatDate = (dateString: string) =>
-  new Date(dateString).toLocaleDateString('en-GB', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
-
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2)
 
 const pushToast = (message: string, type: ToastType = 'info') => {
@@ -93,7 +80,7 @@ const pushToast = (message: string, type: ToastType = 'info') => {
   }, 3000)
 }
 
-const editCharacter = (c: Character) => {
+const editCharacter = () => {
   pushToast('Edit feature to be implemented.', 'info')
 }
 
@@ -138,14 +125,12 @@ onMounted(loadFromLocalStorage)
 </script>
 
 <style scoped>
-.app {
-  max-height: 100vh;
-  font-family: 'Inter', 'Segoe UI', sans-serif;
-}
-.app-main {
+.page {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 2rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .empty-state {

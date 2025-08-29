@@ -1,30 +1,20 @@
 <template>
-  <div class="app">
-    <main class="app-main">
-      <div class="toolbar">
-        <button class="btn btn-outline" @click="showImport = true">Import JSON</button>
-      </div>
+  <section class="page">
+    <CharacterForm
+      form-title="Add character"
+      :enable-auto-validation="true"
+      @submit="handleCharacterSubmit"
+      @error="handleFormError"
+    />
 
-      <CharacterForm
-        form-title="Add character"
-        :enable-auto-validation="true"
-        @submit="handleCharacterSubmit"
-        @error="handleFormError"
-      />
-    </main>
-
-    <div class="notifications">
-      <div v-for="n in notifications" :key="n.id" class="notification" :class="n.type">
-        {{ n.message }}
-      </div>
-    </div>
-
-  </div>
+    <Toaster :items="notifications" />
+  </section>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import CharacterForm from '@/components/CharacterForm.vue'
+import Toaster from '@/components/Toaster.vue'
 import type {
   Character,
   FormSubmitEvent,
@@ -41,7 +31,6 @@ interface Notification {
 
 const characters = ref<Character[]>([])
 const notifications = ref<Notification[]>([])
-const showImport = ref(false)
 
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2)
 const toast = (m: string, t: ToastType = 'info') => {
@@ -103,69 +92,11 @@ onMounted(load)
 </script>
 
 <style scoped>
-.app-main {
+.page {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 2rem 2rem;
-}
-.toolbar {
-  display: flex;
-  justify-content: flex-end;
-  padding: 1rem 0;
-}
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 1.1rem;
-  border-radius: 10px;
-  font-weight: 700;
-  cursor: pointer;
-  border: 1px solid #cbd5e1;
-  background: transparent;
-  color: #334155;
-}
-.btn:hover {
-  background: #f8fafc;
-}
-
-.notifications {
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-  z-index: 1000;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-}
-.notification {
-  padding: 1rem 1.25rem;
-  border-radius: 10px;
-  color: white;
-  font-weight: 600;
-  min-width: 300px;
-  animation: slideIn 0.25s ease;
-}
-.notification.success {
-  background: #10b981;
-}
-.notification.error {
-  background: #ef4444;
-}
-.notification.warning {
-  background: #f59e0b;
-}
-.notification.info {
-  background: #3b82f6;
-}
-@keyframes slideIn {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+  gap: 1rem;
 }
 </style>

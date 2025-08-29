@@ -364,7 +364,6 @@ type Signup = {
   roleName?: RoleName
   level?: number
 }
-type EventJson = { date?: string; signUps: Signup[] }
 
 const NON_PLAYABLE = new Set(['Bench', 'Absence', 'Tentative', 'Late'])
 
@@ -398,9 +397,9 @@ function parseJson() {
   if (!txt) return
 
   try {
-    const parsed = JSON.parse(txt) as EventJson | { signUps?: Signup[] }
-    const signUps = Array.isArray((parsed as any).signUps)
-      ? ((parsed as any).signUps as Signup[])
+    const parsed = JSON.parse(txt) as { signUps?: unknown }
+    const signUps = Array.isArray(parsed.signUps)
+      ? (parsed.signUps as Signup[])
       : []
 
     if (!signUps.length) {
