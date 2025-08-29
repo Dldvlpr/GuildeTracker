@@ -19,7 +19,7 @@
           type="text"
           class="form-input"
           :class="{ 'is-invalid': fieldErrors.name }"
-          placeholder="Entrez le nom de votre personnage"
+          placeholder="Enter your character's name"
           required
           maxlength="50"
           @blur="validateCharacterName"
@@ -45,7 +45,7 @@
           required
           @change="handleClassChange"
         >
-          <option value="">-- Sélectionnez une classe --</option>
+          <option value="">-- Select a class --</option>
           <option
             v-for="option in classOptions"
             :key="option.value"
@@ -60,7 +60,6 @@
         </div>
       </div>
 
-      <!-- Sélection de spécialisation -->
       <div
         v-if="canSelectSpec"
         class="form-group"
@@ -78,7 +77,7 @@
           required
           @change="handleSpecChange"
         >
-          <option value="">-- Sélectionnez une spécialisation --</option>
+          <option value="">-- Select a specialisation --</option>
           <option
             v-for="spec in specOptions"
             :key="spec.value"
@@ -94,13 +93,13 @@
       </div>
 
       <div v-if="hasSelectedClass" class="form-section">
-        <h3 class="section-title">Récapitulatif</h3>
+        <h3 class="section-title">Summary</h3>
 
         <div class="summary">
           <div class="summary-grid">
             <div class="summary-item">
-              <span class="summary-label">Nom :</span>
-              <span class="summary-value">{{ characterName || 'Non défini' }}</span>
+              <span class="summary-label">Name :</span>
+              <span class="summary-value">{{ characterName || 'Not defined' }}</span>
             </div>
             <div class="summary-item">
               <span class="summary-label">Classe :</span>
@@ -111,7 +110,7 @@
               <span class="summary-value">{{ selectedSpec }}</span>
             </div>
             <div v-if="currentSpecRole" class="summary-item">
-              <span class="summary-label">Rôle :</span>
+              <span class="summary-label">Role :</span>
               <span class="summary-value role-badge" :data-role="currentSpecRole">
                 {{ getRoleDisplay(currentSpecRole) }}
               </span>
@@ -133,9 +132,9 @@
                 <template v-else>⏳</template>
               </span>
               <span class="status-text">
-                <template v-if="isValidForm">Formulaire valide</template>
-                <template v-else-if="hasValidationErrors && hasTriedSubmit">Formulaire invalide</template>
-                <template v-else>En cours de saisie</template>
+                <template v-if="isValidForm">Valid form</template>
+                <template v-else-if="hasValidationErrors && hasTriedSubmit">Invalid form</template>
+                <template v-else>Being entered</template>
               </span>
             </div>
           </div>
@@ -156,7 +155,7 @@
           @click="handleReset"
           class="btn btn-secondary"
         >
-          Réinitialiser
+          Reset
         </button>
 
         <button
@@ -164,7 +163,7 @@
           class="btn btn-primary"
           :disabled="!isValidForm"
         >
-          Créer le personnage
+          Create the character
         </button>
       </div>
     </form>
@@ -199,8 +198,8 @@ interface Emits {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  formTitle: 'Création de personnage',
-  formDescription: 'Sélectionnez votre classe et spécialisation',
+  formTitle: 'Character creation',
+  formDescription: 'Select your class and specialisation',
   enableAutoValidation: true
 });
 
@@ -248,7 +247,7 @@ const hasGeneralErrors = computed((): boolean =>
 
 const getClassDescription = (className: string): string => {
   const gameClass = classOptions.value.find(opt => opt.value === className);
-  return gameClass ? `${gameClass.specCount} spécialisations disponibles` : '';
+  return gameClass ? `${gameClass.specCount} available specialisations` : '';
 };
 const getRoleDisplay = (role: Role): string => {
   return `${ROLE_ICONS[role]} ${role}`;
@@ -267,22 +266,22 @@ const validateCharacterName = (): boolean => {
   const name = characterName.value.trim();
 
   if (!name) {
-    fieldErrors.value.name = 'Le nom est requis';
+    fieldErrors.value.name = 'Name is required';
     return false;
   }
 
   if (name.length < 2) {
-    fieldErrors.value.name = 'Le nom doit contenir au moins 2 caractères';
+    fieldErrors.value.name = 'The name must contain at least 2 characters.';
     return false;
   }
 
   if (name.length > 50) {
-    fieldErrors.value.name = 'Le nom ne peut pas dépasser 50 caractères';
+    fieldErrors.value.name = 'The name cannot exceed 50 characters.';
     return false;
   }
 
   if (!/^[a-zA-Z0-9\s\-_]+$/u.test(name)) {
-    fieldErrors.value.name = 'Le nom contient des caractères invalides';
+    fieldErrors.value.name = 'The name contains invalid characters.';
     return false;
   }
 
@@ -454,6 +453,7 @@ if (props.enableAutoValidation) {
   font-size: 1rem;
   background: #ffffff;
   transition: border-color 0.2s ease;
+  color: black;
 }
 
 .form-input:focus,
@@ -595,6 +595,7 @@ if (props.enableAutoValidation) {
 
 .summary-value {
   font-weight: 500;
+  color: black;
 }
 
 .role-badge {
