@@ -33,14 +33,14 @@ export default defineConfig({
           console.log('🔄 Rewriting path:', path);
           return path;
         },
-        configure: (proxy, options) => {
-          proxy.on('proxyReq', (proxyReq, req, res) => {
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
             console.log('🚀 Proxying request:', req.method, req.url, '-> https://localhost:443' + req.url);
           });
-          proxy.on('proxyRes', (proxyRes, req, res) => {
+          proxy.on('proxyRes', (proxyRes, req) => {
             console.log('📨 Proxy response:', proxyRes.statusCode, 'for', req.url);
           });
-          proxy.on('error', (err, req, res) => {
+          proxy.on('error', (err, req) => {
             console.error('❌ Proxy error:', err.message, 'for', req.url);
           });
         }
