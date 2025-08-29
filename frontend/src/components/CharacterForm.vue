@@ -1,18 +1,17 @@
 <template>
-  <div class="character-form">
-    <div class="form-header">
-      <h2>{{ formTitle }}</h2>
-      <p v-if="formDescription" class="form-description">
-        {{ formDescription }}
-      </p>
-    </div>
-
+  <div class="character-form" role="form" aria-labelledby="character-form-title">
     <form @submit.prevent="handleSubmit" class="form" novalidate>
+      <!-- Header (optional) -->
+      <div class="form-header">
+        <h2 id="character-form-title">Create a Character</h2>
+        <p class="form-description" id="character-form-desc">
+          Fill in the fields below and select a class and specialization.
+        </p>
+      </div>
 
+      <!-- Character name -->
       <div class="form-group">
-        <label for="character-name" class="form-label required">
-          Player name
-        </label>
+        <label for="character-name" class="form-label required"> Player name </label>
         <input
           id="character-name"
           v-model="characterName"
@@ -22,52 +21,56 @@
           placeholder="Enter your character's name"
           required
           maxlength="50"
+          inputmode="text"
+          autocomplete="off"
+          autocapitalize="none"
+          spellcheck="false"
+          :aria-invalid="!!fieldErrors.name"
+          :aria-describedby="fieldErrors.name ? 'character-name-error' : 'character-name-hint'"
           @blur="validateCharacterName"
           @input="clearFieldError('name')"
         />
-        <div v-if="fieldErrors.name" class="field-error">
+        <div v-if="fieldErrors.name" class="field-error" id="character-name-error" role="alert">
           {{ fieldErrors.name }}
         </div>
-        <div v-else class="field-hint">
-          50 chars maximum
-        </div>
+        <div v-else class="field-hint" id="character-name-hint">50 characters maximum</div>
       </div>
 
+      <!-- Class select -->
       <div class="form-group">
-        <label for="class-select" class="form-label required">
-          Class
-        </label>
+        <label for="class-select" class="form-label required"> Class </label>
         <select
           id="class-select"
           v-model="selectedClass"
           class="form-select"
           :class="{ 'is-invalid': fieldErrors.class }"
           required
+          :aria-invalid="!!fieldErrors.class"
+          :aria-describedby="fieldErrors.class ? 'class-error' : undefined"
           @change="handleClassChange"
         >
-          <option value="">-- Select a class --</option>
+          <option value="">— Select a class —</option>
           <option
             v-for="option in classOptions"
             :key="option.value"
             :value="option.value"
             :title="getClassDescription(option.value)"
           >
-            {{ option.label }} ({{ option.specCount }} spécialisations)
+            {{ option.label }} ({{ option.specCount }} specializations)
           </option>
         </select>
-        <div v-if="fieldErrors.class" class="field-error">
+        <div v-if="fieldErrors.class" class="field-error" id="class-error" role="alert">
           {{ fieldErrors.class }}
         </div>
       </div>
 
+      <!-- Spec select -->
       <div
         v-if="canSelectSpec"
         class="form-group"
         :class="{ 'form-group--disabled': !hasSelectedClass }"
       >
-        <label for="spec-select" class="form-label required">
-          Class spec
-        </label>
+        <label for="spec-select" class="form-label required"> Class spec </label>
         <select
           id="spec-select"
           v-model="selectedSpec"
@@ -75,73 +78,27 @@
           :class="{ 'is-invalid': fieldErrors.spec }"
           :disabled="!hasSelectedClass"
           required
+          :aria-invalid="!!fieldErrors.spec"
+          :aria-describedby="fieldErrors.spec ? 'spec-error' : undefined"
           @change="handleSpecChange"
         >
-          <option value="">-- Select a specialisation --</option>
+          <option value="">— Select a specialization —</option>
           <option
             v-for="spec in specOptions"
             :key="spec.value"
             :value="spec.value"
-            :title="`Rôle: ${spec.role}`"
+            :title="`Role: ${spec.role}`"
           >
             {{ spec.label }} ({{ spec.role }})
           </option>
         </select>
-        <div v-if="fieldErrors.spec" class="field-error">
+        <div v-if="fieldErrors.spec" class="field-error" id="spec-error" role="alert">
           {{ fieldErrors.spec }}
         </div>
       </div>
 
-      <div v-if="hasSelectedClass" class="form-section">
-        <h3 class="section-title">Summary</h3>
-
-        <div class="summary">
-          <div class="summary-grid">
-            <div class="summary-item">
-              <span class="summary-label">Name :</span>
-              <span class="summary-value">{{ characterName || 'Not defined' }}</span>
-            </div>
-            <div class="summary-item">
-              <span class="summary-label">Classe :</span>
-              <span class="summary-value">{{ selectedClass }}</span>
-            </div>
-            <div v-if="hasSelectedSpec" class="summary-item">
-              <span class="summary-label">Spécialisation :</span>
-              <span class="summary-value">{{ selectedSpec }}</span>
-            </div>
-            <div v-if="currentSpecRole" class="summary-item">
-              <span class="summary-label">Role :</span>
-              <span class="summary-value role-badge" :data-role="currentSpecRole">
-                {{ getRoleDisplay(currentSpecRole) }}
-              </span>
-          </div>
-          </div>
-
-          <div class="validation-status">
-            <div
-              class="status-indicator"
-              :class="{
-                'status-indicator--valid': isValidForm,
-                'status-indicator--invalid': hasValidationErrors && hasTriedSubmit,
-                'status-indicator--pending': !hasSelectedClass
-              }"
-            >
-              <span class="status-icon">
-                <template v-if="isValidForm">✓</template>
-                <template v-else-if="hasValidationErrors && hasTriedSubmit">✗</template>
-                <template v-else>⏳</template>
-              </span>
-              <span class="status-text">
-                <template v-if="isValidForm">Valid form</template>
-                <template v-else-if="hasValidationErrors && hasTriedSubmit">Invalid form</template>
-                <template v-else>Being entered</template>
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="hasGeneralErrors" class="general-errors">
+      <!-- General errors -->
+      <div v-if="hasGeneralErrors" class="general-errors" role="alert" aria-live="assertive">
         <div class="error-list">
           <div v-for="error in generalErrors" :key="error" class="error-item">
             {{ error }}
@@ -149,20 +106,11 @@
         </div>
       </div>
 
-      <div class="form-actions">
-        <button
-          type="button"
-          @click="handleReset"
-          class="btn btn-secondary"
-        >
-          Reset
-        </button>
+      <!-- Actions (centered) -->
+      <div class="form-actions form-actions--center">
+        <button type="button" @click="handleReset" class="btn btn-secondary">Reset</button>
 
-        <button
-          type="submit"
-          class="btn btn-primary"
-          :disabled="!isValidForm"
-        >
+        <button type="submit" class="btn btn-primary" :disabled="!isValidForm">
           Create the character
         </button>
       </div>
@@ -171,8 +119,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
-import { useGameData } from '../composables/useGameData.ts';
+import { ref, computed, watch } from 'vue'
+import { useGameData } from '../composables/useGameData.ts'
 import type {
   Role,
   Character,
@@ -180,30 +128,28 @@ import type {
   ClassChangeEvent,
   SpecChangeEvent,
   FormErrors,
-  CharacterStatus
-} from '../interfaces/game.interface';
-import { ROLE_ICONS } from '../interfaces/game.interface';
+  CharacterStatus,
+} from '../interfaces/game.interface'
+import { ROLE_ICONS } from '../interfaces/game.interface'
 
 interface Props {
-  readonly formTitle?: string;
-  readonly formDescription?: string;
-  readonly enableAutoValidation?: boolean;
+  readonly formTitle?: string
+  readonly formDescription?: string
+  readonly enableAutoValidation?: boolean
 }
 
 interface Emits {
-  (event: 'submit', data: FormSubmitEvent): void;
-  (event: 'classChange', data: ClassChangeEvent): void;
-  (event: 'specChange', data: SpecChangeEvent): void;
-  (event: 'error', errors: FormErrors): void;
+  (event: 'submit', data: FormSubmitEvent): void
+  (event: 'classChange', data: ClassChangeEvent): void
+  (event: 'specChange', data: SpecChangeEvent): void
+  (event: 'error', errors: FormErrors): void
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  formTitle: 'Character creation',
-  formDescription: 'Select your class and specialisation',
-  enableAutoValidation: true
-});
+  enableAutoValidation: true,
+})
 
-const emit = defineEmits<Emits>();
+const emit = defineEmits<Emits>()
 
 const {
   selectedClass,
@@ -219,126 +165,116 @@ const {
   validationErrors,
   setClass,
   setSpec,
-  resetAll
-} = useGameData();
+  resetAll,
+} = useGameData()
 
-const characterName = ref<string>('');
-const characterLevel = ref<number>();
-const fieldErrors = ref<FormErrors>({});
-const generalErrors = ref<string[]>([]);
-const hasTriedSubmit = ref<boolean>(false);
+const characterName = ref<string>('')
+const characterLevel = ref<number>()
+const fieldErrors = ref<FormErrors>({})
+const generalErrors = ref<string[]>([])
+const hasTriedSubmit = ref<boolean>(false)
 
 const isValidForm = computed((): boolean => {
-  return (
-    isValidSelection.value &&
-    characterName.value.trim() !== '' &&
-    !hasValidationErrors.value
-  );
-});
+  return isValidSelection.value && characterName.value.trim() !== '' && !hasValidationErrors.value
+})
 
-const hasValidationErrors = computed((): boolean =>
-  Object.keys(fieldErrors.value).length > 0 ||
-  Object.keys(validationErrors.value).length > 0
-);
+const hasValidationErrors = computed(
+  (): boolean =>
+    Object.keys(fieldErrors.value).length > 0 || Object.keys(validationErrors.value).length > 0,
+)
 
-const hasGeneralErrors = computed((): boolean =>
-  generalErrors.value.length > 0
-);
+const hasGeneralErrors = computed((): boolean => generalErrors.value.length > 0)
 
 const getClassDescription = (className: string): string => {
-  const gameClass = classOptions.value.find(opt => opt.value === className);
-  return gameClass ? `${gameClass.specCount} available specialisations` : '';
-};
-const getRoleDisplay = (role: Role): string => {
-  return `${ROLE_ICONS[role]} ${role}`;
-};
+  const gameClass = classOptions.value.find((opt) => opt.value === className)
+  return gameClass ? `${gameClass.specCount} available specializations` : ''
+}
+
+const getRoleDisplay = (role: Role): string => `${ROLE_ICONS[role]} ${role}`
 
 const clearFieldError = (field: keyof FormErrors): void => {
-  delete fieldErrors.value[field];
-};
+  delete fieldErrors.value[field]
+}
 
 const clearAllErrors = (): void => {
-  fieldErrors.value = {};
-  generalErrors.value = [];
-};
+  fieldErrors.value = {}
+  generalErrors.value = []
+}
 
 const validateCharacterName = (): boolean => {
-  const name = characterName.value.trim();
+  const name = characterName.value.trim()
 
   if (!name) {
-    fieldErrors.value.name = 'Name is required';
-    return false;
+    fieldErrors.value.name = 'Name is required.'
+    return false
   }
-
   if (name.length < 2) {
-    fieldErrors.value.name = 'The name must contain at least 2 characters.';
-    return false;
+    fieldErrors.value.name = 'The name must contain at least 2 characters.'
+    return false
   }
-
   if (name.length > 50) {
-    fieldErrors.value.name = 'The name cannot exceed 50 characters.';
-    return false;
+    fieldErrors.value.name = 'The name cannot exceed 50 characters.'
+    return false
   }
-
   if (!/^[a-zA-Z0-9\s\-_]+$/u.test(name)) {
-    fieldErrors.value.name = 'The name contains invalid characters.';
-    return false;
+    fieldErrors.value.name = 'The name contains invalid characters.'
+    return false
   }
 
-  clearFieldError('name');
-  return true;
-};
+  clearFieldError('name')
+  return true
+}
 
 const validateForm = (): boolean => {
-  const nameValid = validateCharacterName();
-  const selectionValid = isValidSelection.value;
+  const nameValid = validateCharacterName()
+  const selectionValid = isValidSelection.value
 
   if (!selectionValid && validationErrors.value.class) {
-    fieldErrors.value.class = validationErrors.value.class;
+    fieldErrors.value.class = validationErrors.value.class
   }
-
   if (!selectionValid && validationErrors.value.spec) {
-    fieldErrors.value.spec = validationErrors.value.spec;
+    fieldErrors.value.spec = validationErrors.value.spec
   }
 
-  return nameValid && selectionValid;
-};
+  return nameValid && selectionValid
+}
 
 const handleClassChange = (): void => {
-  clearFieldError('class');
-  clearFieldError('spec');
+  clearFieldError('class')
+  clearFieldError('spec')
 
   emit('classChange', {
     className: selectedClass.value,
-    availableSpecs: availableSpecs.value
-  });
-};
+    availableSpecs: availableSpecs.value,
+  })
+}
 
 const handleSpecChange = (): void => {
-  clearFieldError('spec');
+  clearFieldError('spec')
 
   if (hasSelectedSpec.value && currentSpecRole.value) {
     emit('specChange', {
       className: selectedClass.value,
       specName: selectedSpec.value,
-      role: currentSpecRole.value
-    });
+      role: currentSpecRole.value,
+    })
   }
-};
+}
+
 const handleReset = (): void => {
-  characterName.value = '';
-  characterLevel.value = undefined;
-  resetAll();
-  clearAllErrors();
-  hasTriedSubmit.value = false;
-};
+  characterName.value = ''
+  characterLevel.value = undefined
+  resetAll()
+  clearAllErrors()
+  hasTriedSubmit.value = false
+}
 
 const handleSubmit = (): void => {
-  hasTriedSubmit.value = true;
+  hasTriedSubmit.value = true
 
   if (!validateForm()) {
-    emit('error', { ...fieldErrors.value, ...validationErrors.value });
-    return;
+    emit('error', { ...fieldErrors.value, ...validationErrors.value })
+    return
   }
 
   const characterData: Omit<Character, 'id' | 'createdAt'> = {
@@ -347,24 +283,23 @@ const handleSubmit = (): void => {
     spec: selectedSpec.value || undefined,
     role: currentSpecRole.value || undefined,
     status: 'active' as CharacterStatus,
-    level: characterLevel.value
-  };
+    level: characterLevel.value,
+  }
 
   const formData: FormSubmitEvent = {
     character: characterData,
-    isValid: true
-  };
+    isValid: true,
+  }
 
-  emit('submit', formData);
-
-};
+  emit('submit', formData)
+}
 
 if (props.enableAutoValidation) {
-  watch([characterName, characterLevel], () => {
+  watch([characterName, characterLevel, selectedClass, selectedSpec], () => {
     if (hasTriedSubmit.value) {
-      validateForm();
+      validateForm()
     }
-  });
+  })
 }
 </script>
 
@@ -375,20 +310,25 @@ if (props.enableAutoValidation) {
   padding: 2rem;
   background: #ffffff;
   border-radius: 12px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  font-family: 'Inter', 'Segoe UI', sans-serif;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.08);
+  font-family:
+    'Inter',
+    'Segoe UI',
+    -apple-system,
+    system-ui,
+    sans-serif;
 }
 
 .form-header {
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .form-header h2 {
-  font-size: 1.75rem;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 0.5rem 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.4rem 0;
 }
 
 .form-description {
@@ -399,28 +339,7 @@ if (props.enableAutoValidation) {
 .form {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-}
-
-.form-section {
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 1.5rem;
-  background: #f8fafc;
-}
-
-.section-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 1rem 0;
-}
-
-.subsection-title {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #374151;
-  margin: 0 0 1rem 0;
+  gap: 1.25rem;
 }
 
 .form-group {
@@ -437,7 +356,7 @@ if (props.enableAutoValidation) {
 .form-label {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #374151;
+  color: #334155;
 }
 
 .form-label.required::after {
@@ -449,23 +368,26 @@ if (props.enableAutoValidation) {
 .form-select {
   padding: 0.75rem;
   border: 2px solid #e2e8f0;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 1rem;
   background: #ffffff;
-  transition: border-color 0.2s ease;
-  color: black;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+  color: #0f172a;
 }
 
 .form-input:focus,
 .form-select:focus {
   outline: none;
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 .form-input.is-invalid,
 .form-select.is-invalid {
   border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
 }
 
 .form-input:disabled,
@@ -485,183 +407,10 @@ if (props.enableAutoValidation) {
   font-size: 0.875rem;
 }
 
-.role-classes {
-  margin-top: 1rem;
-}
-
-.class-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-}
-
-.class-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 1rem;
-  transition: all 0.2s ease;
-}
-
-.class-card:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.class-card--selected {
-  border-color: #3b82f6;
-  background: #eff6ff;
-}
-
-.class-card__title {
-  margin: 0 0 0.75rem 0;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.class-button {
-  background: none;
-  border: none;
-  color: #3b82f6;
-  cursor: pointer;
-  text-decoration: underline;
-  font-weight: inherit;
-  font-size: inherit;
-  padding: 0;
-}
-
-.class-button:hover {
-  color: #2563eb;
-}
-
-.class-button.active {
-  color: #1d4ed8;
-  font-weight: 700;
-}
-
-.class-card__specs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.spec-tag--selected .spec-button {
-  background: #3b82f6;
-  color: white;
-}
-
-.spec-button {
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 4px;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.spec-button:hover {
-  background: #3b82f6;
-  color: white;
-  border-color: #3b82f6;
-}
-
-.summary {
-  background: #ffffff;
-  border-radius: 6px;
-  padding: 1.5rem;
-}
-
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.summary-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem;
-  background: #f8fafc;
-  border-radius: 4px;
-}
-
-.summary-label {
-  font-weight: 600;
-  color: #374151;
-}
-
-.summary-value {
-  font-weight: 500;
-  color: black;
-}
-
-.role-badge {
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-
-.role-badge[data-role="Tanks"] {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.role-badge[data-role="Healers"] {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.role-badge[data-role="Melee"] {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.role-badge[data-role="Ranged"] {
-  background: #fed7aa;
-  color: #9a3412;
-}
-
-.validation-status {
-  text-align: center;
-}
-
-.status-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 0.875rem;
-}
-
-.status-indicator--valid {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.status-indicator--invalid {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.status-indicator--pending {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.status-icon {
-  font-size: 1.125rem;
-}
-
 .general-errors {
   background: #fef2f2;
   border: 1px solid #fecaca;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 1rem;
 }
 
@@ -673,33 +422,40 @@ if (props.enableAutoValidation) {
 
 .error-item {
   color: #ef4444;
-  font-size: 0.875rem;
-  font-weight: 500;
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .form-actions {
   display: flex;
   gap: 1rem;
-  justify-content: flex-end;
+  justify-content: center;
   padding-top: 1rem;
   border-top: 1px solid #e2e8f0;
+}
+.form-actions--center {
+  justify-content: center;
 }
 
 .btn {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
+  padding: 0.8rem 1.4rem;
   border: none;
-  border-radius: 6px;
+  border-radius: 10px;
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+  will-change: transform;
 }
 
 .btn:disabled {
-  opacity: 0.5;
+  opacity: 0.55;
   cursor: not-allowed;
   transform: none !important;
 }
@@ -707,20 +463,22 @@ if (props.enableAutoValidation) {
 .btn-primary {
   background: #3b82f6;
   color: white;
+  box-shadow: 0 6px 14px rgba(59, 130, 246, 0.25);
 }
-
-.btn-primary:hover:not(:disabled) {
+.btn-primary:hover:not(:disabled),
+.btn-primary:focus-visible:not(:disabled) {
   background: #2563eb;
   transform: translateY(-1px);
 }
 
 .btn-secondary {
-  background: #6b7280;
+  background: #64748b;
   color: white;
+  box-shadow: 0 6px 14px rgba(100, 116, 139, 0.22);
 }
-
-.btn-secondary:hover:not(:disabled) {
-  background: #4b5563;
+.btn-secondary:hover:not(:disabled),
+.btn-secondary:focus-visible:not(:disabled) {
+  background: #475569;
   transform: translateY(-1px);
 }
 
@@ -730,16 +488,13 @@ if (props.enableAutoValidation) {
     margin: 1rem;
   }
 
-  .class-cards {
-    grid-template-columns: 1fr;
-  }
-
-  .summary-grid {
-    grid-template-columns: 1fr;
-  }
-
   .form-actions {
     flex-direction: column;
+  }
+
+  .btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>

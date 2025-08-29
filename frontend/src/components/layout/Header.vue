@@ -19,6 +19,12 @@
           </button>
         </li>
         <li>
+          <button class="cursor-pointer text-secondary hover:text-accent transition-colors">
+            <router-link to="/list">player list</router-link>
+
+          </button>
+        </li>
+        <li>
           <button @click="logoutWithDiscord"
                   class="cursor-pointer text-secondary hover:text-accent transition-colors">
             Deconnexion
