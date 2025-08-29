@@ -30,7 +30,6 @@ import EventJsonImportModal from '@/components/EventJsonImportModal.vue'
 import type {
   Character,
   FormSubmitEvent,
-  SpecChangeEvent,
   FormErrors,
   CharacterStatus,
 } from '@/interfaces/game.interface'

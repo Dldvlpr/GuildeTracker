@@ -7,7 +7,7 @@
           Fill in the fields below and select a class and specialization.
         </p>
         <p>OR</p>
-        <p>Import Json data from raid helper</p>
+        <p>Import Json data from Raid-Helper</p>
       </div>
 
       <div class="form-group">
@@ -109,9 +109,72 @@
         <button type="submit" class="btn btn-primary" :disabled="!isValidForm">
           Create the character
         </button>
+
+        <button type="button" class="btn btn-outline" @click="showImport = true">
+          Import JSON
+        </button>
       </div>
     </form>
-    <button class="btn btn-primary" >Json</button>
+
+    <div
+      v-if="showImport"
+      class="backdrop"
+      @click.self="closeImport"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="import-title"
+    >
+      <div class="modal">
+        <header class="modal__header">
+          <h3 id="import-title">Import from Raid-Helper JSON</h3>
+          <button class="icon-btn" @click="closeImport" aria-label="Close">✖</button>
+        </header>
+
+        <section class="modal__body">
+          <p class="hint">
+            Paste the event JSON (must contain a <code>signUps</code> array). Then select a player
+            to prefill this form.
+          </p>
+
+          <textarea
+            v-model="importText"
+            class="textarea"
+            rows="12"
+            placeholder='{"date":"1-9-2025","signUps":[{"name":"shaqx","className":"Druid","specName":"Feral","roleName":"Melee"}]}'
+            spellcheck="false"
+          ></textarea>
+
+          <div class="options">
+            <label class="opt">
+              <input type="checkbox" v-model="includeNonPlayableClasses" />
+              Include non-playable classes (Bench, Absence, Tentative, Late)
+            </label>
+          </div>
+
+          <div v-if="importError" class="error" role="alert">{{ importError }}</div>
+
+          <div v-if="parsedPlayers.length" class="picker">
+            <label class="form-label" for="player-select">Detected players</label>
+            <select id="player-select" v-model="selectedPlayerIndex" class="form-select">
+              <option v-for="(p, idx) in parsedPlayers" :key="idx" :value="idx">
+                {{ p.name }} — {{ p.class }}{{ p.spec ? ` (${p.spec})` : '' }}
+              </option>
+            </select>
+          </div>
+        </section>
+
+        <footer class="modal__footer">
+          <button class="btn btn-outline" @click="closeImport">Cancel</button>
+          <button
+            class="btn btn-primary"
+            :disabled="!parsedPlayers.length"
+            @click="applySelectedPlayer"
+          >
+            Use selection
+          </button>
+        </footer>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -119,7 +182,6 @@
 import { ref, computed, watch } from 'vue'
 import { useGameData } from '../composables/useGameData.ts'
 import type {
-  Role,
   Character,
   FormSubmitEvent,
   ClassChangeEvent,
@@ -127,7 +189,6 @@ import type {
   FormErrors,
   CharacterStatus,
 } from '../interfaces/game.interface'
-import { ROLE_ICONS } from '../interfaces/game.interface'
 
 interface Props {
   readonly formTitle?: string
@@ -160,8 +221,6 @@ const {
   canSelectSpec,
   isValidSelection,
   validationErrors,
-  setClass,
-  setSpec,
   resetAll,
 } = useGameData()
 
@@ -186,8 +245,6 @@ const getClassDescription = (className: string): string => {
   const gameClass = classOptions.value.find((opt) => opt.value === className)
   return gameClass ? `${gameClass.specCount} available specializations` : ''
 }
-
-const getRoleDisplay = (role: Role): string => `${ROLE_ICONS[role]} ${role}`
 
 const clearFieldError = (field: keyof FormErrors): void => {
   delete fieldErrors.value[field]
@@ -298,6 +355,106 @@ if (props.enableAutoValidation) {
     }
   })
 }
+
+type RoleName = 'Tanks' | 'Healers' | 'Melee' | 'Ranged'
+type Signup = {
+  name: string
+  className?: string
+  specName?: string
+  roleName?: RoleName
+  level?: number
+}
+type EventJson = { date?: string; signUps: Signup[] }
+
+const NON_PLAYABLE = new Set(['Bench', 'Absence', 'Tentative', 'Late'])
+
+const showImport = ref(false)
+const importText = ref('')
+const importError = ref('')
+const includeNonPlayableClasses = ref(false)
+
+type ParsedPlayer = { name: string; class: string; spec?: string; role?: RoleName; level?: number }
+const parsedPlayers = ref<ParsedPlayer[]>([])
+const selectedPlayerIndex = ref<number>(0)
+
+const closeImport = () => {
+  showImport.value = false
+  importText.value = ''
+  importError.value = ''
+  parsedPlayers.value = []
+  selectedPlayerIndex.value = 0
+}
+
+watch([importText, includeNonPlayableClasses], () => {
+  parseJson()
+})
+
+function parseJson() {
+  importError.value = ''
+  parsedPlayers.value = []
+  selectedPlayerIndex.value = 0
+
+  const txt = importText.value.trim()
+  if (!txt) return
+
+  try {
+    const parsed = JSON.parse(txt) as EventJson | { signUps?: Signup[] }
+    const signUps = Array.isArray((parsed as any).signUps)
+      ? ((parsed as any).signUps as Signup[])
+      : []
+
+    if (!signUps.length) {
+      importError.value = 'Invalid JSON: missing or empty "signUps" array.'
+      return
+    }
+
+    const players = signUps
+      .map((s) => {
+        const cls = (s.className ?? '').trim()
+        const name = (s.name ?? '').trim()
+        if (!name || !cls) return null
+        if (!includeNonPlayableClasses.value && NON_PLAYABLE.has(cls)) return null
+        return {
+          name,
+          class: cls,
+          spec: s.specName?.trim() || undefined,
+          role: s.roleName as RoleName | undefined,
+          level: typeof s.level === 'number' ? s.level : undefined,
+        } as ParsedPlayer
+      })
+      .filter((x): x is ParsedPlayer => x !== null)
+
+    const seen = new Set<string>()
+    const dedup = players.filter((p) => {
+      const key = p.name.toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+
+    if (!dedup.length) {
+      importError.value = 'No valid players after filtering.'
+      return
+    }
+
+    parsedPlayers.value = dedup
+  } catch (e) {
+    importError.value = (e as Error).message || 'Invalid JSON.'
+  }
+}
+
+function applySelectedPlayer() {
+  const p = parsedPlayers.value[selectedPlayerIndex.value]
+  if (!p) return
+
+  characterName.value = p.name
+  selectedClass.value = p.class
+  const hasSpec = specOptions.value.some((s) => s.value === p.spec)
+  selectedSpec.value = hasSpec ? (p.spec as string) : ''
+
+  clearAllErrors()
+  showImport.value = false
+}
 </script>
 
 <style scoped>
@@ -332,35 +489,29 @@ if (props.enableAutoValidation) {
   color: #64748b;
   margin: 0;
 }
-
 .form {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
 }
-
 .form-group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
-
 .form-group--disabled {
   opacity: 0.6;
   pointer-events: none;
 }
-
 .form-label {
   font-size: 0.875rem;
   font-weight: 600;
   color: #334155;
 }
-
 .form-label.required::after {
   content: ' *';
   color: #ef4444;
 }
-
 .form-input,
 .form-select {
   padding: 0.75rem;
@@ -373,20 +524,17 @@ if (props.enableAutoValidation) {
     box-shadow 0.2s ease;
   color: #0f172a;
 }
-
 .form-input:focus,
 .form-select:focus {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
-
 .form-input.is-invalid,
 .form-select.is-invalid {
   border-color: #ef4444;
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
 }
-
 .form-input:disabled,
 .form-select:disabled {
   background-color: #f1f5f9;
@@ -398,7 +546,6 @@ if (props.enableAutoValidation) {
   font-size: 0.875rem;
   font-weight: 500;
 }
-
 .field-hint {
   color: #64748b;
   font-size: 0.875rem;
@@ -410,13 +557,11 @@ if (props.enableAutoValidation) {
   border-radius: 8px;
   padding: 1rem;
 }
-
 .error-list {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
-
 .error-item {
   color: #ef4444;
   font-size: 0.9rem;
@@ -450,13 +595,11 @@ if (props.enableAutoValidation) {
     box-shadow 0.15s ease;
   will-change: transform;
 }
-
 .btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
   transform: none !important;
 }
-
 .btn-primary {
   background: #3b82f6;
   color: white;
@@ -467,7 +610,6 @@ if (props.enableAutoValidation) {
   background: #2563eb;
   transform: translateY(-1px);
 }
-
 .btn-secondary {
   background: #64748b;
   color: white;
@@ -478,20 +620,107 @@ if (props.enableAutoValidation) {
   background: #475569;
   transform: translateY(-1px);
 }
+.btn-outline {
+  background: transparent;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+.btn-outline:hover {
+  background: #f8fafc;
+}
+
+/* ==== Modal ==== */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.55);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+}
+.modal {
+  width: min(880px, 94vw);
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 25px 60px rgba(2, 6, 23, 0.25);
+  overflow: hidden;
+}
+.modal__header,
+.modal__footer {
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+.modal__footer {
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 0;
+  justify-content: flex-end;
+}
+.modal__body {
+  padding: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+.icon-btn {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 1rem;
+}
+.hint {
+  color: #64748b;
+  margin: 0;
+}
+.textarea {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  padding: 0.85rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+.error {
+  color: #ef4444;
+  font-weight: 600;
+}
+.options {
+  display: grid;
+  gap: 0.35rem;
+}
+.opt {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #334155;
+}
+.picker {
+  display: grid;
+  gap: 0.5rem;
+}
 
 @media (max-width: 768px) {
   .character-form {
     padding: 1rem;
     margin: 1rem;
   }
-
   .form-actions {
     flex-direction: column;
   }
-
   .btn {
     width: 100%;
     justify-content: center;
+  }
+  .modal {
+    width: 94vw;
   }
 }
 </style>

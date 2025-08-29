@@ -129,10 +129,8 @@ function toCharacter(s: Signup): Character | null {
   const cls = (s.className ?? '').trim()
   if (!cls) return null
 
-  // skip non playable classes unless allowed
   if (!includeNonPlayableClasses.value && NON_PLAYABLE.has(cls)) return null
 
-  // prefer role from spec mapping? (we only have incoming text, so we trust roleName; hook provided for future mapping)
   const role = s.roleName as RoleName | undefined
 
   return {
@@ -161,7 +159,6 @@ const confirm = () => {
       return
     }
 
-    // Optional: dedup by name (case-insensitive) within the import batch
     const seen = new Set<string>()
     const dedup = mapped.filter((c) => {
       const key = c.name.toLowerCase()
