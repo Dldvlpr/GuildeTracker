@@ -19,14 +19,12 @@
       </div>
     </div>
 
-    <EventJsonImportModal v-model="showImport" @confirm="onImportConfirm" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import CharacterForm from '@/components/CharacterForm.vue'
-import EventJsonImportModal from '@/components/EventJsonImportModal.vue'
 import type {
   Character,
   FormSubmitEvent,
@@ -73,33 +71,6 @@ const load = () => {
   }
 }
 
-const onImportConfirm = (items: Omit<Character, 'id' | 'createdAt' | 'status'>[]) => {
-  const existing = new Set(characters.value.map((c) => c.name.toLowerCase()))
-  const now = new Date().toISOString()
-
-  const merged: Character[] = items
-    .map((i) => ({
-      id: genId(),
-      createdAt: now,
-      status: 'active' as CharacterStatus,
-      ...i,
-    }))
-    .filter((i) => {
-      const key = i.name.toLowerCase()
-      if (existing.has(key)) return false
-      existing.add(key)
-      return true
-    })
-
-  if (merged.length === 0) {
-    toast('Nothing to import (duplicates or filtered).', 'warning')
-    return
-  }
-
-  characters.value.push(...merged)
-  save()
-  toast(`Imported ${merged.length} character(s).`, 'success')
-}
 
 const handleCharacterSubmit = (event: FormSubmitEvent) => {
   try {
