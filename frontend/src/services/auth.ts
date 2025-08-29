@@ -39,7 +39,8 @@ export async function logoutUser() {
     } else {
       return { success: false, error: `Status: ${response.status}` };
     }
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, error: message };
   }
 }

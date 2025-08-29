@@ -7,6 +7,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'AppHeader' })
 import { RouterLink } from 'vue-router'
 import logo from '@/assets/image/logo.png'
 </script>

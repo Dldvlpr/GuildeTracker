@@ -48,6 +48,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'AppSidebar' })
 import { RouterLink } from 'vue-router'
 import { redirectToDiscordAuth } from '@/services/auth'
 import { useUserStore } from '@/stores/userStore'

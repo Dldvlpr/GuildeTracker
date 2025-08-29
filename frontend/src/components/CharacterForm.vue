@@ -358,6 +358,7 @@ type Signup = {
   roleName?: RoleName
   level?: number
 }
+
 type EventJson = { date?: string; signUps: Signup[] }
 type ParsedPlayer = {
   name: string
@@ -394,9 +395,9 @@ function parseJson() {
   const txt = importText.value.trim()
   if (!txt) return
   try {
-    const parsed = JSON.parse(txt) as EventJson | { signUps?: Signup[] }
-    const signUps = Array.isArray((parsed as any).signUps)
-      ? ((parsed as any).signUps as Signup[])
+    const parsed = JSON.parse(txt) as { signUps?: unknown }
+    const signUps = Array.isArray(parsed.signUps)
+      ? (parsed.signUps as Signup[])
       : []
     if (!signUps.length) {
       importError.value = 'Invalid JSON: missing or empty "signUps" array.'

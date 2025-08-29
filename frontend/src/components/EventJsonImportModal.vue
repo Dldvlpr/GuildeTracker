@@ -92,7 +92,7 @@ type Character = {
 
 const NON_PLAYABLE = new Set(['Bench', 'Absence', 'Tentative', 'Late'])
 
-const props = defineProps<{
+defineProps<{
   modelValue: boolean
 }>()
 const emit = defineEmits<{
