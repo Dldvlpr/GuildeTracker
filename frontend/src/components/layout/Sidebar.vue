@@ -1,7 +1,26 @@
 <template>
-  <aside class="flex flex-col h-full w-56 bg-primary text-default">
-    <div class="p-4 text-xl font-bold">
+  <aside
+    class="flex flex-col h-full w-56 bg-primary text-default transform transition-transform duration-200 md:translate-x-0"
+    :class="open ? 'translate-x-0 fixed inset-y-0 left-0 z-50 md:static' : '-translate-x-full fixed inset-y-0 left-0 z-50 md:static md:translate-x-0'"
+  >
+    <div class="p-4 text-xl font-bold flex items-center justify-between">
       <RouterLink to="/" class="block">GuildeTracker</RouterLink>
+      <button
+        class="md:hidden"
+        @click="$emit('close')"
+        aria-label="Fermer le menu"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          class="w-5 h-5"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
     </div>
     <nav class="flex-1 overflow-y-auto">
       <ul v-if="userStore.isLoading" class="p-2">
@@ -74,6 +93,8 @@ import { RouterLink } from 'vue-router'
 import { redirectToDiscordAuth } from '@/services/auth'
 import { useUserStore } from '@/stores/userStore'
 
+const { open } = defineProps<{ open: boolean }>()
+defineEmits(['close'])
 const userStore = useUserStore()
 
 function loginWithDiscord() {
