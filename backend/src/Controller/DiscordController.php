@@ -84,8 +84,8 @@ class DiscordController extends AbstractController
     }
 
     #[Route('/connect/discord/check', name: 'connect_discord_check')]
-    public function connectCheck(): RedirectResponse
+    public function connectCheck(Request $request): RedirectResponse
     {
-        return $this->redirect('https://discordapp.com/api/oauth2/token', 302);
+        return $this->redirectToRoute('connect_discord_start');
     }
 }

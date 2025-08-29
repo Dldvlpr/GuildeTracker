@@ -50,8 +50,7 @@ async function logoutWithDiscord() {
       </ul>
       <ul class="flex items-center space-x-6" v-else-if="userStore.isAuthenticated">
         <li>
-          <button>
-                  class="cursor-pointer text-secondary hover:text-accent transition-colors">
+          <button class="cursor-pointer text-secondary hover:text-accent transition-colors">
             add player
           </button>
         </li>

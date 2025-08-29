@@ -305,9 +305,6 @@ const validateForm = (): boolean => {
   return nameValid && selectionValid;
 };
 
-/**
- * GESTIONNAIRES D'ÉVÉNEMENTS
- */
 const handleClassChange = (): void => {
   clearFieldError('class');
   clearFieldError('spec');

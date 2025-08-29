@@ -38,45 +38,60 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
 
     public function authenticate(Request $request): SelfValidatingPassport
     {
-        $client = $this->clientRegistry->getClient('discord');
-        $accessToken = $this->fetchAccessToken($client);
-        $request->getSession()->set('discord_access_token', $accessToken->getToken());
+        try {
+            $client = $this->clientRegistry->getClient('discord');
+            $accessToken = $this->fetchAccessToken($client);
 
-        /** @var DiscordResourceOwner $discordUser */
-        $discordUser = $client->fetchUserFromToken($accessToken);
+            $request->getSession()->set('discord_access_token', $accessToken->getToken());
 
-        $discordId = $discordUser->getId();
-        $email     = $discordUser->getEmail();
-        $username  = $discordUser->getUsername();
+            /** @var DiscordResourceOwner $discordUser */
+            $discordUser = $client->fetchUserFromToken($accessToken);
 
-        return new SelfValidatingPassport(
-            new UserBadge($discordId, function() use ($discordId, $email, $username) {
-                $existing = $this->userRepository->findOneBy(['discordId' => $discordId]);
-                if ($existing) {
-                    return $existing;
-                }
-                if ($email) {
-                    $existing = $this->userRepository->findOneBy(['email' => $email]);
-                }
-                if (isset($existing)) {
-                    $existing->setDiscordId($discordId);
-                    if ($username) {
-                        $existing->setUsername($username);
+            $discordId = $discordUser->getId();
+            $email     = $discordUser->getEmail();
+            $username  = $discordUser->getUsername();
+
+            error_log("Discord Auth - ID: {$discordId}, Email: {$email}, Username: {$username}");
+
+            return new SelfValidatingPassport(
+                new UserBadge($discordId, function() use ($discordId, $email, $username) {
+                    $existing = $this->userRepository->findOneBy(['discordId' => $discordId]);
+                    if ($existing) {
+                        error_log("Utilisateur existant trouvé par Discord ID: {$existing->getId()}");
+                        return $existing;
                     }
-                    $this->em->persist($existing);
+
+                    if ($email) {
+                        $existing = $this->userRepository->findOneBy(['email' => $email]);
+                        if ($existing) {
+                            $existing->setDiscordId($discordId);
+                            if ($username) {
+                                $existing->setUsername($username);
+                            }
+                            $this->em->persist($existing);
+                            $this->em->flush();
+                            error_log("Utilisateur existant mis à jour avec Discord ID: {$existing->getId()}");
+                            return $existing;
+                        }
+                    }
+
+                    $user = new User();
+                    $user->setDiscordId($discordId)
+                        ->setEmail($email)
+                        ->setUsername($username)
+                        ->setRoles(['ROLE_USER']);
+
+                    $this->em->persist($user);
                     $this->em->flush();
-                    return $existing;
-                }
-                $user = new User();
-                $user->setDiscordId($discordId)
-                    ->setEmail($email)
-                    ->setUsername($username)
-                    ->setRoles(['ROLE_USER']);
-                $this->em->persist($user);
-                $this->em->flush();
-                return $user;
-            })
-        );
+
+                    error_log("Nouvel utilisateur créé: {$user->getId()}");
+                    return $user;
+                })
+            );
+        } catch (\Exception $e) {
+            error_log("Erreur dans l'authentification Discord: " . $e->getMessage());
+            throw new AuthenticationException('Erreur lors de l\'authentification Discord: ' . $e->getMessage());
+        }
     }
 
     public function onAuthenticationSuccess(Request $request, TokenInterface $token, string $firewallName): ?Response
@@ -89,6 +104,7 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
         $accessToken = $request->getSession()->get('discord_access_token');
 
         if (!$accessToken) {
+            error_log("Aucun token OAuth Discord trouvé dans la session");
             return new Response("Aucun token OAuth Discord trouvé", Response::HTTP_UNAUTHORIZED);
         }
 
@@ -107,12 +123,17 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
             )
         );
 
-        return $response;    }
+        error_log("Authentification réussie, redirection vers: {$targetUrl}");
+        return $response;
+    }
 
     public function onAuthenticationFailure(Request $request, AuthenticationException $exception): ?Response
     {
         $message = strtr($exception->getMessageKey(), $exception->getMessageData());
-        return new Response("Échec de l'authentification : $message", Response::HTTP_FORBIDDEN);
+        error_log("Échec de l'authentification Discord: {$message}");
+
+        $errorUrl = 'https://localhost:5173?error=auth_failed&message=' . urlencode($message);
+        return new RedirectResponse($errorUrl);
     }
 
     public function start(Request $request, ?AuthenticationException $authException = null): Response

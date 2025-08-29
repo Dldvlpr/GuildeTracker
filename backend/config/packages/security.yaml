@@ -8,7 +8,7 @@ security:
         app_user_provider:
             entity:
                 class: App\Entity\User
-                property: email
+                property: discordId
     firewalls:
         dev:
             pattern: ^/(_(profiler|wdt)|css|images|js)/
@@ -18,6 +18,8 @@ security:
             provider: app_user_provider
             custom_authenticators:
                 - App\Security\DiscordAuthenticator
+            entry_point: App\Security\DiscordAuthenticator
+
 
             # activate different ways to authenticate
             # https://symfony.com/doc/current/security.html#the-firewall
