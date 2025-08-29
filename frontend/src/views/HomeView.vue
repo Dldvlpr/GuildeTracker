@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
 </script>
-
 <template>
-  <section class="page home">
-    <h1 class="page-title">Dashboard</h1>
+  <section>
+    <p>Bienvenue sur GuildeTracker.</p>
     <div class="quick-links">
       <RouterLink to="/list" class="nav-card">View Players</RouterLink>
       <RouterLink to="/add" class="nav-card">Add Player</RouterLink>

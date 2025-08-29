@@ -32,8 +32,6 @@ interface Notification {
 const characters = ref<Character[]>([])
 const notifications = ref<Notification[]>([])
 
-ref(false)
-
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2)
 const toast = (m: string, t: ToastType = 'info') => {
   const id = genId()

@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { RouterView } from 'vue-router'
-import Header from '@/components/layout/Header.vue'
-import Footer from '@/components/layout/Footer.vue'
 import Sidebar from '@/components/layout/Sidebar.vue'
 import { useUserStore } from '@/stores/userStore'
 import { checkAuthStatus } from '@/services/auth'
@@ -34,12 +32,8 @@ onMounted(async () => {
 <template>
   <div class="h-screen flex bg-background text-default">
     <Sidebar />
-    <div class="flex flex-col flex-1">
-      <Header />
-      <main class="flex-1 overflow-auto p-4">
-        <RouterView />
-      </main>
-      <Footer />
-    </div>
+    <main class="flex-1 overflow-auto p-4">
+      <RouterView />
+    </main>
   </div>
 </template>
