@@ -5465,16 +5465,16 @@
         },
         {
             "name": "symfony/rate-limiter",
-            "version": "v7.3.0",
+            "version": "v7.3.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/rate-limiter.git",
-                "reference": "78a3dbd84386cb0aa7f375e3469294e7048e5a1a"
+                "reference": "7e855541d302ba752f86fb0e97932e7969fe9c04"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/rate-limiter/zipball/78a3dbd84386cb0aa7f375e3469294e7048e5a1a",
-                "reference": "78a3dbd84386cb0aa7f375e3469294e7048e5a1a",
+                "url": "https://api.github.com/repos/symfony/rate-limiter/zipball/7e855541d302ba752f86fb0e97932e7969fe9c04",
+                "reference": "7e855541d302ba752f86fb0e97932e7969fe9c04",
                 "shasum": ""
             },
             "require": {
@@ -5515,7 +5515,7 @@
                 "rate-limiter"
             ],
             "support": {
-                "source": "https://github.com/symfony/rate-limiter/tree/v7.3.0"
+                "source": "https://github.com/symfony/rate-limiter/tree/v7.3.2"
             },
             "funding": [
                 {
@@ -5527,11 +5527,15 @@
                     "type": "github"
                 },
                 {
+                    "url": "https://github.com/nicolas-grekas",
+                    "type": "github"
+                },
+                {
                     "url": "https://tidelift.com/funding/github/packagist/symfony/symfony",
                     "type": "tidelift"
                 }
             ],
-            "time": "2025-03-12T17:05:47+00:00"
+            "time": "2025-07-07T08:17:57+00:00"
         },
         {
             "name": "symfony/routing",

@@ -89,44 +89,33 @@
 
 <script setup lang="ts">
 defineOptions({ name: 'AppSidebar' })
-import { RouterLink } from 'vue-router'
-import { redirectToDiscordAuth } from '@/services/auth'
+import { RouterLink, useRouter } from 'vue-router'
+import { redirectToDiscordAuth, logoutUser } from '@/services/auth'
 import { useUserStore } from '@/stores/userStore'
 
+const router = useRouter()
 const { open } = defineProps<{ open: boolean }>()
 defineEmits(['close'])
 const userStore = useUserStore()
 
 function loginWithDiscord() {
-  try {
-    redirectToDiscordAuth()
-  } catch (error) {
-    console.error('Erreur lors de la redirection Discord:', error)
-  }
+  redirectToDiscordAuth()
 }
 
 async function logoutWithDiscord() {
   try {
-    const response = await fetch('/api/logout', {
-      method: 'GET',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
-
-    if (response.ok) {
-      console.log('Déconnexion réussie')
+    const ok = await logoutUser()
+    if (ok) {
       userStore.logout()
+      await router.push({ name: 'home' })
     } else {
-      console.error('Erreur lors de la déconnexion, status:', response.status)
+      console.error('Erreur lors de la déconnexion')
     }
-  } catch (error) {
-    console.error('Erreur lors de la déconnexion :', error)
+  } catch (e) {
+    console.error('Erreur lors de la déconnexion :', e)
   }
 }
 </script>
-
 <style scoped>
 </style>
 
