@@ -40,7 +40,9 @@ export const useUserStore = defineStore('user', {
       this.isLoading = true
       this._initPromise = (async () => {
         try {
-          const res = await fetch(`${apiBase}/api/me`, { credentials: 'include' })
+          const res = await fetch(`${apiBase}/api/me`, {
+            credentials: 'include', // VERY IMPORTANT
+            headers: { 'Accept': 'application/json' }})
           if (res.ok) {
             const data = (await res.json()) as DiscordUserInterface
             this.user = data

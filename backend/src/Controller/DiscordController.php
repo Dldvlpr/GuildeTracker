@@ -6,43 +6,63 @@ use App\Repository\UserRepository;
 use GuzzleHttp\Client;
 use KnpU\OAuth2ClientBundle\Client\ClientRegistry;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Component\Validator\Constraints\Json;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpFoundation\Cookie;
+use Symfony\Component\HttpFoundation\Response;
 
 class DiscordController extends AbstractController
 {
     #[Route('/api/me', name: 'api_me', methods: ['GET'])]
-    public function me(Request $request): JsonResponse
+    public function me(Request $request, UserRepository $users): JsonResponse
     {
-        $token = $request->cookies->get('DISCORD_TOKEN');
-        if (!$token) {
-            return $this->json(['error' => 'Non authentifié'], 401);
+        error_log('[/api/me] Cookies: '.json_encode($request->cookies->all()));
+
+        $sessionCookie = $request->cookies->get('APP_SESSION');
+        if (!$sessionCookie) {
+            return $this->json(['error' => 'Non authentifié (APP_SESSION manquant)'], 401);
         }
 
-        $client = new Client();
-        try {
-            $response = $client->get('https://discord.com/api/users/@me', [
-                'headers' => [
-                    'Authorization' => 'Bearer ' . $token,
-                    'Accept'        => 'application/json',
-                ]
-            ]);
-
-            $data = json_decode($response->getBody()->getContents(), true);
-
-            return $this->json([
-                'id'       => $data['id'],
-                'username' => $data['username'],
-                'email'    => $data['email'] ?? null,
-                'avatar'   => $data['avatar'] ?? null,
-            ]);
-        } catch (\Throwable $e) {
-            return $this->json(['error' => 'Token Discord invalide ou expiré'], 401);
+        $decoded = base64_decode($sessionCookie, true);
+        if ($decoded === false) {
+            return $this->json(['error' => 'Non authentifié (base64 invalide)', 'raw' => $sessionCookie], 401);
         }
+
+        $payload = json_decode($decoded, true);
+        if (!is_array($payload)) {
+            return $this->json(['error' => 'Non authentifié (json invalide)', 'decoded' => $decoded], 401);
+        }
+        if (!array_key_exists('uid', $payload)) {
+            return $this->json(['error' => 'Non authentifié (uid manquant)', 'payload' => $payload], 401);
+        }
+
+        $uid = $payload['uid'] ?? null;
+        if (is_int($uid)) {
+            $uidRaw = $uid;
+        } elseif (is_string($uid) && ctype_digit($uid)) {
+            $uidRaw = (int) $uid;
+        } else {
+            return $this->json(['error' => 'Non authentifié (uid non numérique)', 'uid' => $payload['uid']], 401);
+        }
+
+        error_log('[/api/me] Looking up user id=' . $uidRaw);
+
+        $user = $users->find($uidRaw);
+        if (!$user) {
+            return $this->json(['error' => 'Non authentifié (user introuvable)', 'uid' => $uidRaw], 401);
+        }
+
+        return $this->json([
+            'id'       => $user->getDiscordId(),
+            'username' => $user->getUsername(),
+            'email'    => $user->getEmail(),
+            'avatar'   => $user->getAvatar(),
+        ]);
     }
 
     #[Route('/api/logout', name: 'api_logout', methods: ['GET', 'POST'])]
@@ -78,15 +98,18 @@ class DiscordController extends AbstractController
     }
 
     #[Route('/connect/discord', name: 'connect_discord_start', methods: ['GET'])]
-    public function connect(Request $request, ClientRegistry $clientRegistry, RateLimiterFactory $discordOauthStart): RedirectResponse|JsonResponse
-    {
-        $limiter = $discordOauthStart->create($request->getClientIp() ?? 'none');
+    public function connect(
+        Request $request,
+        ClientRegistry $clientRegistry,
+        #[Autowire(service: 'limiter.discord_oauth_start')] RateLimiterFactory $discordLimiter
+    ): RedirectResponse|JsonResponse {
+        $limiter = $discordLimiter->create($request->getClientIp() ?? 'none');
         if (!$limiter->consume(1)->isAccepted()) {
             return $this->json(['error' => 'Too many request'], 429);
         }
 
-        $codeVerifier = rtrim(strtr(base64_encode(random_bytes(64)), '+/', '-_'), '=/');
-        $codeChallenge = rtrim(strtr(base64_encode(hash('sha256', $codeVerifier, true)), '+/', '-_'), '=/');
+        $codeVerifier  = rtrim(strtr(base64_encode(random_bytes(64)), '+/', '-_'), '=');
+        $codeChallenge = rtrim(strtr(base64_encode(hash('sha256', $codeVerifier, true)), '+/', '-_'), '=');
 
         $request->getSession()->set('discord_pkce_verifier', $codeVerifier);
 
@@ -103,15 +126,13 @@ class DiscordController extends AbstractController
     public function connectCheck(
         Request $request,
         ClientRegistry $clients,
-        RateLimiterFactory $discord_oauth_callback,
+        #[Autowire(service: 'limiter.discord_oauth_callback')] RateLimiterFactory $discordCallbackLimiter,
         UserRepository $users,
-        EntityManagerInterface $em,
-    ): RedirectResponse
-    {
-        // Rate limit
-        $limiter = $discord_oauth_callback->create($request->getClientIp() ?? 'anon');
+        \Doctrine\ORM\EntityManagerInterface $em,
+    ) {
+        $limiter = $discordCallbackLimiter->create($request->getClientIp() ?? 'anon');
         if (!$limiter->consume(1)->isAccepted()) {
-            return $this->redirect('https://app.example.com/auth/error?reason=rate_limited');
+            return $this->redirect($this->getParameter('front.error_uri') . '?reason=oauth_failed');
         }
 
         $client = $clients->getClient('discord');
@@ -120,15 +141,12 @@ class DiscordController extends AbstractController
             $verifier = $request->getSession()->get('discord_pkce_verifier');
             $request->getSession()->remove('discord_pkce_verifier');
 
-            // Échange code -> tokens avec PKCE
             $accessToken = $client->getAccessToken(['code_verifier' => $verifier]);
 
-            // Profil @me
             $discordUser = $client->fetchUserFromToken($accessToken);
             $discordId = (string) $discordUser->getId();
             $arr = $discordUser->toArray();
 
-            // Upsert user + stocker tokens SERVER-SIDE (pas en cookie front)
             $user = $users->findOneBy(['discordId' => $discordId]) ?? new \App\Entity\User();
             $user->setDiscordId($discordId);
             $user->setUsername($arr['username'] ?? null);
@@ -141,23 +159,40 @@ class DiscordController extends AbstractController
             $em->persist($user);
             $em->flush();
 
-            // Pose UNIQUEMENT ta session applicative (HttpOnly). Pas de token Discord côté navigateur.
-            $response = $this->redirect($this->getParameter('front.success_uri'));
-            $response->headers->setCookie(
-                cookie(
-                    name: 'APP_SESSION',
-                    value: base64_encode(json_encode(['uid' => $user->getId()])), // idéalement: id de session opaque signé
-                    expires: 0,
-                    path: '/',
-                    domain: null,
-                    secure: true,
-                    httpOnly: true,
-                    sameSite: 'Lax'
-                )
-            );
+            $cookie = Cookie::create('APP_SESSION')
+                ->withValue(base64_encode(json_encode(['uid' => (int) $user->getId()])))
+                ->withPath('/')
+                ->withSecure(true)
+                ->withHttpOnly(true)
+                ->withSameSite('None');
+
+            $frontSuccess = $this->getParameter('front.success_uri');
+
+            $html = <<<HTML
+<!doctype html>
+<meta charset="utf-8">
+<title>Connexion…</title>
+<p>Connexion réussie. Redirection…</p>
+<script>
+  window.location.replace({json_encode($frontSuccess)});
+</script>
+HTML;
+
+            $response = new Response($html, 200);
+            $response->headers->setCookie($cookie);
+            $response->headers->clearCookie('DISCORD_TOKEN', '/');
             return $response;
         } catch (\Throwable $e) {
             return $this->redirect($this->getParameter('front.success_error'));
         }
+    }
+
+    #[Route('/debug/cookies', name: 'debug_cookies', methods: ['GET'])]
+    public function debugCookies(Request $request): JsonResponse
+    {
+        return $this->json([
+            'cookies' => $request->cookies->all(),
+            'headers' => $request->headers->all(),
+        ]);
     }
 }
