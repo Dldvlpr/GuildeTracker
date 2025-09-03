@@ -33,7 +33,6 @@ class DiscordController extends AbstractController
             return new Response('Code manquant', 400);
         }
 
-        // Échange du code contre un token
         $response = $this->httpClient->request('POST', 'https://discord.com/api/oauth2/token', [
             'body' => [
                 'client_id'     => $_ENV['OAUTH_DISCORD_CLIENT_ID'],
@@ -46,7 +45,6 @@ class DiscordController extends AbstractController
 
         $data = $response->toArray();
 
-        // Récupération des informations utilisateur
         $userResponse = $this->httpClient->request('GET', 'https://discord.com/api/users/@me', [
             'headers' => [
                 'Authorization' => 'Bearer '.$data['access_token'],
@@ -54,7 +52,8 @@ class DiscordController extends AbstractController
         ]);
 
         $user = $userResponse->toArray();
+        $request->getSession()->set('user', $user);
 
-        return new Response('<pre>'.htmlspecialchars(print_r($user, true)).'</pre>');
+        return $this->redirect($_ENV['FRONT_SUCCESS_URI']);
     }
 }
