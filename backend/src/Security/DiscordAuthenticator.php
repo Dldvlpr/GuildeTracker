@@ -113,6 +113,7 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
         }
 
         $response = new RedirectResponse($targetUrl);
+        $isSecure = $_ENV['COOKIE_SECURE'] === 'true';
 
         // Set the session cookie expected by /api/me
         $user = $token->getUser();
@@ -120,9 +121,9 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
             $cookie = Cookie::create('APP_SESSION')
                 ->withValue(base64_encode(json_encode(['uid' => (int) $user->getId()])))
                 ->withPath('/')
-                ->withSecure(true)
+                ->withSecure($isSecure)
                 ->withHttpOnly(true)
-                ->withSameSite('None');
+                ->withSameSite($isSecure ? 'None' : 'Lax');
             $response->headers->setCookie($cookie);
         }
 
