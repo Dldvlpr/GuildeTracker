@@ -21,7 +21,6 @@ class DiscordController extends AbstractController
     #[Route('/connect/discord/check', name: 'connect_discord_check', methods: ['GET'])]
     public function check(): void
     {
-        // The request is handled by DiscordAuthenticator
     }
 
     #[Route('/api/me', name: 'api_me', methods: ['GET'])]
