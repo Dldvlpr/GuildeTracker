@@ -6,7 +6,7 @@ export function redirectToDiscordAuth() {
 
 export async function checkAuthStatus() {
   try {
-    const response = await fetch('/api/me', {
+    const response = await fetch(`${API_BASE}/api/me`, {
       method: 'GET',
       credentials: 'include',
     });
@@ -25,7 +25,7 @@ export async function checkAuthStatus() {
 
 export async function logoutUser() {
   try {
-    const response = await fetch('/api/logout', {
+    const response = await fetch(`${API_BASE}/api/logout`, {
       method: 'GET',
       credentials: 'include',
       headers: {

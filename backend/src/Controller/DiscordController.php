@@ -2,6 +2,7 @@
 namespace App\Controller;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
@@ -56,4 +57,25 @@ class DiscordController extends AbstractController
 
         return $this->redirect($_ENV['FRONT_SUCCESS_URI']);
     }
+
+    #[Route('/api/me', name: 'current_user')]
+    public function me(Request $request): JsonResponse
+    {
+        $user = $request->getSession()->get('user');
+        if (!$user) {
+            return $this->json(['message' => 'Not authenticated'], 401);
+        }
+        return $this->json($user);
+    }
+
+    #[Route('/api/logout', name: 'current_user')]
+    public function logout(Request $request): RedirectResponse
+    {
+        if ($request->getSession()->has('user')) {
+            $request->getSession()->remove('user');
+        }
+
+        return $this->redirect($_ENV['FRONT_SUCCESS_URI']);
+    }
+
 }
