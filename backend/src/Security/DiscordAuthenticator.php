@@ -103,31 +103,52 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
 
     public function onAuthenticationSuccess(Request $request, TokenInterface $token, string $firewallName): ?Response
     {
-        $targetUrl = $this->getTargetPath($request->getSession(), $firewallName) ?? (string) $this->params->get('front.success_uri');
+        $targetUrl = $this->getTargetPath($request->getSession(), $firewallName) ??
+            (string) $this->params->get('front.success_uri');
 
         $accessToken = $request->getSession()->get('discord_access_token');
-
         if (!$accessToken) {
-            error_log("Aucun token OAuth Discord trouvé dans la session");
+            error_log("❌ Aucun token OAuth Discord trouvé dans la session");
             return new Response("Aucun token OAuth Discord trouvé", Response::HTTP_UNAUTHORIZED);
         }
 
         $response = new RedirectResponse($targetUrl);
-        $isSecure = $_ENV['COOKIE_SECURE'] === 'true';
 
-        // Set the session cookie expected by /api/me
+        // Debug des valeurs importantes
+        error_log("🔍 Request isSecure: " . ($request->isSecure() ? 'true' : 'false'));
+        error_log("🔍 Request Host: " . $request->getHost());
+        error_log("🔍 Request Port: " . $request->getPort());
+        error_log("🔍 Target URL: " . $targetUrl);
+        error_log("🔍 COOKIE_SECURE env: " . ($_ENV['COOKIE_SECURE'] ?? 'undefined'));
+
+        $isSecure = $request->isSecure(); // Utiliser la détection automatique
+
         $user = $token->getUser();
         if ($user instanceof \App\Entity\User) {
+            $cookieValue = base64_encode(json_encode(['uid' => (int) $user->getId()]));
+
+            error_log("🍪 Creating cookie for user ID: " . $user->getId());
+            error_log("🍪 Cookie value: " . $cookieValue);
+            error_log("🍪 Cookie secure: " . ($isSecure ? 'true' : 'false'));
+            error_log("🍪 Cookie SameSite: " . ($isSecure ? 'None' : 'Lax'));
+
             $cookie = Cookie::create('APP_SESSION')
-                ->withValue(base64_encode(json_encode(['uid' => (int) $user->getId()])))
+                ->withValue($cookieValue)
                 ->withPath('/')
                 ->withSecure($isSecure)
                 ->withHttpOnly(true)
                 ->withSameSite($isSecure ? 'None' : 'Lax');
+
             $response->headers->setCookie($cookie);
+            error_log("✅ Cookie ajouté à la réponse");
+
+            // Debug des headers de réponse
+            error_log("🔍 Response headers: " . json_encode($response->headers->all()));
+        } else {
+            error_log("❌ User n'est pas une instance de App\Entity\User");
         }
 
-        error_log("Authentification réussie, redirection vers: {$targetUrl}");
+        error_log("🎯 Redirection vers: {$targetUrl}");
         return $response;
     }
 

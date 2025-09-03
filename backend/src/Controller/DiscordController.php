@@ -6,63 +6,41 @@ use App\Repository\UserRepository;
 use GuzzleHttp\Client;
 use KnpU\OAuth2ClientBundle\Client\ClientRegistry;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Annotation\Route;
-use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Component\HttpFoundation\Cookie;
-use Symfony\Component\HttpFoundation\Response;
 
 class DiscordController extends AbstractController
 {
     #[Route('/api/me', name: 'api_me', methods: ['GET'])]
-    public function me(Request $request, UserRepository $users): JsonResponse
+    public function me(Request $request): JsonResponse
     {
-        error_log('[/api/me] Cookies: '.json_encode($request->cookies->all()));
-
-        $sessionCookie = $request->cookies->get('APP_SESSION');
-        if (!$sessionCookie) {
-            return $this->json(['error' => 'Non authentifié (APP_SESSION manquant)'], 401);
+        $token = $request->cookies->get('DISCORD_TOKEN');
+        if (!$token) {
+            return $this->json(['error' => 'Non authentifié'], 401);
         }
 
-        $decoded = base64_decode($sessionCookie, true);
-        if ($decoded === false) {
-            return $this->json(['error' => 'Non authentifié (base64 invalide)', 'raw' => $sessionCookie], 401);
-        }
+        $client = new Client();
+        try {
+            $response = $client->get('https://discord.com/api/users/@me', [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $token,
+                    'Accept'        => 'application/json',
+                ]
+            ]);
 
-        $payload = json_decode($decoded, true);
-        if (!is_array($payload)) {
-            return $this->json(['error' => 'Non authentifié (json invalide)', 'decoded' => $decoded], 401);
-        }
-        if (!array_key_exists('uid', $payload)) {
-            return $this->json(['error' => 'Non authentifié (uid manquant)', 'payload' => $payload], 401);
-        }
+            $data = json_decode($response->getBody()->getContents(), true);
 
-        $uid = $payload['uid'] ?? null;
-        if (is_int($uid)) {
-            $uidRaw = $uid;
-        } elseif (is_string($uid) && ctype_digit($uid)) {
-            $uidRaw = (int) $uid;
-        } else {
-            return $this->json(['error' => 'Non authentifié (uid non numérique)', 'uid' => $payload['uid']], 401);
+            return $this->json([
+                'id'       => $data['id'],
+                'username' => $data['username'],
+                'email'    => $data['email'] ?? null,
+                'avatar'   => $data['avatar'] ?? null,
+            ]);
+        } catch (\Throwable $e) {
+            return $this->json(['error' => 'Token Discord invalide ou expiré'], 401);
         }
-
-        error_log('[/api/me] Looking up user id=' . $uidRaw);
-
-        $user = $users->find($uidRaw);
-        if (!$user) {
-            return $this->json(['error' => 'Non authentifié (user introuvable)', 'uid' => $uidRaw], 401);
-        }
-
-        return $this->json([
-            'id'       => $user->getDiscordId(),
-            'username' => $user->getUsername(),
-            'email'    => $user->getEmail(),
-            'avatar'   => $user->getAvatar(),
-        ]);
     }
 
     #[Route('/api/logout', name: 'api_logout', methods: ['GET', 'POST'])]
@@ -93,58 +71,21 @@ class DiscordController extends AbstractController
             'Lax'
         );
 
-        // Also clear our app session cookie used by /api/me
-        $response->headers->clearCookie(
-            'APP_SESSION',
-            '/',
-            null,
-            true,
-            true,
-            'None'
-        );
-
         error_log('Response status: 200');
         return $response;
     }
 
     #[Route('/connect/discord', name: 'connect_discord_start', methods: ['GET'])]
-    public function connect(
-        Request $request,
-        ClientRegistry $clientRegistry,
-        #[Autowire(service: 'limiter.discord_oauth_start')] RateLimiterFactory $discordLimiter
-    ): RedirectResponse|JsonResponse {
-        $limiter = $discordLimiter->create($request->getClientIp() ?? 'none');
-        if (!$limiter->consume(1)->isAccepted()) {
-            return $this->json(['error' => 'Too many request'], 429);
-        }
-
-        $codeVerifier  = rtrim(strtr(base64_encode(random_bytes(64)), '+/', '-_'), '=');
-        $codeChallenge = rtrim(strtr(base64_encode(hash('sha256', $codeVerifier, true)), '+/', '-_'), '=');
-
-        $request->getSession()->set('discord_pkce_verifier', $codeVerifier);
-
-        return $clientRegistry->getClient('discord')->redirect(
-            ['identify', 'email'],
-            [
-                'code_challenge' => $codeChallenge,
-                'code_challenge_method' => 'S256',
-            ]
-        );
+    public function connect(ClientRegistry $clientRegistry): RedirectResponse
+    {
+        return $clientRegistry
+            ->getClient('discord')
+            ->redirect(['identify', 'email']);
     }
 
-    #[Route('/connect/discord/check', name: 'connect_discord_check', methods: ['GET'])]
-    public function connectCheck(): void
+    #[Route('/connect/discord/check', name: 'connect_discord_check')]
+    public function connectCheck(Request $request): RedirectResponse
     {
-        // Handled by App\\Security\\DiscordAuthenticator
-        throw new \LogicException('The Discord OAuth callback must be handled by the security authenticator.');
-    }
-
-    #[Route('/debug/cookies', name: 'debug_cookies', methods: ['GET'])]
-    public function debugCookies(Request $request): JsonResponse
-    {
-        return $this->json([
-            'cookies' => $request->cookies->all(),
-            'headers' => $request->headers->all(),
-        ]);
+        return $this->redirectToRoute('connect_discord_start');
     }
 }
