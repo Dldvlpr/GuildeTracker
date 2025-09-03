@@ -93,6 +93,16 @@ class DiscordController extends AbstractController
             'Lax'
         );
 
+        // Also clear our app session cookie used by /api/me
+        $response->headers->clearCookie(
+            'APP_SESSION',
+            '/',
+            null,
+            true,
+            true,
+            'None'
+        );
+
         error_log('Response status: 200');
         return $response;
     }
@@ -123,68 +133,10 @@ class DiscordController extends AbstractController
     }
 
     #[Route('/connect/discord/check', name: 'connect_discord_check', methods: ['GET'])]
-    public function connectCheck(
-        Request $request,
-        ClientRegistry $clients,
-        #[Autowire(service: 'limiter.discord_oauth_callback')] RateLimiterFactory $discordCallbackLimiter,
-        UserRepository $users,
-        \Doctrine\ORM\EntityManagerInterface $em,
-    ) {
-        $limiter = $discordCallbackLimiter->create($request->getClientIp() ?? 'anon');
-        if (!$limiter->consume(1)->isAccepted()) {
-            return $this->redirect($this->getParameter('front.error_uri') . '?reason=oauth_failed');
-        }
-
-        $client = $clients->getClient('discord');
-
-        try {
-            $verifier = $request->getSession()->get('discord_pkce_verifier');
-            $request->getSession()->remove('discord_pkce_verifier');
-
-            $accessToken = $client->getAccessToken(['code_verifier' => $verifier]);
-
-            $discordUser = $client->fetchUserFromToken($accessToken);
-            $discordId = (string) $discordUser->getId();
-            $arr = $discordUser->toArray();
-
-            $user = $users->findOneBy(['discordId' => $discordId]) ?? new \App\Entity\User();
-            $user->setDiscordId($discordId);
-            $user->setUsername($arr['username'] ?? null);
-            $user->setEmail($arr['email'] ?? null);
-            $user->setAvatar($arr['avatar'] ?? null);
-            $user->setDiscordAccessToken($accessToken->getToken());
-            $user->setDiscordRefreshToken($accessToken->getRefreshToken());
-            $user->setDiscordTokenExpiresAt((new \DateTimeImmutable())->setTimestamp($accessToken->getExpires() ?? (time()+3600)));
-
-            $em->persist($user);
-            $em->flush();
-
-            $cookie = Cookie::create('APP_SESSION')
-                ->withValue(base64_encode(json_encode(['uid' => (int) $user->getId()])))
-                ->withPath('/')
-                ->withSecure(true)
-                ->withHttpOnly(true)
-                ->withSameSite('None');
-
-            $frontSuccess = $this->getParameter('front.success_uri');
-
-            $html = <<<HTML
-<!doctype html>
-<meta charset="utf-8">
-<title>Connexion…</title>
-<p>Connexion réussie. Redirection…</p>
-<script>
-  window.location.replace({json_encode($frontSuccess)});
-</script>
-HTML;
-
-            $response = new Response($html, 200);
-            $response->headers->setCookie($cookie);
-            $response->headers->clearCookie('DISCORD_TOKEN', '/');
-            return $response;
-        } catch (\Throwable $e) {
-            return $this->redirect($this->getParameter('front.success_error'));
-        }
+    public function connectCheck(): void
+    {
+        // Handled by App\\Security\\DiscordAuthenticator
+        throw new \LogicException('The Discord OAuth callback must be handled by the security authenticator.');
     }
 
     #[Route('/debug/cookies', name: 'debug_cookies', methods: ['GET'])]
@@ -193,7 +145,6 @@ HTML;
         return $this->json([
             'cookies' => $request->cookies->all(),
             'headers' => $request->headers->all(),
-            'roro' => 'roro'
         ]);
     }
 }

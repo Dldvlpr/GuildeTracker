@@ -3,50 +3,32 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import tailwindcss from '@tailwindcss/vite'
-import fs from 'fs'
-import path from 'path'
+import fs from 'node:fs'
+import path from 'node:path'
+
+// ESM-safe __dirname
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
-  plugins: [
-    vue(),
-    vueDevTools(),
-    tailwindcss(),
-  ],
+  plugins: [vue(), vueDevTools(), tailwindcss()],
   resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
-    },
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   server: {
+    https: {
+      cert: fs.readFileSync(path.resolve(__dirname, 'certs/localhost+2.pem')),
+      key:  fs.readFileSync(path.resolve(__dirname, 'certs/localhost+2-key.pem')),
+    },
     host: 'localhost',
     port: 5173,
-    https: {
-      key: fs.readFileSync(path.resolve(__dirname, 'localhost+2-key.pem')),
-      cert: fs.readFileSync(path.resolve(__dirname, 'localhost+2.pem')),
-    },
     proxy: {
       '/api': {
-        target: 'https://localhost:443',
+        target: 'https://localhost:8000',
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => {
-          console.log('🔄 Rewriting path:', path);
-          return path;
-        },
-        configure: (proxy) => {
-          proxy.on('proxyReq', (proxyReq, req) => {
-            console.log('🚀 Proxying request:', req.method, req.url, '-> https://localhost:443' + req.url);
-          });
-          proxy.on('proxyRes', (proxyRes, req) => {
-            console.log('📨 Proxy response:', proxyRes.statusCode, 'for', req.url);
-          });
-          proxy.on('error', (err, req) => {
-            console.error('❌ Proxy error:', err.message, 'for', req.url);
-          });
-        }
       },
       '/connect': {
-        target: 'https://localhost:443',
+        target: 'https://localhost:8000',
         changeOrigin: true,
         secure: false,
       }

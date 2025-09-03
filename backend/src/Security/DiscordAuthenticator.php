@@ -10,6 +10,8 @@ use KnpU\OAuth2ClientBundle\Security\Authenticator\OAuth2Authenticator;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\Cookie;
+use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Routing\RouterInterface;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
@@ -28,7 +30,8 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
         private readonly ClientRegistry $clientRegistry,
         private readonly EntityManagerInterface $em,
         private readonly RouterInterface $router,
-        private readonly UserRepository $userRepository
+        private readonly UserRepository $userRepository,
+        private readonly ParameterBagInterface $params,
     ) {}
 
     public function supports(Request $request): ?bool
@@ -40,7 +43,11 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
     {
         try {
             $client = $this->clientRegistry->getClient('discord');
-            $accessToken = $this->fetchAccessToken($client);
+            // Include PKCE code_verifier if present (set during /connect/discord)
+            $verifier = $request->getSession()->get('discord_pkce_verifier');
+            $request->getSession()->remove('discord_pkce_verifier');
+            $options = $verifier ? ['code_verifier' => $verifier] : [];
+            $accessToken = $this->fetchAccessToken($client, $options);
 
             $request->getSession()->set('discord_access_token', $accessToken->getToken());
 
@@ -96,10 +103,7 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
 
     public function onAuthenticationSuccess(Request $request, TokenInterface $token, string $firewallName): ?Response
     {
-        $targetUrl = $this->getTargetPath($request->getSession(), $firewallName);
-        if (!$targetUrl) {
-            $targetUrl = 'https://localhost:5173';
-        }
+        $targetUrl = $this->getTargetPath($request->getSession(), $firewallName) ?? (string) $this->params->get('front.success_uri');
 
         $accessToken = $request->getSession()->get('discord_access_token');
 
@@ -110,18 +114,17 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
 
         $response = new RedirectResponse($targetUrl);
 
-        $response->headers->setCookie(
-            new \Symfony\Component\HttpFoundation\Cookie(
-                name: 'DISCORD_TOKEN',
-                value: $accessToken,
-                expire: time() + 3600,
-                path: '/',
-                domain: null,
-                secure: true,
-                httpOnly: true,
-                sameSite: 'Lax'
-            )
-        );
+        // Set the session cookie expected by /api/me
+        $user = $token->getUser();
+        if ($user instanceof \App\Entity\User) {
+            $cookie = Cookie::create('APP_SESSION')
+                ->withValue(base64_encode(json_encode(['uid' => (int) $user->getId()])))
+                ->withPath('/')
+                ->withSecure(true)
+                ->withHttpOnly(true)
+                ->withSameSite('None');
+            $response->headers->setCookie($cookie);
+        }
 
         error_log("Authentification réussie, redirection vers: {$targetUrl}");
         return $response;
@@ -129,10 +132,14 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
 
     public function onAuthenticationFailure(Request $request, AuthenticationException $exception): ?Response
     {
-        $message = strtr($exception->getMessageKey(), $exception->getMessageData());
+        // Prefer the real exception message for debugging clarity
+        $message = $exception->getMessage();
         error_log("Échec de l'authentification Discord: {$message}");
 
-        $errorUrl = 'https://localhost:5173?error=auth_failed&message=' . urlencode($message);
+        $errorUrl = (string) $this->params->get('front.error_uri');
+        // Keep context for the frontend if useful
+        $glue = str_contains($errorUrl, '?') ? '&' : '?';
+        $errorUrl .= $glue . 'reason=auth_failed&message=' . urlencode($message);
         return new RedirectResponse($errorUrl);
     }
 
