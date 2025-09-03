@@ -43,7 +43,6 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
     {
         try {
             $client = $this->clientRegistry->getClient('discord');
-            // Include PKCE code_verifier if present (set during /connect/discord)
             $verifier = $request->getSession()->get('discord_pkce_verifier');
             $request->getSession()->remove('discord_pkce_verifier');
             $options = $verifier ? ['code_verifier' => $verifier] : [];
@@ -154,12 +153,10 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
 
     public function onAuthenticationFailure(Request $request, AuthenticationException $exception): ?Response
     {
-        // Prefer the real exception message for debugging clarity
         $message = $exception->getMessage();
         error_log("Échec de l'authentification Discord: {$message}");
 
         $errorUrl = (string) $this->params->get('front.error_uri');
-        // Keep context for the frontend if useful
         $glue = str_contains($errorUrl, '?') ? '&' : '?';
         $errorUrl .= $glue . 'reason=auth_failed&message=' . urlencode($message);
         return new RedirectResponse($errorUrl);

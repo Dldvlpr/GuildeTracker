@@ -1,7 +1,7 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
 export function redirectToDiscordAuth() {
-  window.location.href = `${API_BASE}/api/login`;
+  window.location.href = `${API_BASE}/connect/discord`;
 }
 
 export async function checkAuthStatus() {
@@ -26,7 +26,7 @@ export async function checkAuthStatus() {
 export async function logoutUser() {
   try {
     const response = await fetch(`${API_BASE}/api/logout`, {
-      method: 'GET',
+      method: 'POST',
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
@@ -34,12 +34,12 @@ export async function logoutUser() {
     });
 
     if (response.ok) {
-      const authStatus = await checkAuthStatus();
-      return { success: true, isStillAuthenticated: authStatus.isAuthenticated };
+      return { success: true, isStillAuthenticated: false };
     } else {
       return { success: false, error: `Status: ${response.status}` };
     }
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, error: message };
   }
 }
