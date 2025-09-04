@@ -1,5 +1,5 @@
 <template>
-  <section class="max-w-screen-xl mx-auto flex flex-col gap-4 p-4">
+  <section class="mx-auto max-w-6xl flex flex-col gap-4">
     <PlayersHeaderStats
       :total="characters.length"
       :tanks="getCharactersByRole('Tanks').length"
@@ -9,25 +9,16 @@
 
     <PlayersFilters :classes="availableClasses" v-model="filters" @clear="clearFilters" />
 
-    <div
-      v-if="filteredCharacters.length === 0"
-      class="flex justify-center items-center min-h-[280px] p-8"
-      role="status"
-      aria-live="polite"
-    >
-      <div class="text-center max-w-md">
-        <span class="text-4xl mb-3 block">👤</span>
-        <h3 class="text-xl font-bold text-primary mb-2">No characters found</h3>
-        <p v-if="characters.length === 0" class="text-secondary">
-          You haven’t created any characters yet.
-        </p>
-        <p v-else class="text-secondary">
-          No characters match the selected filters.
-        </p>
+    <div v-if="filteredCharacters.length === 0" class="flex items-center justify-center min-h-[280px] p-8" role="status" aria-live="polite">
+      <div class="max-w-md text-center">
+        <span class="mb-3 block text-4xl">👤</span>
+        <h3 class="mb-2 text-xl font-bold text-white">No characters found</h3>
+        <p v-if="characters.length === 0" class="text-slate-400">You haven’t created any characters yet.</p>
+        <p v-else class="text-slate-400">No characters match the selected filters.</p>
       </div>
     </div>
 
-    <div v-else class="grid gap-5 p-5 sm:grid-cols-2 lg:grid-cols-3">
+    <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <CharacterCard
         v-for="c in filteredCharacters"
         :key="c.id"
@@ -122,7 +113,6 @@ const loadFromLocalStorage = () => {
       const parsed = JSON.parse(saved)
       if (Array.isArray(parsed)) {
         characters.value = parsed
-        pushToast(`${parsed.length} character(s) loaded.`, 'info')
       }
     }
   } catch {

@@ -2,7 +2,6 @@
   <div
     class="min-h-[100svh] flex bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-100 selection:bg-indigo-600/30 selection:text-white"
   >
-    <!-- Overlay mobile -->
     <Transition
       enter-active-class="transition duration-200"
       enter-from-class="opacity-0"
@@ -19,12 +18,9 @@
       />
     </Transition>
 
-    <!-- Sidebar -->
     <Sidebar :open="sidebarOpen" @close="sidebarOpen = false" />
 
-    <!-- Main column -->
-    <div class="flex-1 flex flex-col min-w-0">
-      <!-- Top bar (mobile only) -->
+    <div class="flex-1 flex flex-col min-w-0 md:pl-64">
       <header
         class="md:hidden sticky top-0 z-30 border-b border-white/5 bg-slate-950/60 backdrop-blur"
       >
@@ -58,9 +54,7 @@
         </div>
       </header>
 
-      <!-- Content -->
       <main class="flex-1 overflow-auto">
-        <!-- halo décoratif pour matcher la Home -->
         <div class="pointer-events-none -z-10 h-0">
           <div
             class="relative"
@@ -72,13 +66,11 @@
           </div>
         </div>
 
-        <!-- le padding est géré ici pour uniformiser les pages -->
         <div class="px-4 py-4 md:px-6 md:py-6">
           <RouterView />
         </div>
       </main>
 
-      <!-- Footer global (optionnel, cohérent avec Home) -->
       <footer class="border-t border-white/5">
         <div
           class="mx-auto max-w-6xl px-4 py-6 text-xs text-slate-400 flex items-center justify-between"

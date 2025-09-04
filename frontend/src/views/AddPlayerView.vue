@@ -1,5 +1,5 @@
 <template>
-  <section class="max-w-screen-xl mx-auto flex flex-col gap-4 p-4">
+  <section class="mx-auto max-w-6xl flex flex-col gap-4">
     <CharacterForm
       form-title="Add character"
       :enable-auto-validation="true"
@@ -56,7 +56,6 @@ const load = () => {
       const arr = JSON.parse(s)
       if (Array.isArray(arr)) {
         characters.value = arr
-        toast(`${arr.length} character(s) loaded.`, 'info')
       }
     }
   } catch {

@@ -2,12 +2,11 @@
 </script>
 
 <template>
-  <section class="max-w-screen-xl mx-auto flex flex-col gap-4 p-4">
-    <h1 class="text-2xl font-bold text-primary">Assignments</h1>
-    <p class="text-secondary">This section is under construction.</p>
+  <section class="mx-auto max-w-6xl flex flex-col gap-3">
+    <h1 class="text-2xl font-bold text-white">Assignments</h1>
+    <p class="text-slate-400">This section is under construction.</p>
   </section>
 </template>
 
 <style scoped>
 </style>
-

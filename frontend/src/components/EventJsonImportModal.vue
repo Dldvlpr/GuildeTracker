@@ -1,61 +1,78 @@
 <template>
   <div
     v-if="modelValue"
-    class="backdrop"
+    class="fixed inset-0 z-[1000] grid place-items-center bg-black/50 backdrop-blur-sm"
     @click.self="close"
     role="dialog"
     aria-modal="true"
     aria-labelledby="import-title"
   >
-    <div class="modal">
-      <header class="modal__header">
-        <h3 id="import-title">Import players from event JSON</h3>
-        <button class="icon-btn" @click="close" aria-label="Close">✖</button>
+    <div
+      class="w-[min(900px,94vw)] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/80 text-slate-100 shadow-2xl backdrop-blur"
+    >
+      <header class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
+        <h3 id="import-title" class="text-base font-semibold">Import players from event JSON</h3>
+        <button
+          class="inline-flex items-center justify-center rounded-lg px-2.5 py-1.5 text-sm text-slate-200 ring-1 ring-inset ring-white/10 hover:bg-white/5"
+          @click="close"
+          aria-label="Close"
+        >
+          ✖
+        </button>
       </header>
 
-      <section class="modal__body">
-        <p class="hint">
+      <section class="grid gap-3 px-4 py-4">
+        <p class="m-0 text-sm text-slate-400">
           Paste your event JSON (must contain a <code>signUps</code> array). We will extract players
           and map them to characters.
         </p>
 
         <textarea
           v-model="text"
-          class="textarea"
+          class="min-h-[260px] w-full resize-y rounded-xl bg-slate-950/60 px-3 py-2 text-sm text-slate-100 ring-1 ring-inset ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 font-mono"
           :placeholder="placeholder"
           rows="14"
           spellcheck="false"
-        ></textarea>
+        />
 
-        <div v-if="error" class="error" role="alert">{{ error }}</div>
+        <div v-if="error" class="text-sm font-semibold text-rose-400" role="alert">{{ error }}</div>
 
-        <details class="example">
-          <summary>Required shape</summary>
-          <pre>
-{
+        <details class="rounded-xl bg-white/5 px-3 py-2">
+          <summary class="cursor-pointer text-sm">Required shape</summary>
+          <pre class="m-0 mt-1 whitespace-pre-wrap text-xs text-slate-300">{
   "date": "1-9-2025",
   "signUps": [
     { "name": "shaqx", "className": "Druid", "specName": "Feral", "roleName": "Melee" }
   ]
-}</pre
-          >
+}</pre>
         </details>
 
-        <div class="options">
-          <label class="opt">
+        <div class="grid gap-1">
+          <label class="inline-flex items-center gap-2 text-sm text-slate-300">
             <input type="checkbox" v-model="includeNonPlayableClasses" />
             Include non-playable classes (Bench, Absence, Tentative, Late)
           </label>
-          <label class="opt">
+          <label class="inline-flex items-center gap-2 text-sm text-slate-300">
             <input type="checkbox" v-model="preferSpecRole" />
             If spec has a role, prefer it over roleName
           </label>
         </div>
       </section>
 
-      <footer class="modal__footer">
-        <button class="btn btn-outline" @click="close">Cancel</button>
-        <button class="btn btn-primary" @click="confirm" :disabled="!text.trim()">Import</button>
+      <footer class="flex items-center justify-end gap-2 border-t border-white/10 px-4 py-3">
+        <button
+          class="inline-flex items-center gap-2 rounded-xl bg-white/0 px-3 py-2 text-sm font-semibold text-slate-200 ring-1 ring-inset ring-white/10 transition hover:bg-white/5 hover:text-white"
+          @click="close"
+        >
+          Cancel
+        </button>
+        <button
+          class="inline-flex items-center gap-2 rounded-xl bg-indigo-600/90 px-3 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-500 disabled:opacity-50"
+          @click="confirm"
+          :disabled="!text.trim()"
+        >
+          Import
+        </button>
       </footer>
     </div>
   </div>
@@ -176,112 +193,5 @@ const confirm = () => {
 </script>
 
 <style scoped>
-.backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(2, 6, 23, 0.55);
-  display: grid;
-  place-items: center;
-  z-index: 1000;
-}
-.modal {
-  width: min(900px, 94vw);
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 25px 60px rgba(2, 6, 23, 0.25);
-  overflow: hidden;
-  font-family: 'Inter', 'Segoe UI', sans-serif;
-}
-.modal__header,
-.modal__footer {
-  padding: 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  border-bottom: 1px solid #e2e8f0;
-}
-.modal__footer {
-  border-top: 1px solid #e2e8f0;
-  border-bottom: 0;
-  justify-content: flex-end;
-}
-.modal__body {
-  padding: 1rem;
-  display: grid;
-  gap: 0.75rem;
-}
-.icon-btn {
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  font-size: 1rem;
-}
-.hint {
-  color: #64748b;
-  margin: 0;
-}
-.textarea {
-  width: 100%;
-  min-height: 260px;
-  resize: vertical;
-  padding: 0.85rem;
-  border: 2px solid #e2e8f0;
-  border-radius: 10px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-.textarea:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-}
-.error {
-  color: #ef4444;
-  font-weight: 600;
-}
-.example {
-  background: #f8fafc;
-  padding: 0.6rem 0.8rem;
-  border-radius: 8px;
-}
-pre {
-  margin: 0.5rem 0 0;
-  font-size: 0.85rem;
-  white-space: pre-wrap;
-}
-.options {
-  display: grid;
-  gap: 0.35rem;
-}
-.opt {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #334155;
-}
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.7rem 1.2rem;
-  border-radius: 10px;
-  font-weight: 700;
-  cursor: pointer;
-  border: 1px solid transparent;
-}
-.btn-outline {
-  background: transparent;
-  color: #334155;
-  border-color: #cbd5e1;
-}
-.btn-outline:hover {
-  background: #f8fafc;
-}
-.btn-primary {
-  background: #3b82f6;
-  color: #fff;
-}
-.btn-primary:hover {
-  background: #2563eb;
-}
 </style>
+

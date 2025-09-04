@@ -1,13 +1,15 @@
 <template>
   <aside
-    class="flex flex-col h-full w-64 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-100 border-r border-white/10 backdrop-blur supports-[backdrop-filter]:bg-slate-950/70 transform transition-transform duration-200 md:translate-x-0"
-    :class="open ? 'translate-x-0 fixed inset-y-0 left-0 z-50 md:static' : '-translate-x-full fixed inset-y-0 left-0 z-50 md:static md:translate-x-0'"
+    class="flex flex-col h-full w-64 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-100 border-r border-white/10 backdrop-blur supports-[backdrop-filter]:bg-slate-950/70 transform transition-transform duration-200"
+    :class="[
+      'fixed inset-y-0 left-0 z-50',
+      open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+    ]"
   >
-    <!-- Top brand / close -->
     <div class="px-4 py-4 border-b border-white/10 flex items-center justify-between">
       <RouterLink to="/" class="group inline-flex items-center gap-2 font-semibold tracking-tight">
-        <span class="inline-grid place-items-center h-9 w-9 rounded-xl bg-indigo-600/90 shadow-lg shadow-indigo-600/30">🛡️</span>
-        <span class="text-lg group-hover:text-white">GuildeTracker</span>
+        <span class="inline-grid place-items-center h-9 w-9 rounded-xl"><img src="@/assets/image/logo.png">️</span>
+        <span class="text-lg group-hover:text-white">Guilde Tracker</span>
       </RouterLink>
       <button
         class="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-inset ring-white/10 hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 transition"
@@ -20,7 +22,6 @@
       </button>
     </div>
 
-    <!-- User mini card -->
     <div class="px-4 py-3 border-b border-white/10">
       <div v-if="userStore.isLoading" class="text-sm text-slate-400">Chargement…</div>
 
@@ -30,7 +31,6 @@
         </div>
         <div class="min-w-0">
           <p class="text-sm font-medium truncate">{{ userStore.user?.username || 'Membre' }}</p>
-          <p class="text-xs text-slate-400 truncate">{{ userStore.user?.email || 'Connecté' }}</p>
         </div>
       </div>
 
@@ -39,18 +39,28 @@
       </div>
     </div>
 
-    <!-- Nav -->
     <nav class="flex-1 overflow-y-auto py-3">
-      <!-- Halo décoratif subtil -->
       <div aria-hidden="true" class="pointer-events-none px-3">
         <div class="h-0 relative">
           <div class="absolute inset-x-0 -top-2 h-0 bg-[radial-gradient(40rem_40rem_at_10%_-20%,rgba(99,102,241,0.15),transparent_60%)]"></div>
         </div>
       </div>
 
-      <!-- Authenticated -->
       <ul v-if="!userStore.isLoading && userStore.isAuthenticated" class="px-2 space-y-1">
         <li>
+          <RouterLink to="/addGuild" v-slot="{ isActive }" class="block">
+            <span
+              :class="[
+                'flex items-center gap-3 px-3 py-2 rounded-xl text-sm ring-1 ring-inset transition',
+                isActive
+                  ? 'bg-indigo-600/20 text-white ring-white/10 shadow-inner shadow-indigo-600/20'
+                  : 'bg-white/0 text-slate-200 ring-white/10 hover:bg-white/5 hover:text-white'
+              ]"
+            >
+              <span class="grid place-items-center h-6 w-6 rounded-lg bg-white/5 ring-1 ring-inset ring-white/10">➕</span>
+              Ajouter une guilde
+            </span>
+          </RouterLink>
           <RouterLink to="/add" v-slot="{ isActive }" class="block">
             <span
               :class="[
@@ -82,7 +92,6 @@
         </li>
       </ul>
 
-      <!-- Guest -->
       <div v-else-if="!userStore.isLoading" class="px-2 space-y-2">
         <button
           @click="loginWithDiscord"
@@ -94,7 +103,6 @@
       </div>
     </nav>
 
-    <!-- Footer actions -->
     <div class="px-4 py-4 border-t border-white/10 space-y-3">
       <a
         href="https://github.com/dldvlpr"
@@ -147,17 +155,11 @@ function loginWithDiscord() {
 }
 
 async function logoutWithDiscord() {
-  try {
     const result = await logoutUser()
     if (result.success) {
       userStore.logout()
       await router.push({ name: 'home' })
-    } else {
-      console.error('Erreur lors de la déconnexion')
     }
-  } catch (e) {
-    console.error('Erreur lors de la déconnexion :', e)
-  }
 }
 </script>
 

@@ -486,9 +486,11 @@ function importAllPlayers() {
   max-width: 700px;
   margin: 0 auto;
   padding: 2rem;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.35);
+  color: #e2e8f0;
   font-family:
     'Inter',
     'Segoe UI',
@@ -504,13 +506,13 @@ function importAllPlayers() {
 
 .form-header h2 {
   font-size: 1.6rem;
-  font-weight: 700;
-  color: #0f172a;
+  font-weight: 800;
+  color: #ffffff;
   margin: 0 0 0.4rem 0;
 }
 
 .form-description {
-  color: #64748b;
+  color: #94a3b8;
   margin: 0;
 }
 .form {
@@ -529,56 +531,56 @@ function importAllPlayers() {
 }
 .form-label {
   font-size: 0.875rem;
-  font-weight: 600;
-  color: #334155;
+  font-weight: 700;
+  color: #cbd5e1;
 }
 .form-label.required::after {
   content: ' *';
-  color: #ef4444;
+  color: #fca5a5;
 }
 .form-input,
 .form-select {
   padding: 0.75rem;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
   font-size: 1rem;
-  background: #ffffff;
+  background: rgba(2, 6, 23, 0.6);
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease;
-  color: #0f172a;
+  color: #e2e8f0;
 }
 .form-input:focus,
 .form-select:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  border-color: rgba(99, 102, 241, 0.6);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
 }
 .form-input.is-invalid,
 .form-select.is-invalid {
-  border-color: #ef4444;
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+  border-color: rgba(244, 63, 94, 0.8);
+  box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.18);
 }
 .form-input:disabled,
 .form-select:disabled {
-  background-color: #f1f5f9;
+  background-color: rgba(255, 255, 255, 0.06);
   cursor: not-allowed;
 }
 
 .field-error {
-  color: #ef4444;
+  color: #fca5a5;
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
 }
 .field-hint {
-  color: #64748b;
+  color: #94a3b8;
   font-size: 0.875rem;
 }
 
 .general-errors {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
+  background: rgba(244, 63, 94, 0.12);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  border-radius: 12px;
   padding: 1rem;
 }
 .error-list {
@@ -587,9 +589,9 @@ function importAllPlayers() {
   gap: 0.5rem;
 }
 .error-item {
-  color: #ef4444;
+  color: #f87171;
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .form-actions {
@@ -597,7 +599,7 @@ function importAllPlayers() {
   gap: 1rem;
   justify-content: center;
   padding-top: 1rem;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 .form-actions--center {
   justify-content: center;
@@ -625,32 +627,32 @@ function importAllPlayers() {
   transform: none !important;
 }
 .btn-primary {
-  background: #3b82f6;
-  color: white;
-  box-shadow: 0 6px 14px rgba(59, 130, 246, 0.25);
+  background: rgba(79, 70, 229, 0.9);
+  color: #fff;
+  box-shadow: 0 10px 18px rgba(79, 70, 229, 0.35);
 }
 .btn-primary:hover:not(:disabled),
 .btn-primary:focus-visible:not(:disabled) {
-  background: #2563eb;
+  background: rgba(99, 102, 241, 0.95);
   transform: translateY(-1px);
 }
 .btn-secondary {
-  background: #64748b;
-  color: white;
-  box-shadow: 0 6px 14px rgba(100, 116, 139, 0.22);
+  background: rgba(71, 85, 105, 0.9);
+  color: #fff;
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.3);
 }
 .btn-secondary:hover:not(:disabled),
 .btn-secondary:focus-visible:not(:disabled) {
-  background: #475569;
+  background: rgba(51, 65, 85, 0.95);
   transform: translateY(-1px);
 }
 .btn-outline {
   background: transparent;
-  color: #334155;
-  border: 1px solid #cbd5e1;
+  color: #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 .btn-outline:hover {
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* ==== Modal ==== */
@@ -664,9 +666,11 @@ function importAllPlayers() {
 }
 .modal {
   width: min(880px, 94vw);
-  background: #fff;
+  background: rgba(15, 23, 42, 0.85);
+  color: #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
-  box-shadow: 0 25px 60px rgba(2, 6, 23, 0.25);
+  box-shadow: 0 25px 60px rgba(2, 6, 23, 0.45);
   overflow: hidden;
 }
 .modal__header,
@@ -676,10 +680,10 @@ function importAllPlayers() {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 .modal__footer {
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   border-bottom: 0;
   justify-content: flex-end;
 }
@@ -693,9 +697,10 @@ function importAllPlayers() {
   border: 0;
   cursor: pointer;
   font-size: 1rem;
+  color: #cbd5e1;
 }
 .hint {
-  color: #64748b;
+  color: #94a3b8;
   margin: 0;
 }
 .textarea {
@@ -703,17 +708,19 @@ function importAllPlayers() {
   min-height: 220px;
   resize: vertical;
   padding: 0.85rem;
-  border: 2px solid #e2e8f0;
-  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.6);
+  color: #e2e8f0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 .textarea:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  border-color: rgba(99, 102, 241, 0.6);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.22);
 }
 .error {
-  color: #ef4444;
+  color: #f87171;
   font-weight: 600;
 }
 .options {
@@ -724,7 +731,7 @@ function importAllPlayers() {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #334155;
+  color: #cbd5e1;
 }
 .picker {
   display: grid;

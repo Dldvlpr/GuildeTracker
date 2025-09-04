@@ -1,36 +1,50 @@
 <template>
-  <div class="filters" role="region" aria-label="Filters">
-    <div class="filter-group">
-      <label for="filter-class">Class</label>
-      <select
-        id="filter-class"
-        class="filter-select"
-        :value="modelValue.class"
-        @change="onClass(($event.target as HTMLSelectElement).value)"
-      >
-        <option value="">All classes</option>
-        <option v-for="cls in classes" :key="cls" :value="cls">{{ cls }}</option>
-      </select>
+  <div
+    class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between rounded-2xl border border-white/10 bg-white/5 p-4"
+    role="region"
+    aria-label="Filters"
+  >
+    <div class="flex flex-1 flex-col gap-4 sm:flex-row">
+      <div class="flex min-w-[200px] flex-1 flex-col gap-1.5">
+        <label for="filter-class" class="text-xs font-semibold text-slate-300">Class</label>
+        <select
+          id="filter-class"
+          class="rounded-xl bg-slate-900/60 px-3 py-2 text-sm text-slate-100 ring-1 ring-inset ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+          :value="modelValue.class"
+          @change="onClass(($event.target as HTMLSelectElement).value)"
+        >
+          <option value="">All classes</option>
+          <option v-for="cls in classes" :key="cls" :value="cls">{{ cls }}</option>
+        </select>
+      </div>
+
+      <div class="flex min-w-[200px] flex-1 flex-col gap-1.5">
+        <label for="filter-role" class="text-xs font-semibold text-slate-300">Role</label>
+        <select
+          id="filter-role"
+          class="rounded-xl bg-slate-900/60 px-3 py-2 text-sm text-slate-100 ring-1 ring-inset ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+          :value="modelValue.role"
+          @change="onRole(($event.target as HTMLSelectElement).value)"
+        >
+          <option value="">All roles</option>
+          <option value="Tanks">🛡️ Tanks</option>
+          <option value="Healers">💚 Healers</option>
+          <option value="Melee">⚔️ Melee</option>
+          <option value="Ranged">🏹 Ranged</option>
+        </select>
+      </div>
     </div>
 
-    <div class="filter-group">
-      <label for="filter-role">Role</label>
-      <select
-        id="filter-role"
-        class="filter-select"
-        :value="modelValue.role"
-        @change="onRole(($event.target as HTMLSelectElement).value)"
+    <div class="flex justify-start md:justify-end">
+      <button
+        class="inline-flex items-center gap-2 rounded-xl bg-white/0 px-3 py-2 text-sm font-semibold text-slate-200 ring-1 ring-inset ring-white/10 transition hover:bg-white/5 hover:text-white"
+        @click="$emit('clear')"
       >
-        <option value="">All roles</option>
-        <option value="Tanks">🛡️ Tanks</option>
-        <option value="Healers">💚 Healers</option>
-        <option value="Melee">⚔️ Melee</option>
-        <option value="Ranged">🏹 Ranged</option>
-      </select>
+        Clear filters
+      </button>
     </div>
-
-    <button class="btn btn-outline btn-sm" @click="$emit('clear')">Clear filters</button>
   </div>
+  
 </template>
 
 <script setup lang="ts">
@@ -50,58 +64,5 @@ function onRole(v: string) {
   emit('update:modelValue', { ...props.modelValue, role: v })
 }
 </script>
-
 <style scoped>
-.filters {
-  display: flex;
-  gap: 1rem;
-  align-items: end;
-  padding: 1rem 2rem;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
-}
-.filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-.filter-group label {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #374151;
-}
-.filter-select {
-  padding: 0.6rem;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  background: white;
-  min-width: 160px;
-  font-size: 0.95rem;
-}
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.45rem 0.9rem;
-  border-radius: 10px;
-  font-size: 0.85rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.btn-outline {
-  background: transparent;
-  color: #334155;
-  border: 1px solid #cbd5e1;
-}
-.btn-outline:hover {
-  background: #f8fafc;
-}
-
-@media (max-width: 768px) {
-  .filters {
-    flex-direction: column;
-    align-items: stretch;
-  }
-}
 </style>

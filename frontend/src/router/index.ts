@@ -9,6 +9,7 @@ const router = createRouter({
   routes: [
     { path: '/', name: 'home', component: HomeView },
     { path: '/add', name: 'addPlayer', component: AddPlayerView },
+    { path: '/Guild', name: 'addGuild', component: AddPlayerView },
     { path: '/list', name: 'listPlayer', component: ListPlayerView },
     { path: '/assignments', name: 'assignments', component: AssignementView },
   ],
