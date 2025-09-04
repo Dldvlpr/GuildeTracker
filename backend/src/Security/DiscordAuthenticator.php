@@ -57,13 +57,10 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
             $email     = $discordUser->getEmail();
             $username  = $discordUser->getUsername();
 
-            error_log("Discord Auth - ID: {$discordId}, Email: {$email}, Username: {$username}");
-
             return new SelfValidatingPassport(
                 new UserBadge($discordId, function() use ($discordId, $email, $username) {
                     $existing = $this->userRepository->findOneBy(['discordId' => $discordId]);
                     if ($existing) {
-                        error_log("Utilisateur existant trouvé par Discord ID: {$existing->getId()}");
                         return $existing;
                     }
 
@@ -76,7 +73,6 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
                             }
                             $this->em->persist($existing);
                             $this->em->flush();
-                            error_log("Utilisateur existant mis à jour avec Discord ID: {$existing->getId()}");
                             return $existing;
                         }
                     }
@@ -90,13 +86,11 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
                     $this->em->persist($user);
                     $this->em->flush();
 
-                    error_log("Nouvel utilisateur créé: {$user->getId()}");
                     return $user;
                 })
             );
         } catch (\Exception $e) {
-            error_log("Erreur dans l'authentification Discord: " . $e->getMessage());
-            throw new AuthenticationException('Erreur lors de l\'authentification Discord: ' . $e->getMessage());
+            throw new AuthenticationException('Erreur on auth: ' . $e->getMessage());
         }
     }
 
@@ -107,29 +101,16 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
 
         $accessToken = $request->getSession()->get('discord_access_token');
         if (!$accessToken) {
-            error_log("❌ Aucun token OAuth Discord trouvé dans la session");
-            return new Response("Aucun token OAuth Discord trouvé", Response::HTTP_UNAUTHORIZED);
+            return new Response("Token not found", Response::HTTP_UNAUTHORIZED);
         }
 
         $response = new RedirectResponse($targetUrl);
 
-        // Debug des valeurs importantes
-        error_log("🔍 Request isSecure: " . ($request->isSecure() ? 'true' : 'false'));
-        error_log("🔍 Request Host: " . $request->getHost());
-        error_log("🔍 Request Port: " . $request->getPort());
-        error_log("🔍 Target URL: " . $targetUrl);
-        error_log("🔍 COOKIE_SECURE env: " . ($_ENV['COOKIE_SECURE'] ?? 'undefined'));
-
-        $isSecure = $request->isSecure(); // Utiliser la détection automatique
+        $isSecure = $request->isSecure();
 
         $user = $token->getUser();
         if ($user instanceof \App\Entity\User) {
-            $cookieValue = base64_encode(json_encode(['uid' => (int) $user->getId()]));
-
-            error_log("🍪 Creating cookie for user ID: " . $user->getId());
-            error_log("🍪 Cookie value: " . $cookieValue);
-            error_log("🍪 Cookie secure: " . ($isSecure ? 'true' : 'false'));
-            error_log("🍪 Cookie SameSite: " . ($isSecure ? 'None' : 'Lax'));
+            $cookieValue = base64_encode(json_encode(['uid' => $user->getId()]));
 
             $cookie = Cookie::create('APP_SESSION')
                 ->withValue($cookieValue)
@@ -139,15 +120,8 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
                 ->withSameSite($isSecure ? 'None' : 'Lax');
 
             $response->headers->setCookie($cookie);
-            error_log("✅ Cookie ajouté à la réponse");
-
-            // Debug des headers de réponse
-            error_log("🔍 Response headers: " . json_encode($response->headers->all()));
-        } else {
-            error_log("❌ User n'est pas une instance de App\Entity\User");
         }
 
-        error_log("🎯 Redirection vers: {$targetUrl}");
         return $response;
     }
 

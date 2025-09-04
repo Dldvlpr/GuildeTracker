@@ -19,6 +19,12 @@ security:
             custom_authenticators:
                 - App\Security\DiscordAuthenticator
             entry_point: App\Security\DiscordAuthenticator
+            logout:
+                path: api_logout
+                target: 'https://localhost:5173'
+                invalidate_session: true
+                delete_cookies:
+                    APP_SESSION: { path: '/' }
 
 
             # activate different ways to authenticate

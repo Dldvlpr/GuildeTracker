@@ -26,7 +26,7 @@ export const useUserStore = defineStore('user', {
     },
 
     logout(): void {
-      this.user = null
+      this.$reset()
       this.isLoading = false
     },
 

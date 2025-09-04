@@ -1,39 +1,3 @@
-<script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { RouterView } from 'vue-router'
-import Sidebar from '@/components/layout/Sidebar.vue'
-import { useUserStore } from '@/stores/userStore'
-import { checkAuthStatus } from '@/services/auth'
-
-const userStore = useUserStore()
-const sidebarOpen = ref(false)
-
-function toggleSidebar() {
-  sidebarOpen.value = !sidebarOpen.value
-}
-
-onMounted(async () => {
-  console.log('🔄 Vérification de l\'authentification au démarrage...')
-
-  userStore.setLoading(true)
-
-  try {
-    const authStatus = await checkAuthStatus()
-
-    if (authStatus.isAuthenticated) {
-      console.log('✅ Utilisateur authentifié:', authStatus.user)
-      userStore.setUser(authStatus.user)
-    } else {
-      console.log('ℹ️ Utilisateur non authentifié')
-      userStore.logout()
-    }
-  } catch (error) {
-    console.warn('⚠️ Erreur lors de la vérification d\'authentification:', error)
-    userStore.logout()
-  }
-})
-</script>
-
 <template>
   <div class="min-h-screen flex bg-background text-default">
     <div
@@ -72,3 +36,35 @@ onMounted(async () => {
     </div>
   </div>
 </template>
+
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import { RouterView } from 'vue-router'
+import Sidebar from '@/components/layout/Sidebar.vue'
+import { useUserStore } from '@/stores/userStore'
+import { checkAuthStatus } from '@/services/auth'
+
+const userStore = useUserStore()
+const sidebarOpen = ref(false)
+
+function toggleSidebar() {
+  sidebarOpen.value = !sidebarOpen.value
+}
+
+onMounted(async () => {
+  userStore.setLoading(true)
+
+  try {
+    const authStatus = await checkAuthStatus()
+
+    if (authStatus.isAuthenticated) {
+      userStore.setUser(authStatus.user)
+    } else {
+      userStore.logout()
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (error) {
+    userStore.logout()
+  }
+})
+</script>

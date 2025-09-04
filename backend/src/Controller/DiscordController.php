@@ -38,15 +38,10 @@ class DiscordController extends AbstractController
         ]);
     }
 
-    #[Route('/api/logout', name: 'api_logout', methods: ['POST'])]
-    public function logout(Request $request): JsonResponse
+    #[Route('/logout', name: 'api_logout', methods: ['GET', 'POST'])]
+    public function logout(): void
     {
-        $request->getSession()->invalidate();
-
-        $response = new JsonResponse(['message' => 'Déconnexion réussie']);
-        $response->headers->clearCookie('APP_SESSION', '/');
-
-        return $response;
+        throw new \LogicException('Cette méthode ne devrait jamais être atteinte !');
     }
 }
 

@@ -104,16 +104,16 @@ function loginWithDiscord() {
 
 async function logoutWithDiscord() {
   try {
-    const success = await logoutUser()
+    const result = await logoutUser();
 
-    if (success) {
-      userStore.logout()
-      await router.push({ name: 'home' })
+    if (result.success) {
+      userStore.logout();
+      await router.push({ name: 'home' });
     } else {
-      console.error('Erreur lors de la déconnexion')
+      console.error('Erreur lors de la déconnexion');
     }
   } catch (e) {
-    console.error('Erreur lors de la déconnexion :', e)
+    console.error('Erreur lors de la déconnexion :', e);
   }
 }
 </script>

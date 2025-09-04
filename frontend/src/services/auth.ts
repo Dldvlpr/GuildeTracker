@@ -1,5 +1,3 @@
-import { useUserStore } from '@/stores/userStore.ts'
-
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
 export function redirectToDiscordAuth() {
@@ -19,23 +17,22 @@ export async function checkAuthStatus() {
     } else {
       return { isAuthenticated: false, user: null };
     }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (error) {
-    console.warn('Erreur lors de la vérification d\'authentification:', error);
     return { isAuthenticated: false, user: null };
   }
 }
 
 export async function logoutUser() {
-    const response = await fetch(`${API_BASE}/api/logout`, {
+  try {
+    await fetch(`${API_BASE}/logout`, {
       method: 'POST',
       credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-    if (response.ok) {
-      useUserStore().logout();
-    }
+    })
 
-      return { success: true, isStillAuthenticated: false};
-    }
+    return { success: true, isStillAuthenticated: false };
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (error) {
+    return { success: false, isStillAuthenticated: true };
+  }
+}
