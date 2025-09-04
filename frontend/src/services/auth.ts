@@ -1,3 +1,5 @@
+import { useUserStore } from '@/stores/userStore.ts'
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
 export function redirectToDiscordAuth() {
@@ -24,7 +26,6 @@ export async function checkAuthStatus() {
 }
 
 export async function logoutUser() {
-  try {
     const response = await fetch(`${API_BASE}/api/logout`, {
       method: 'POST',
       credentials: 'include',
@@ -32,14 +33,9 @@ export async function logoutUser() {
         'Content-Type': 'application/json',
       },
     });
-
     if (response.ok) {
-      return { success: true, isStillAuthenticated: false };
-    } else {
-      return { success: false, error: `Status: ${response.status}` };
+      useUserStore().logout();
     }
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { success: false, error: message };
-  }
-}
+
+      return { success: true, isStillAuthenticated: false};
+    }

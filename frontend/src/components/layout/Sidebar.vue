@@ -104,8 +104,9 @@ function loginWithDiscord() {
 
 async function logoutWithDiscord() {
   try {
-    const ok = await logoutUser()
-    if (ok) {
+    const success = await logoutUser()
+
+    if (success) {
       userStore.logout()
       await router.push({ name: 'home' })
     } else {
