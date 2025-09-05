@@ -1,28 +1,31 @@
 <template>
-  <section class="mx-auto max-w-6xl flex flex-col gap-4">
-    <selectGuild />
+  <section class="mx-auto max-w-6xl grid-cols-4 flex flex-row gap-4">
+    <ul v-if="gameGuilds.length > 0">
+      <li v-for="gameGuild in gameGuilds" :key="gameGuild.guildId">
+        <p>{{ gameGuild.guildName }}</p>
+      </li>
+    </ul>
 
-    <CharacterForm
-      form-title="Add character"
-      :enable-auto-validation="true"
-      @submit="handleCharacterSubmit"
-      @error="handleFormError"
-      @bulkImport="handleBulkImport"
-    />
-
+    <button
+      class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm ring-1 ring-inset transition"
+    >
+      +
+    </button>
     <Toaster :items="notifications" />
   </section>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import CharacterForm from '@/components/CharacterForm.vue'
 import Toaster from '@/components/Toaster.vue'
 import type {
   Character,
   FormSubmitEvent,
   FormErrors,
 } from '@/interfaces/game.interface'
+import type {
+  GameGuild
+} from '@/interfaces/GameGuild.interface.ts';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info'
 interface Notification {
@@ -33,6 +36,7 @@ interface Notification {
 
 const characters = ref<Character[]>([])
 const notifications = ref<Notification[]>([])
+const gameGuilds = ref<GameGuild[]>([])
 
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2)
 const toast = (m: string, t: ToastType = 'info') => {
