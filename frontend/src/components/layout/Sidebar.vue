@@ -48,7 +48,7 @@
 
       <ul v-if="!userStore.isLoading && userStore.isAuthenticated" class="px-2 space-y-1">
         <li>
-          <RouterLink to="/addGuild" v-slot="{ isActive }" class="block">
+          <RouterLink to="/guild" v-slot="{ isActive }" class="block">
             <span
               :class="[
                 'flex items-center gap-3 px-3 py-2 rounded-xl text-sm ring-1 ring-inset transition',
@@ -61,6 +61,8 @@
               Ajouter une guilde
             </span>
           </RouterLink>
+        </li>
+        <li>
           <RouterLink to="/add" v-slot="{ isActive }" class="block">
             <span
               :class="[

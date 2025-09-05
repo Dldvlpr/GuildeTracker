@@ -47,6 +47,7 @@ class User implements UserInterface
      * @var Collection<int, GameCharacter>
      */
     #[ORM\OneToMany(targetEntity: GameCharacter::class, mappedBy: 'userPlayer')]
+    #[ORM\JoinColumn(nullable: true)]
     private Collection $gameCharacters;
 
     public function __construct()

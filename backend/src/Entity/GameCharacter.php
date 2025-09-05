@@ -26,10 +26,11 @@ class GameCharacter
     private ?string $role = null;
 
     #[ORM\ManyToOne(inversedBy: 'gameCharacters')]
-    #[ORM\JoinColumn(nullable: false)]
-    private ?Guild $guild = null;
+    #[ORM\JoinColumn(nullable: true)]
+    private ?GameGuild $guild = null;
 
     #[ORM\ManyToOne(inversedBy: 'gameCharacters')]
+    #[ORM\JoinColumn(nullable: true)]
     private ?User $userPlayer = null;
 
     public function getId(): ?int

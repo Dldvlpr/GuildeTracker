@@ -7,8 +7,8 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
-#[ORM\Entity(repositoryClass: GuildRepository::class)]
-class Guild
+#[ORM\Entity(repositoryClass: GameGuildRepository::class)]
+class GameGuild
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]

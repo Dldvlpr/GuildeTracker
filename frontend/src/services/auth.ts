@@ -1,10 +1,17 @@
+import type { DiscordUserInterface } from '@/interfaces/DiscordUser.interface.ts';
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
+
+type UserResult =
+  | { isAuthenticated: false, user: null }
+  | { isAuthenticated: true, user: DiscordUserInterface }
+
 
 export function redirectToDiscordAuth() {
   window.location.href = `${API_BASE}/connect/discord`;
 }
 
-export async function checkAuthStatus() {
+export async function checkAuthStatus(): Promise<UserResult> {
   try {
     const response = await fetch(`${API_BASE}/api/me`, {
       method: 'GET',
@@ -13,7 +20,7 @@ export async function checkAuthStatus() {
 
     if (response.ok) {
       const userData = await response.json();
-      return { isAuthenticated: true, user: userData };
+      return { isAuthenticated: true, user: userData as DiscordUserInterface };
     } else {
       return { isAuthenticated: false, user: null };
     }

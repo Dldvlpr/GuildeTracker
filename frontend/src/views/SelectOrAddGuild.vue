@@ -1,115 +1,85 @@
 <template>
-  <section class="mx-auto max-w-6xl grid-cols-4 flex flex-row gap-4">
-    <ul v-if="gameGuilds.length > 0">
-      <li v-for="gameGuild in gameGuilds" :key="gameGuild.guildId">
-        <p>{{ gameGuild.guildName }}</p>
-      </li>
-    </ul>
-
-    <button
-      class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm ring-1 ring-inset transition"
+  <section class="mx-auto max-w-6xl px-4 py-8">
+    <div
+      :class="[
+        'grid gap-6',
+        gameGuilds.length > 0
+          ? 'justify-items-start grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
+          : 'place-items-center grid-cols-1'
+      ]"
     >
-      +
-    </button>
+      <RouterLink
+        v-for="gameGuild in gameGuilds"
+        :key="gameGuild.guildId"
+        to="/selectGuild"
+        v-slot="{ isActive }"
+        class="block w-full max-w-[260px]"
+      >
+        <span
+          :class="[
+            'block w-full rounded-xl px-4 py-3 text-sm ring-1 ring-inset transition',
+            'text-center select-none',
+            isActive
+              ? 'bg-indigo-600/20 text-white ring-white/10 shadow-inner shadow-indigo-600/20'
+              : 'bg-white/0 text-slate-200 ring-white/10 hover:bg-white/5 hover:text-white'
+          ]"
+        >
+          {{ gameGuild.guildName }}
+        </span>
+      </RouterLink>
+
+      <span
+        :class="[
+          'block rounded-xl ring-1 ring-inset transition cursor-pointer',
+          'flex items-center justify-center',
+          'aspect-square min-h-[8rem] sm:min-h-[9rem] lg:min-h-[10rem]',
+          open
+            ? 'bg-indigo-600/20 text-white ring-white/10 shadow-inner shadow-indigo-600/20'
+            : 'bg-white/0 text-slate-200 ring-white/10 hover:bg-white/5 hover:text-white'
+        ]"
+        aria-label="Add a guild"
+        role="button"
+        tabindex="0"
+        @click="open = true"
+        @keyup.enter="open = true"
+        @keyup.space="open = true"
+      >
+        <span class="text-3xl leading-none">➕</span>
+      </span>
+    </div>
+
+    <GuildCreateModal v-model="open" @created="onGuildCreated" />
+
     <Toaster :items="notifications" />
   </section>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { RouterLink } from 'vue-router'
 import Toaster from '@/components/Toaster.vue'
-import type {
-  Character,
-  FormSubmitEvent,
-  FormErrors,
-} from '@/interfaces/game.interface'
-import type {
-  GameGuild
-} from '@/interfaces/GameGuild.interface.ts';
+import GuildCreateModal from '@/components/guilds/GuildCreateModal.vue'
+import type { GameGuild } from '@/interfaces/GameGuild.interface'
 
 type ToastType = 'success' | 'error' | 'warning' | 'info'
-interface Notification {
-  id: string
-  message: string
-  type: ToastType
-}
+interface Notification { id: string; message: string; type: ToastType }
 
-const characters = ref<Character[]>([])
 const notifications = ref<Notification[]>([])
 const gameGuilds = ref<GameGuild[]>([])
+const open = ref(false)
+
+function onGuildCreated(newGuild: { id: string; name: string }) {
+  gameGuilds.value.unshift({ guildId: newGuild.id, guildName: newGuild.name } as any)
+  toast(`Guild “${newGuild.name}” created!`, 'success')
+}
 
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2)
 const toast = (m: string, t: ToastType = 'info') => {
   const id = genId()
   notifications.value.push({ id, message: m, type: t })
-  setTimeout(() => (notifications.value = notifications.value.filter((n) => n.id !== id)), 3000)
-}
-const handleFormError = (errors: FormErrors) => {
-  console.error(errors)
-  toast('Please fix the highlighted errors.', 'error')
-}
-const save = () => {
-  try {
-    localStorage.setItem('wow-characters', JSON.stringify(characters.value))
-  } catch {
-    toast('An error occurred while saving.', 'error')
-  }
-}
-const load = () => {
-  try {
-    const s = localStorage.getItem('wow-characters')
-    if (s) {
-      const arr = JSON.parse(s)
-      if (Array.isArray(arr)) {
-        characters.value = arr
-        toast(`${arr.length} character(s) loaded.`, 'info')
-      }
-    }
-  } catch {
-    toast('An error occurred while loading saved data.', 'warning')
-  }
+  setTimeout(() => (notifications.value = notifications.value.filter(n => n.id !== id)), 3000)
 }
 
-
-const handleCharacterSubmit = (event: FormSubmitEvent) => {
-  try {
-    const exists = new Set(characters.value.map((c) => c.name.toLowerCase()))
-    if (exists.has(event.character.name.toLowerCase())) {
-      toast('A character with this name already exists.', 'error')
-      return
-    }
-    const newChar: Character = {
-      id: genId(),
-      createdAt: new Date().toISOString(),
-      ...event.character,
-    }
-    characters.value.push(newChar)
-    save()
-    toast(`Character "${newChar.name}" created successfully!`, 'success')
-  } catch (e) {
-    console.error(e)
-    toast('An error occurred while creating the character.', 'error')
-  }
-}
-
-const handleBulkImport = (items: Omit<Character,'id'|'createdAt'>[]) => {
-  const existing = new Set(characters.value.map(c => c.name.toLowerCase()))
-  const now = new Date().toISOString()
-  const toAdd: Character[] = []
-  for (const it of items) {
-    const key = it.name.toLowerCase()
-    if (existing.has(key)) continue
-    existing.add(key)
-    toAdd.push({ id: genId(), createdAt: now, ...it })
-  }
-  if (!toAdd.length) { toast('Nothing to import (duplicates).', 'warning'); return }
-  characters.value.push(...toAdd)
-  save()
-  toast(`Imported ${toAdd.length} character(s).`, 'success')
-}
-
-onMounted(load)
+onMounted(() => {
+})
 </script>
-
-<style scoped>
-</style>
