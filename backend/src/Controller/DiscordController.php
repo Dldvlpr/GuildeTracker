@@ -10,7 +10,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 
-class DiscordController extends AbstractController
+final class DiscordController extends AbstractController
 {
     #[Route('/connect/discord', name: 'connect_discord_start', methods: ['GET'])]
     public function connect(ClientRegistry $clientRegistry): RedirectResponse

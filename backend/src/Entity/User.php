@@ -50,6 +50,10 @@ class User implements UserInterface
     #[ORM\JoinColumn(nullable: true)]
     private Collection $gameCharacters;
 
+    /** @var Collection<int, GuildMembership> */
+    #[ORM\OneToMany(targetEntity: GuildMembership::class, mappedBy: 'user', cascade: ['persist', 'remove'], orphanRemoval: true)]
+    private Collection $memberships;
+
     public function __construct()
     {
         $this->gameCharacters = new ArrayCollection();
@@ -84,7 +88,7 @@ class User implements UserInterface
      */
     public function getUserIdentifier(): string
     {
-        return (string) $this->discordId;
+        return (string)$this->discordId;
     }
 
     /**
@@ -182,5 +186,11 @@ class User implements UserInterface
         }
 
         return $this;
+    }
+
+    /** @return Collection<int, GuildMembership> */
+    public function getMemberships(): Collection
+    {
+        return $this->memberships;
     }
 }

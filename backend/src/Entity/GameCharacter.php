@@ -4,14 +4,18 @@ namespace App\Entity;
 
 use App\Repository\GameCharacterRepository;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Bridge\Doctrine\IdGenerator\UuidGenerator;
+use Symfony\Bridge\Doctrine\Types\UuidType;
+use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity(repositoryClass: GameCharacterRepository::class)]
 class GameCharacter
 {
     #[ORM\Id]
-    #[ORM\GeneratedValue]
-    #[ORM\Column]
-    private ?int $id = null;
+    #[ORM\GeneratedValue(strategy: 'CUSTOM')]
+    #[ORM\Column(type: UuidType::NAME, unique: true)]
+    #[ORM\CustomIdGenerator(class: UuidGenerator::class)]
+    private ?Uuid $id = null;
 
     #[ORM\Column(length: 255)]
     private ?string $name = null;
@@ -33,9 +37,14 @@ class GameCharacter
     #[ORM\JoinColumn(nullable: true)]
     private ?User $userPlayer = null;
 
-    public function getId(): ?int
+    public function getId(): Uuid
     {
         return $this->id;
+    }
+
+    public function getUuidToString(): string
+    {
+        return $this->id->toString();
     }
 
     public function getName(): ?string

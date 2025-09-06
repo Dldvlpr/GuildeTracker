@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { useRoute, useRouter, RouterLink } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/userStore'
 import { checkAuthStatus } from '@/services/auth'
 
@@ -13,10 +13,6 @@ const type = ref<'success' | 'error' | null>(null)
 
 function clearQuery() {
   router.replace({ name: 'home' })
-}
-function scrollToFeatures() {
-  const el = document.getElementById('features')
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 onMounted(async () => {
@@ -74,7 +70,6 @@ onMounted(async () => {
       </Transition>
     </div>
 
-    <!-- Hero -->
     <section class="relative">
       <div class="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60rem_60rem_at_50%_-10%,rgba(99,102,241,0.20),transparent_60%)]"></div>
 
@@ -88,22 +83,6 @@ onMounted(async () => {
               Centralisez les informations de vos joueurs, suivez leurs personnages, et gardez une
               organisation claire par factions — le tout dans une interface rapide et moderne.
             </p>
-
-            <div class="flex flex-wrap items-center gap-3">
-              <button
-                @click="scrollToFeatures"
-                class="inline-flex items-center gap-2 rounded-2xl bg-white/5 px-5 py-3 text-sm font-medium ring-1 ring-inset ring-white/10 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-indigo-300 transition"
-              >
-                ✨ Découvrir les fonctionnalités
-              </button>
-            </div>
-
-            <ul class="mt-4 grid gap-2 text-sm text-slate-300/80">
-              <li class="flex items-start gap-2"><span>✅</span><span>Gestion des joueurs — profils, rôles et statuts</span></li>
-              <li class="flex items-start gap-2"><span>✅</span><span>Suivi des personnages — classes, niveaux, équipements</span></li>
-              <li class="flex items-start gap-2"><span>✅</span><span>Organisation par faction — hiérarchies & permissions</span></li>
-              <li class="flex items-start gap-2"><span>✅</span><span>Tableaux & tags — filtres rapides pour les raids</span></li>
-            </ul>
           </div>
 
           <div class="relative">
@@ -132,7 +111,6 @@ onMounted(async () => {
       </div>
     </section>
 
-    <!-- Features grid -->
     <section id="features" class="mx-auto max-w-6xl px-4 pb-16 md:pb-24">
       <h2 class="text-2xl md:text-3xl font-bold">Fonctionnalités principales</h2>
       <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -156,12 +134,6 @@ onMounted(async () => {
           <h3 class="mt-3 font-semibold">Outils de raid</h3>
           <p class="mt-1 text-sm text-slate-300/80">Planif, présences, groupes & rôles.</p>
         </article>
-      </div>
-
-      <div class="mt-10 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/10 bg-gradient-to-r from-white/5 to-transparent p-5">
-        <p class="text-sm text-slate-300/90">
-          Simple et intuitif — une interface claire pour gérer efficacement votre communauté.
-        </p>
       </div>
     </section>
   </main>

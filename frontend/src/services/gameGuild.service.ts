@@ -2,94 +2,117 @@ import type { GameGuild } from '@/interfaces/GameGuild.interface'
 
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
-type GuildResult =
+export type GuildResult =
+  | { ok: true; data: GameGuild[] }
+  | { ok: false; error: string; status?: number };
+
+export type GuildOneResult =
   | { ok: true; data: GameGuild }
-  | { ok: false; error: string; status?: number }
+  | { ok: false; error: string; status?: number };
 
-export async function getGameGuild(guildId: string): Promise<GuildResult> {
+export async function getGameGuild(guildId: string, opts?: { signal?: AbortSignal }): Promise<GuildOneResult> {
   if (!BASE) {
-    return { ok: false, error: 'VITE_API_BASE_URL is not set' }
+    return { ok: false, error: 'VITE_API_BASE_URL is not set' };
   }
 
   try {
-    const res = await fetch(
-      `${BASE}/api/getGuild/${encodeURIComponent(guildId)}`,
-      {
-        method: 'GET',
-        credentials: 'include',
-        headers: { Accept: 'application/json' }
-      }
-    )
+    const res = await fetch(`${BASE}/api/getGuild/${encodeURIComponent(guildId)}`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      signal: opts?.signal,
+    });
 
     if (!res.ok) {
-      let message = `HTTP ${res.status}`
+      let message = `HTTP ${res.status}`;
       try {
-        const body = await res.json()
-        if (body?.message) message = body.message
-        if (Array.isArray(body?.violations) && body.violations.length) {
-          message = body.violations.map((v: any) => v.message).join(' · ')
+        const bodyText = await res.text();
+        if (bodyText) {
+          const body = JSON.parse(bodyText);
+          if (typeof body?.message === 'string') message = body.message;
+          if (Array.isArray(body?.violations) && body.violations.length) {
+            message = body.violations.map((v: any) => v.message).join(' · ');
+          }
         }
       } catch {
-        return { ok: false, error: 'error' }
       }
-      return { ok: false, error: message, status: res.status }
+      return { ok: false, error: message, status: res.status };
     }
 
     if (res.status === 204) {
-      return { ok: false, error: 'Empty response (204 No Content)' }
+      return { ok: false, error: 'Empty response (204 No Content)', status: 204 };
     }
 
-    const data = (await res.json()) as GameGuild
-    return { ok: true, data }
+    const text = await res.text();
+    if (!text) {
+      return { ok: false, error: 'Empty body', status: res.status };
+    }
+
+    const json = JSON.parse(text);
+
+    if (typeof json !== 'object' || json === null || typeof json.id === 'undefined') {
+      return { ok: false, error: 'Unexpected payload: expected a GameGuild object' };
+    }
+
+    const data = json as GameGuild;
+    return { ok: true, data };
   } catch (e: any) {
-    return { ok: false, error: e?.message ?? 'Network error' }
+    return { ok: false, error: e?.message ?? 'Network error' };
   }
 }
 
-export async function getAllGameGuild(guildId: string): Promise<GuildResult> {
+export async function getAllGameGuild(opts?: { signal?: AbortSignal }): Promise<GuildResult> {
   if (!BASE) {
-    return { ok: false, error: 'VITE_API_BASE_URL is not set' }
+    return { ok: false, error: 'VITE_API_BASE_URL is not set' };
   }
 
   try {
-    const res = await fetch(
-      `${BASE}/api/getAllGuild/${encodeURIComponent(guildId)}`,
-      {
-        method: 'GET',
-        credentials: 'include',
-        headers: { Accept: 'application/json' }
-      }
-    )
+    const res = await fetch(`${BASE}/api/gameguild`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      signal: opts?.signal,
+    });
 
     if (!res.ok) {
-      let message = `HTTP ${res.status}`
+      let message = `HTTP ${res.status}`;
       try {
-        const body = await res.json()
-        if (body?.message) message = body.message
-        if (Array.isArray(body?.violations) && body.violations.length) {
-          message = body.violations.map((v: any) => v.message).join(' · ')
+        const bodyText = await res.text();
+        if (bodyText) {
+          const body = JSON.parse(bodyText);
+          if (typeof body?.message === 'string') message = body.message;
+          if (Array.isArray(body?.violations) && body.violations.length) {
+            message = body.violations.map((v: any) => v.message).join(' · ');
+          }
         }
       } catch {
-        return { ok: false, error: 'error' }
+        return { ok: false, error: message, status: res.status };
       }
-      return { ok: false, error: message, status: res.status }
+      return { ok: false, error: message, status: res.status };
     }
 
     if (res.status === 204) {
-      return { ok: false, error: 'Empty response (204 No Content)' }
+      return { ok: true, data: [] };
     }
 
-    const data = (await res.json()) as GameGuild
-    return { ok: true, data }
+    const text = await res.text();
+    const json = text ? JSON.parse(text) : [];
+
+    if (!Array.isArray(json)) {
+      return { ok: false, error: 'Unexpected payload: expected an array' };
+    }
+
+    const data = json as GameGuild[];
+
+    return { ok: true, data };
   } catch (e: any) {
-    return { ok: false, error: e?.message ?? 'Network error' }
+    return { ok: false, error: e?.message ?? 'Network error' };
   }
 }
-
 
 export async function createGuild(name: string) {
   try {
-    const res = await fetch(`${BASE}/api/guilds`, {
+    const res = await fetch(`${BASE}/api/gameguild/create`, {
       method: 'POST',
       credentials: 'include',
       headers: {

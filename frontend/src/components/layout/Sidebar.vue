@@ -58,7 +58,7 @@
               ]"
             >
               <span class="grid place-items-center h-6 w-6 rounded-lg bg-white/5 ring-1 ring-inset ring-white/10">➕</span>
-              Ajouter une guilde
+              Guilde
             </span>
           </RouterLink>
         </li>
@@ -77,7 +77,7 @@
             </span>
           </RouterLink>
         </li>
-        <li>
+       <li>
           <RouterLink to="/list" v-slot="{ isActive }" class="block">
             <span
               :class="[
