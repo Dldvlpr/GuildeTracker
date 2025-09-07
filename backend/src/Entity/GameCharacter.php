@@ -37,7 +37,7 @@ class GameCharacter
     #[ORM\JoinColumn(nullable: true)]
     private ?User $userPlayer = null;
 
-    public function getId(): Uuid
+    public function getId(): ?Uuid
     {
         return $this->id;
     }
@@ -55,7 +55,6 @@ class GameCharacter
     public function setName(string $name): static
     {
         $this->name = $name;
-
         return $this;
     }
 
@@ -67,7 +66,6 @@ class GameCharacter
     public function setClass(string $class): static
     {
         $this->class = $class;
-
         return $this;
     }
 
@@ -79,7 +77,6 @@ class GameCharacter
     public function setClassSpec(string $classSpec): static
     {
         $this->classSpec = $classSpec;
-
         return $this;
     }
 
@@ -91,19 +88,17 @@ class GameCharacter
     public function setRole(string $role): static
     {
         $this->role = $role;
-
         return $this;
     }
 
-    public function getGuild(): ?Guild
+    public function getGuild(): ?GameGuild
     {
         return $this->guild;
     }
 
-    public function setGuild(?Guild $guild): static
+    public function setGuild(?GameGuild $guild): static
     {
         $this->guild = $guild;
-
         return $this;
     }
 
@@ -115,7 +110,6 @@ class GameCharacter
     public function setUserPlayer(?User $userPlayer): static
     {
         $this->userPlayer = $userPlayer;
-
         return $this;
     }
 }

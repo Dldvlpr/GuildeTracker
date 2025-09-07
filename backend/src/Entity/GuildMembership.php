@@ -26,11 +26,11 @@ class GuildMembership
     #[ORM\JoinColumn(name: 'user_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
     private User $user;
 
-    #[ORM\ManyToOne(targetEntity: GameGuild::class, inversedBy: 'memberships')]
+    #[ORM\ManyToOne(targetEntity: GameGuild::class, inversedBy: 'guildMemberships')]
     #[ORM\JoinColumn(name: 'guild_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
     private GameGuild $guild;
 
-    #[ORM\Column(type: Types::STRING, length: 20, enumType: GuildRole::class)]
+    #[ORM\Column(type: Types::STRING, enumType: GuildRole::class, length: 20)]
     private GuildRole $role;
 
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
@@ -44,7 +44,7 @@ class GuildMembership
         $this->joinedAt = new \DateTimeImmutable();
     }
 
-    public function getId(): Uuid
+    public function getId(): ?Uuid
     {
         return $this->id;
     }
@@ -59,9 +59,21 @@ class GuildMembership
         return $this->user;
     }
 
+    public function setUser(User $user): self
+    {
+        $this->user = $user;
+        return $this;
+    }
+
     public function getGuild(): GameGuild
     {
         return $this->guild;
+    }
+
+    public function setGuild(GameGuild $guild): self
+    {
+        $this->guild = $guild;
+        return $this;
     }
 
     public function getRole(): GuildRole

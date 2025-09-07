@@ -2,34 +2,30 @@
 
 namespace App\DataFixtures;
 
-use App\Entity\GameGuild;
-use App\Repository\GameGuildRepository;
-use App\Repository\UserRepository;
+use App\Entity\User;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
 use Faker;
 
 class UserFixtures extends Fixture
 {
-    public function __construct(
-        private UserRepository $userRepository,
-    )
-    {}
-
     public function load(ObjectManager $manager): void
     {
         $faker = Faker\Factory::create('fr_FR');
-        $users = $this->userRepository->findAll();
-        $user = $users[0];
 
         for ($i = 0; $i < 10; $i++) {
-            $gameGuild = new GameGuild();
-            $gameGuild->setName($faker->word);
-            $gameGuild->setFaction($faker->randomElement(['ALLIANCE', 'HORDE']));
-            $gameGuild->addUser($users[0]);
-            $manager->persist($gameGuild);
+            $user = new User();
+            $user->setDiscordId($faker->unique()->numerify('##############'));
+            $user->setUsername($faker->userName);
+            $user->setEmail($faker->unique()->safeEmail);
+            $user->setRoles(['ROLE_USER']);
+
+            if ($faker->boolean(70)) {
+                $user->setBlizzardId($faker->userName . '#' . $faker->numberBetween(1000, 9999));
+            }
+
             $manager->persist($user);
-            $this->addReference('game_guild_'.$i, $gameGuild);
+            $this->addReference('user_'.$i, $user);
         }
 
         $manager->flush();

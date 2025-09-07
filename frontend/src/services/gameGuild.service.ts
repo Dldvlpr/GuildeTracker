@@ -110,7 +110,11 @@ export async function getAllGameGuild(opts?: { signal?: AbortSignal }): Promise<
   }
 }
 
-export async function createGuild(name: string) {
+export async function createGuild(name: string, faction: 'HORDE' | 'ALLIANCE') {
+  if (!BASE) {
+    throw new Error('VITE_API_BASE_URL is not set');
+  }
+
   try {
     const res = await fetch(`${BASE}/api/gameguild/create`, {
       method: 'POST',
@@ -119,7 +123,7 @@ export async function createGuild(name: string) {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, faction }),
     })
 
     if (!res.ok) {
@@ -130,11 +134,14 @@ export async function createGuild(name: string) {
         if (Array.isArray(data?.violations)) {
           msg = data.violations.map((v: any) => v.message).join(' · ')
         }
+        if (Array.isArray(data?.details)) {
+          msg = data.details.join(' · ')
+        }
       } catch {}
       throw new Error(msg)
     }
 
-    return (await res.json()) as { id: string; name: string }
+    return (await res.json()) as { status: string; id: string }
   } catch (e: any) {
     throw new Error(e?.message ?? 'Erreur réseau')
   }

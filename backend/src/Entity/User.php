@@ -57,6 +57,7 @@ class User implements UserInterface
     public function __construct()
     {
         $this->gameCharacters = new ArrayCollection();
+        $this->memberships = new ArrayCollection();
     }
 
     public function getId(): ?Uuid
@@ -77,7 +78,6 @@ class User implements UserInterface
     public function setEmail(string $email): static
     {
         $this->email = $email;
-
         return $this;
     }
 
@@ -97,7 +97,6 @@ class User implements UserInterface
     public function getRoles(): array
     {
         $roles = $this->roles;
-        // guarantee every user at least has ROLE_USER
         $roles[] = 'ROLE_USER';
 
         return array_unique($roles);
@@ -109,7 +108,6 @@ class User implements UserInterface
     public function setRoles(array $roles): static
     {
         $this->roles = $roles;
-
         return $this;
     }
 
@@ -118,8 +116,6 @@ class User implements UserInterface
      */
     public function eraseCredentials(): void
     {
-        // If you store any temporary, sensitive data on the user, clear it here
-        // $this->plainPassword = null;
     }
 
     public function getDiscordId(): ?string
@@ -130,7 +126,6 @@ class User implements UserInterface
     public function setDiscordId(string $discordId): static
     {
         $this->discordId = $discordId;
-
         return $this;
     }
 
@@ -142,7 +137,6 @@ class User implements UserInterface
     public function setUsername(string $username): static
     {
         $this->username = $username;
-
         return $this;
     }
 
@@ -154,7 +148,6 @@ class User implements UserInterface
     public function setBlizzardId(?string $blizzardId): static
     {
         $this->blizzardId = $blizzardId;
-
         return $this;
     }
 
@@ -179,7 +172,6 @@ class User implements UserInterface
     public function removeGameCharacter(GameCharacter $gameCharacter): static
     {
         if ($this->gameCharacters->removeElement($gameCharacter)) {
-            // set the owning side to null (unless already changed)
             if ($gameCharacter->getUserPlayer() === $this) {
                 $gameCharacter->setUserPlayer(null);
             }
@@ -192,5 +184,26 @@ class User implements UserInterface
     public function getMemberships(): Collection
     {
         return $this->memberships;
+    }
+
+    public function addMembership(GuildMembership $membership): static
+    {
+        if (!$this->memberships->contains($membership)) {
+            $this->memberships->add($membership);
+            $membership->setUser($this);
+        }
+
+        return $this;
+    }
+
+    public function removeMembership(GuildMembership $membership): static
+    {
+        if ($this->memberships->removeElement($membership)) {
+            if ($membership->getUser() === $this) {
+                $membership->setUser(null);
+            }
+        }
+
+        return $this;
     }
 }

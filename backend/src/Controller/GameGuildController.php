@@ -25,7 +25,9 @@ final class GameGuildController extends AbstractController
 
     #[Route('/api/gameguild/create', name: 'gameGuild_create', methods: ['POST'])]
     public function createGameGuild(
-        Request $request): JsonResponse {
+        Request $request,
+        EntityManagerInterface $em
+    ): JsonResponse {
         try {
             $payload = $request->toArray();
         } catch (\Throwable) {
@@ -40,7 +42,15 @@ final class GameGuildController extends AbstractController
         $form->submit($payload, true);
 
         if (!$form->isSubmitted() || !$form->isValid()) {
-            return $this->json(['error' => 'Validation failed'], 422);
+            $errors = [];
+            foreach ($form->getErrors(true) as $error) {
+                $errors[] = $error->getMessage();
+            }
+            return $this->json([
+                'error' => 'Validation failed',
+                'details' => $errors,
+                'violations' => $errors
+            ], 422);
         }
 
         $securityUser = $this->getUser();
@@ -54,22 +64,17 @@ final class GameGuildController extends AbstractController
             return $this->json(['error' => 'User not found'], 404);
         }
 
-        $guildMemberShip = new GuildMembership(
-            $user,
-            $gameGuild,
-            GuildRole::GM
-        );
-
         try {
+            $membership = new GuildMembership($user, $gameGuild, GuildRole::GM);
 
-            $this->em->persist($gameGuild);
-            $this->em->persist($guildMemberShip);
-            $this->em->flush();
+            $em->persist($gameGuild);
+            $em->persist($membership);
+            $em->flush();
         } catch (\Throwable $e) {
             return $this->json(['error' => 'Database error', 'hint' => $e->getMessage()], 500);
         }
 
-        return $this->json(['status' => 'ok', 'id' => $gameGuild->getId()], 201);
+        return $this->json(['status' => 'ok', 'id' => $gameGuild->getUuidToString()], 201);
     }
 
     #[Route('/api/gameguild', name: 'get_allGameGuild', methods: ['GET'])]
