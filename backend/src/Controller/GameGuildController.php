@@ -4,6 +4,8 @@ namespace App\Controller;
 
 use App\DTO\GameGuildDTO;
 use App\Entity\GameGuild;
+use App\Entity\GuildMembership;
+use App\Enum\GuildRole;
 use App\Form\GameGuildType;
 use App\Repository\GameGuildRepository;
 use App\Repository\UserRepository;
@@ -23,11 +25,9 @@ final class GameGuildController extends AbstractController
 
     #[Route('/api/gameguild/create', name: 'gameGuild_create', methods: ['POST'])]
     public function createGameGuild(
-        Request $request,
-        EntityManagerInterface $em
-    ): JsonResponse {
+        Request $request): JsonResponse {
         try {
-            $payload = $request->toArray(); // lève si JSON invalide
+            $payload = $request->toArray();
         } catch (\Throwable) {
             return $this->json(['error' => 'Invalid JSON payload'], 400);
         }
@@ -54,11 +54,17 @@ final class GameGuildController extends AbstractController
             return $this->json(['error' => 'User not found'], 404);
         }
 
-        $gameGuild->addUser($user);
+        $guildMemberShip = new GuildMembership(
+            $user,
+            $gameGuild,
+            GuildRole::GM
+        );
 
         try {
-            $em->persist($gameGuild);
-            $em->flush();
+
+            $this->em->persist($gameGuild);
+            $this->em->persist($guildMemberShip);
+            $this->em->flush();
         } catch (\Throwable $e) {
             return $this->json(['error' => 'Database error', 'hint' => $e->getMessage()], 500);
         }

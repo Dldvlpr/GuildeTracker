@@ -4,34 +4,41 @@ namespace App\DTO;
 
 use App\Entity\GameGuild;
 
-class GameGuildDTO
+final class GameGuildDTO
 {
     public string $id;
     public string $name;
     public string $faction;
-    /** @var string[] */
-    public array $userIds;
 
-    private function __construct(string $id, string $name, string $faction, array $userIds)
+    /** @var list<string> */
+    public array $membershipIds;
+
+    private function __construct(string $id, string $name, string $faction, array $membershipIds)
     {
         $this->id = $id;
         $this->name = $name;
         $this->faction = $faction;
-        $this->userIds = $userIds;
+        $this->membershipIds = $membershipIds;
     }
 
     public static function fromEntity(GameGuild $guild): self
     {
-        $userIds = [];
-        foreach ($guild->getUsers() as $user) {
-            $userIds[] = (string) $user->getId();
+        $membershipIds = [];
+        foreach ($guild->getGuildMemberships() as $membership) {
+            $membershipIds[] = $membership->getUuidToString();
         }
 
+        // Si faction est un enum BackedEnum, passer la valeur string :
+        $faction = $guild->getFaction();
+        $factionString = \is_object($faction) && method_exists($faction, 'value')
+            ? $faction->value
+            : (string) $faction;
+
         return new self(
-            (string) $guild->getUuidToString(),
+            $guild->getUuidToString(),
             $guild->getName(),
-            $guild->getFaction(),
-            $userIds
+            $factionString,
+            $membershipIds
         );
     }
 

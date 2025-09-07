@@ -10,7 +10,7 @@ use Doctrine\Migrations\AbstractMigration;
 /**
  * Auto-generated Migration: Please modify to your needs!
  */
-final class Version20250906180020 extends AbstractMigration
+final class Version20250906222615 extends AbstractMigration
 {
     public function getDescription(): string
     {
@@ -28,10 +28,11 @@ final class Version20250906180020 extends AbstractMigration
         $this->addSql('COMMENT ON COLUMN game_character.user_player_id IS \'(DC2Type:uuid)\'');
         $this->addSql('CREATE TABLE game_guild (id UUID NOT NULL, name VARCHAR(255) NOT NULL, faction VARCHAR(255) NOT NULL, PRIMARY KEY(id))');
         $this->addSql('COMMENT ON COLUMN game_guild.id IS \'(DC2Type:uuid)\'');
-        $this->addSql('CREATE TABLE guild_membership (id SERIAL NOT NULL, user_id UUID NOT NULL, guild_id UUID NOT NULL, role VARCHAR(20) NOT NULL, joined_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, PRIMARY KEY(id))');
+        $this->addSql('CREATE TABLE guild_membership (id UUID NOT NULL, user_id UUID NOT NULL, guild_id UUID NOT NULL, role VARCHAR(20) NOT NULL, joined_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, PRIMARY KEY(id))');
         $this->addSql('CREATE INDEX IDX_E7D8D2AA76ED395 ON guild_membership (user_id)');
         $this->addSql('CREATE INDEX IDX_E7D8D2A5F2131EF ON guild_membership (guild_id)');
         $this->addSql('CREATE UNIQUE INDEX uniq_user_guild ON guild_membership (user_id, guild_id)');
+        $this->addSql('COMMENT ON COLUMN guild_membership.id IS \'(DC2Type:uuid)\'');
         $this->addSql('COMMENT ON COLUMN guild_membership.user_id IS \'(DC2Type:uuid)\'');
         $this->addSql('COMMENT ON COLUMN guild_membership.guild_id IS \'(DC2Type:uuid)\'');
         $this->addSql('COMMENT ON COLUMN guild_membership.joined_at IS \'(DC2Type:datetime_immutable)\'');
