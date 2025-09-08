@@ -28,13 +28,13 @@ class GameGuild
     /**
      * @var Collection<int, GameCharacter>
      */
-    #[ORM\OneToMany(targetEntity: GameCharacter::class, mappedBy: 'gameGuild')]
+    #[ORM\OneToMany(targetEntity: GameCharacter::class, mappedBy: 'guild')]
     private Collection $gameCharacters;
 
     /**
      * @var Collection<int, GuildMembership>
      */
-    #[ORM\OneToMany(targetEntity: GuildMembership::class, mappedBy: 'gameGuild')]
+    #[ORM\OneToMany(targetEntity: GuildMembership::class, mappedBy: 'guild')]
     private Collection $guildMemberships;
 
     public function __construct()
@@ -43,7 +43,7 @@ class GameGuild
         $this->guildMemberships = new ArrayCollection();
     }
 
-    public function getId(): Uuid
+    public function getId(): ?Uuid
     {
         return $this->id;
     }
@@ -119,7 +119,7 @@ class GameGuild
     {
         if (!$this->guildMemberships->contains($guildMembership)) {
             $this->guildMemberships->add($guildMembership);
-            $guildMembership->setGameGuild($this);
+            $guildMembership->setGuild($this);
         }
 
         return $this;
@@ -129,8 +129,9 @@ class GameGuild
     {
         if ($this->guildMemberships->removeElement($guildMembership)) {
             // set the owning side to null (unless already changed)
-            if ($guildMembership->getGameGuild() === $this) {
-                $guildMembership->setGameGuild(null);
+            if ($guildMembership->getGuild() === $this) {
+                // Relationship is non-nullable on owning side; rely on orphanRemoval if enabled
+                // Do not set to null to avoid violating non-nullable constraint
             }
         }
 

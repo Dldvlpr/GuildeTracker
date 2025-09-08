@@ -14,7 +14,7 @@ use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity(repositoryClass: UserRepository::class)]
 #[ORM\Table(name: '`user`')]
-#[ORM\UniqueConstraint(name: 'UNIQ_IDENTIFIER_DISCORDID', fields: ['discordId'])]
+#[ORM\UniqueConstraint(name: 'UNIQ_IDENTIFIER_DISCORDID', columns: ['discord_id'])]
 #[UniqueEntity(fields: ['email'], message: 'Cette adresse est déjà utilisée !')]
 #[UniqueEntity(fields: ['discordId'], message: 'Ce compte discord est déjà utilisé !')]
 class User implements UserInterface
@@ -47,7 +47,6 @@ class User implements UserInterface
      * @var Collection<int, GameCharacter>
      */
     #[ORM\OneToMany(targetEntity: GameCharacter::class, mappedBy: 'userPlayer')]
-    #[ORM\JoinColumn(nullable: true)]
     private Collection $gameCharacters;
 
     /** @var Collection<int, GuildMembership> */
@@ -199,9 +198,7 @@ class User implements UserInterface
     public function removeMembership(GuildMembership $membership): static
     {
         if ($this->memberships->removeElement($membership)) {
-            if ($membership->getUser() === $this) {
-                $membership->setUser(null);
-            }
+            // Relationship is non-nullable on owning side; rely on orphanRemoval to delete the membership
         }
 
         return $this;

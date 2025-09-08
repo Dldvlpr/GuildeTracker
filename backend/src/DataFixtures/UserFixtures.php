@@ -6,6 +6,7 @@ use App\Entity\User;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
 use Faker;
+use Symfony\Component\Uid\Uuid;
 
 class UserFixtures extends Fixture
 {
@@ -13,11 +14,12 @@ class UserFixtures extends Fixture
     {
         $faker = Faker\Factory::create('fr_FR');
 
-        for ($i = 0; $i < 10; $i++) {
+        for ($i = 0; $i < 80; $i++) {
             $user = new User();
-            $user->setDiscordId($faker->unique()->numerify('##############'));
+            $user->setDiscordId($faker->uuid());
+
             $user->setUsername($faker->userName);
-            $user->setEmail($faker->unique()->safeEmail);
+            $user->setEmail($faker->email);
             $user->setRoles(['ROLE_USER']);
 
             if ($faker->boolean(70)) {
