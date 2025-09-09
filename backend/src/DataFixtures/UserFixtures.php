@@ -12,10 +12,13 @@ class UserFixtures extends Fixture
     public function load(ObjectManager $manager): void
     {
         $usersCount = (int)($_ENV['FIXTURES_USERS'] ?? 800);
-        $seed       = (int)($_ENV['FIXTURES_SEED'] ?? 0);
+        $seed = (int)($_ENV['FIXTURES_SEED'] ?? 0);
 
         $faker = Faker::create('fr_FR');
-        if ($seed) { $faker->seed($seed); mt_srand($seed); }
+        if ($seed) {
+            $faker->seed($seed);
+            mt_srand($seed);
+        }
 
         for ($i = 1; $i <= $usersCount; $i++) {
             $user = new User();
@@ -25,7 +28,7 @@ class UserFixtures extends Fixture
             $user->setRoles(['ROLE_USER']);
 
             $manager->persist($user);
-            $this->addReference('user_'.$i, $user);
+            $this->addReference('user_' . $i, $user);
 
             if ($i % 500 === 0) {
                 $manager->flush();

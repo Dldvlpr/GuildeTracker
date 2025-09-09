@@ -30,7 +30,7 @@ class GuildMembership
     #[ORM\JoinColumn(name: 'guild_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
     private GameGuild $guild;
 
-    #[ORM\Column(type: Types::STRING, enumType: GuildRole::class, length: 20)]
+    #[ORM\Column(type: Types::STRING, length: 20, enumType: GuildRole::class)]
     private GuildRole $role;
 
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
