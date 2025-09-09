@@ -5,22 +5,25 @@ namespace App\DataFixtures;
 use App\Entity\GameGuild;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
-use Faker;
+use Faker\Factory as Faker;
 
 class GameGuildFixtures extends Fixture
 {
     public function load(ObjectManager $manager): void
     {
-        $faker = Faker\Factory::create('fr_FR');
+        $guildsCount = (int)($_ENV['FIXTURES_GUILDS']);
+        $seed        = (int)($_ENV['FIXTURES_SEED']);
 
-        for ($i = 1; $i <= 2; $i++) {
+        $faker = Faker::create('fr_FR');
+        if ($seed) { $faker->seed($seed + 1); mt_srand($seed + 1); }
+
+        for ($i = 1; $i <= $guildsCount; $i++) {
             $guild = new GameGuild();
-            $guild->setName($faker->unique()->company());
-            $guild->setFaction($faker->randomElement(['HORDE', 'ALLIANCE']));
+            $guild->setName($faker->unique()->company())
+                ->setFaction($faker->randomElement(['HORDE','ALLIANCE']));
 
             $manager->persist($guild);
-
-            $this->addReference('gm_guild_'.$i, $guild);
+            $this->addReference('guild_'.$i, $guild);
         }
 
         $manager->flush();

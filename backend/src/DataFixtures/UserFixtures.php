@@ -5,29 +5,31 @@ namespace App\DataFixtures;
 use App\Entity\User;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
-use Faker;
-use Symfony\Component\Uid\Uuid;
+use Faker\Factory as Faker;
 
 class UserFixtures extends Fixture
 {
     public function load(ObjectManager $manager): void
     {
-        $faker = Faker\Factory::create('fr_FR');
+        $usersCount = (int)($_ENV['FIXTURES_USERS'] ?? 800);
+        $seed       = (int)($_ENV['FIXTURES_SEED'] ?? 0);
 
-        for ($i = 0; $i < 80; $i++) {
+        $faker = Faker::create('fr_FR');
+        if ($seed) { $faker->seed($seed); mt_srand($seed); }
+
+        for ($i = 1; $i <= $usersCount; $i++) {
             $user = new User();
+            $user->setEmail($faker->unique()->safeEmail());
+            $user->setUsername($faker->unique()->userName());
             $user->setDiscordId($faker->uuid());
-
-            $user->setUsername($faker->userName);
-            $user->setEmail($faker->email);
             $user->setRoles(['ROLE_USER']);
-
-            if ($faker->boolean(70)) {
-                $user->setBlizzardId($faker->userName . '#' . $faker->numberBetween(1000, 9999));
-            }
 
             $manager->persist($user);
             $this->addReference('user_'.$i, $user);
+
+            if ($i % 500 === 0) {
+                $manager->flush();
+            }
         }
 
         $manager->flush();

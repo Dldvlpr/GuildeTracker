@@ -4,58 +4,74 @@ namespace App\DataFixtures;
 
 use App\Entity\GuildMembership;
 use App\Entity\GameGuild;
+use App\Entity\User;
 use App\Enum\GuildRole;
-use App\Repository\UserRepository;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Common\DataFixtures\DependentFixtureInterface;
 use Doctrine\Persistence\ObjectManager;
 
 class GuildMembershipFixtures extends Fixture implements DependentFixtureInterface
 {
-    public function __construct(
-        private readonly UserRepository $userRepository,
-    ) {}
-
     public function load(ObjectManager $manager): void
     {
-        $users = $this->userRepository->createQueryBuilder('u')->getQuery()->getResult();
+        $guildsCount        = (int)($_ENV['FIXTURES_GUILDS'] ?? 20);
+        $usersCount         = (int)($_ENV['FIXTURES_USERS'] ?? 800);
+        $officersPerGuild   = max(0, (int)($_ENV['FIXTURES_OFFICERS_PER_GUILD'] ?? 3));
+        $seed               = (int)($_ENV['FIXTURES_SEED'] ?? 0);
 
-        if (count($users) < 8) {
-            throw new \RuntimeException('Need at least 8 users to assign 2 GMs and 6 Officers.');
+        if ($usersCount < $guildsCount * (1 + $officersPerGuild)) {
+            throw new \RuntimeException('Not enough users for the requested GM+Officer plan.');
         }
 
-        shuffle($users);
+        $userRefs = range(1, $usersCount);
+        if ($seed) { mt_srand($seed + 2); }
+        shuffle($userRefs);
 
-        /** @var GameGuild $guild1 */
-        $guild1 = $this->getReference('gm_guild_1', GameGuild::class);
-        /** @var GameGuild $guild2 */
-        $guild2 = $this->getReference('gm_guild_2', GameGuild::class);
+        $basePerGuild = intdiv($usersCount, $guildsCount);
+        $remainder    = $usersCount % $guildsCount;
 
-        $gms = array_splice($users, 0, 2);
-        $manager->persist(new GuildMembership($gms[0], $guild1, GuildRole::GM));
-        $manager->persist(new GuildMembership($gms[1], $guild2, GuildRole::GM));
+        $popIndex = 0;
 
-        $officers = array_splice($users, 0, 6);
-        $officerChunks = array_chunk($officers, 3);
-        foreach ($officerChunks[0] as $user) {
-            $manager->persist(new GuildMembership($user, $guild1, GuildRole::OFFICER));
-        }
-        foreach ($officerChunks[1] as $user) {
-            $manager->persist(new GuildMembership($user, $guild2, GuildRole::OFFICER));
-        }
+        for ($g = 1; $g <= $guildsCount; $g++) {
+            /** @var GameGuild $guild */
+            $guild = $this->getReference('guild_'.$g, GameGuild::class);
 
-        $members = $users;
-        if (!empty($members)) {
-            $memberChunks = array_chunk($members, (int) ceil(count($members) / 2));
-            $g1Members = $memberChunks[0] ?? [];
-            $g2Members = $memberChunks[1] ?? [];
+            $targetThisGuild = $basePerGuild + ($g <= $remainder ? 1 : 0);
 
-            foreach ($g1Members as $user) {
-                $manager->persist(new GuildMembership($user, $guild1, GuildRole::MEMBER));
+            $gmUserId = $userRefs[$popIndex++];
+            $gmUser   = $this->getReference('user_'.$gmUserId, User::class);
+            $manager->persist(new GuildMembership($gmUser, $guild, GuildRole::GM));
+
+            for ($k = 0; $k < $officersPerGuild; $k++) {
+                $offUserId = $userRefs[$popIndex++];
+                $offUser   = $this->getReference('user_'.$offUserId, User::class);
+                $manager->persist(new GuildMembership($offUser, $guild, GuildRole::OFFICER));
             }
-            foreach ($g2Members as $user) {
-                $manager->persist(new GuildMembership($user, $guild2, GuildRole::MEMBER));
+
+            $already = 1 + $officersPerGuild;
+            $toFill  = max(0, $targetThisGuild - $already);
+
+            for ($m = 0; $m < $toFill; $m++) {
+                $memUserId = $userRefs[$popIndex++];
+                $memUser   = $this->getReference('user_'.$memUserId, User::class);
+                $manager->persist(new GuildMembership($memUser, $guild, GuildRole::MEMBER));
             }
+
+            if ($g % 10 === 0) {
+                $manager->flush();
+            }
+        }
+
+        $g = 1;
+        while ($popIndex < count($userRefs)) {
+            /** @var GameGuild $guild */
+            $guild = $this->getReference('guild_'.$g, GameGuild::class);
+            $uid   = $userRefs[$popIndex++];
+            $user  = $this->getReference('user_'.$uid, User::class);
+            $manager->persist(new GuildMembership($user, $guild, GuildRole::MEMBER));
+
+            $g++;
+            if ($g > $guildsCount) { $g = 1; }
         }
 
         $manager->flush();
