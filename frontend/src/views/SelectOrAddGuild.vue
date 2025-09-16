@@ -89,7 +89,7 @@
                 <div
                   class="rounded-lg bg-white/5 py-2 ring-1 ring-inset ring-white/10 group-hover:bg-white/10"
                 >
-                  <div class="text-sm font-semibold text-slate-200">—</div>
+                  <div class="text-sm font-semibold text-slate-200">{{ g.nbrGuildMembers }}</div>
                   <div>Persos</div>
                 </div>
               </div>
@@ -134,7 +134,7 @@ import { RouterLink } from 'vue-router'
 import Toaster from '@/components/Toaster.vue'
 import GuildCreateModal from '@/components/guilds/GuildCreateModal.vue'
 import type { GameGuild } from '@/interfaces/GameGuild.interface'
-import { getAllGameGuild } from '@/services/gameGuild.service.ts'
+import { getAllGameGuild, getMyGuild } from '@/services/gameGuild.service.ts'
 
 type ToastType = 'success' | 'error' | 'warning' | 'info'
 interface Notification {
@@ -157,8 +157,8 @@ function initials(name?: string) {
   return (a + b).toUpperCase()
 }
 
-function onGuildCreated(newGuild: { id: string;}) {
-  gameGuilds.value.unshift({ guildId: newGuild.id} as any)
+function onGuildCreated(newGuild: { id: string }) {
+  gameGuilds.value.unshift({ guildId: newGuild.id } as any)
   toast(`Guild was created!`, 'success')
 }
 
@@ -171,7 +171,7 @@ const toast = (m: string, t: ToastType = 'info') => {
 
 onMounted(async () => {
   try {
-    const res = await getAllGameGuild()
+    const res = await getMyGuild()
     if (res.ok) {
       gameGuilds.value = res.data
     } else {

@@ -40,4 +40,17 @@ class GameGuildRepository extends ServiceEntityRepository
     //            ->getOneOrNullResult()
     //        ;
     //    }
+
+    /**
+     * @return GameGuild[]
+     */
+    public function findByUserId(string $userId): array
+    {
+        return $this->createQueryBuilder('g')
+            ->innerJoin('g.guildMemberships', 'gm')
+            ->andWhere('IDENTITY(gm.user) = :uid')
+            ->setParameter('uid', $userId)
+            ->getQuery()
+            ->getResult();
+    }
 }

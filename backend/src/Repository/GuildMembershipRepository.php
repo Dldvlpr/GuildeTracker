@@ -2,7 +2,9 @@
 
 namespace App\Repository;
 
+use App\Entity\GameGuild;
 use App\Entity\GuildMembership;
+use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 

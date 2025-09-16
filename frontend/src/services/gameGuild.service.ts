@@ -111,6 +111,57 @@ export async function getAllGameGuild(opts?: { signal?: AbortSignal }): Promise<
   }
 }
 
+export async function getMyGuild(opts?: { signal?: AbortSignal }): Promise<GuildResult> {
+  if (!BASE) {
+    return { ok: false, error: 'VITE_API_BASE_URL is not set' };
+  }
+
+  try {
+    const res = await fetch(`${BASE}/api/me/guilds`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      signal: opts?.signal,
+    });
+
+    if (!res.ok) {
+      let message = `HTTP ${res.status}`;
+      try {
+        const bodyText = await res.text();
+        if (bodyText) {
+          const body = JSON.parse(bodyText);
+          if (typeof body?.message === 'string') message = body.message;
+          if (Array.isArray(body?.violations) && body.violations.length) {
+            message = body.violations.map((v: any) => v.message).join(' · ');
+          }
+        }
+      } catch {
+        return { ok: false, error: message, status: res.status };
+      }
+      return { ok: false, error: message, status: res.status };
+    }
+
+    if (res.status === 204) {
+      return { ok: true, data: [] };
+    }
+
+    const text = await res.text();
+    const json = text ? JSON.parse(text) : [];
+
+    if (!Array.isArray(json)) {
+      return { ok: false, error: 'Unexpected payload: expected an array' };
+    }
+
+    const data = json as GameGuild[];
+    console.log(data)
+
+    return { ok: true, data };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? 'Network error' };
+  }
+}
+
+
 export async function createGuild(name: string, faction: 'HORDE' | 'ALLIANCE') {
   if (!BASE) {
     throw new Error('VITE_API_BASE_URL is not set');

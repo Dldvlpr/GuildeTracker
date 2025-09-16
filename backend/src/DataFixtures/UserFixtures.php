@@ -30,7 +30,7 @@ class UserFixtures extends Fixture
             $manager->persist($user);
             $this->addReference('user_' . $i, $user);
 
-            if ($i % 500 === 0) {
+            if ($i % 20 === 0) {
                 $manager->flush();
             }
         }

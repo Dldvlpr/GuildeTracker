@@ -5,5 +5,6 @@ export interface GameGuild {
   name: string;
   faction: string;
   nbrGuildMembers: string;
+  nbrCharacters: string;
   players?: PlayerInterface[] | [];
 }

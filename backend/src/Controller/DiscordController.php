@@ -23,20 +23,6 @@ final class DiscordController extends AbstractController
     {
     }
 
-    #[Route('/api/me', name: 'api_me', methods: ['GET'])]
-    public function me(): JsonResponse
-    {
-        $user = $this->getUser();
-        if (!$user) {
-            return new JsonResponse(['error' => 'Non authentifié'], Response::HTTP_UNAUTHORIZED);
-        }
-
-        return $this->json([
-            'id' => $user->getDiscordId(),
-            'username' => $user->getUsername(),
-            'email' => $user->getEmail(),
-        ]);
-    }
 
     #[Route('/logout', name: 'api_logout', methods: ['GET', 'POST'])]
     public function logout(): void
