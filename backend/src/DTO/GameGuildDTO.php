@@ -11,40 +11,47 @@ class GameGuildDTO
     public string $faction;
     /** @var string[] */
     public array $userIds;
+    public int $nbrGuildMembers;
 
-    private function __construct(string $id, string $name, string $faction, array $userIds)
-    {
+    private function __construct(
+        string $id,
+        string $name,
+        string $faction,
+        int $nbrGuildMembers,
+        array $userIds = []
+    ) {
         $this->id = $id;
         $this->name = $name;
         $this->faction = $faction;
+        $this->nbrGuildMembers = $nbrGuildMembers;
         $this->userIds = $userIds;
     }
 
     public static function fromEntity(GameGuild $guild): self
     {
-        $userIds = [];
-        foreach ($guild->getGuildMemberships() as $membership) {
-            $userIds[] = (string) $membership->getUser()->getId();
-        }
+        $nbrGuildMembers = count($guild->getGuildMemberships() ?? []);
 
         return new self(
-            $guild->getUuidToString(),
-            $guild->getName() ?? '',
+            $guild->getId()->toRfc4122(),
+            $guild->getName(),
             $guild->getFaction() ?? '',
-            $userIds
-        );
+            $nbrGuildMembers,
+            $guild?->getGuildMemberships()?->map(
+                static fn($m) => $m?->getUser()?->getId()?->toRfc4122()
+            )->toArray()
+            );
     }
 
     /**
      * @param iterable<GameGuild> $guilds
-     * @return list<self>
+     * @return self[]
      */
     public static function fromEntities(iterable $guilds): array
     {
-        $dtos = [];
-        foreach ($guilds as $guild) {
-            $dtos[] = self::fromEntity($guild);
+        $out = [];
+        foreach ($guilds as $g) {
+            $out[] = self::fromEntity($g);
         }
-        return $dtos;
+        return $out;
     }
 }

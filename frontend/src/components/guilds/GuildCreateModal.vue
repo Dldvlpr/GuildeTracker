@@ -10,11 +10,12 @@
           required
           minlength="2"
           maxlength="50"
+          v-focus
           autocomplete="off"
           autocapitalize="none"
           spellcheck="false"
-          class="mt-1 block w-full rounded-lg bg-slate-800 text-slate-100 placeholder-slate-400 ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-indigo-500 px-3 py-2"
-          placeholder="e.g. Tracker"
+          class="mt-1 block w-full round  ed-lg bg-slate-800 text-slate-100 placeholder-slate-400 ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-indigo-500 px-3 py-2"
+          placeholder="Guild Name"
           :aria-invalid="!!fieldError"
           aria-describedby="guild-name-error"
         />
@@ -93,6 +94,14 @@ const emit = defineEmits<{
   (e: 'update:modelValue', v: boolean): void
   (e: 'created', payload: GuildResponse): void
 }>()
+const vFocus = {
+  mounted: (el: HTMLInputElement) => {
+    requestAnimationFrame(() => el.focus())
+  },
+  updated: (el: HTMLInputElement) => {
+    requestAnimationFrame(() => el.focus())
+  }
+}
 
 const model = computed({
   get: () => props.modelValue,

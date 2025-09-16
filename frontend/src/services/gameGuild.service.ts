@@ -103,6 +103,7 @@ export async function getAllGameGuild(opts?: { signal?: AbortSignal }): Promise<
     }
 
     const data = json as GameGuild[];
+    console.log(data)
 
     return { ok: true, data };
   } catch (e: any) {
