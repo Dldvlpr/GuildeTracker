@@ -15,10 +15,24 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   server: {
-    https: {
-      cert: fs.readFileSync(path.resolve(__dirname, 'certs/localhost+2.pem')),
-      key:  fs.readFileSync(path.resolve(__dirname, 'certs/localhost+2-key.pem')),
-    },
+    // Prefer mkcert-generated localhost certs if available, otherwise fallback
+    // to existing certs. This avoids browser warnings by ensuring SANs.
+    https: (() => {
+      const certDir = path.resolve(__dirname, 'certs')
+      const localhostCert = path.join(certDir, 'localhost.pem')
+      const localhostKey = path.join(certDir, 'localhost-key.pem')
+      const legacyCert = path.join(certDir, 'cert.pem')
+      const legacyKey = path.join(certDir, 'key.pem')
+
+      const useLocalhost = fs.existsSync(localhostCert) && fs.existsSync(localhostKey)
+      const certPath = useLocalhost ? localhostCert : legacyCert
+      const keyPath = useLocalhost ? localhostKey : legacyKey
+
+      return {
+        cert: fs.readFileSync(certPath),
+        key: fs.readFileSync(keyPath),
+      }
+    })(),
     host: 'localhost',
     port: 5173,
     proxy: {
