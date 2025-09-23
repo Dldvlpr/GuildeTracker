@@ -2,11 +2,13 @@
 
 namespace App\Controller;
 
+use App\DTO\CharacterDTO;
 use App\DTO\GameGuildDTO;
 use App\Entity\GameGuild;
 use App\Entity\GuildMembership;
 use App\Enum\GuildRole;
 use App\Form\GameGuildType;
+use App\Repository\GameCharacterRepository;
 use App\Repository\GameGuildRepository;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -14,6 +16,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 final class GameGuildController extends AbstractController
 {
@@ -21,6 +24,7 @@ final class GameGuildController extends AbstractController
         private readonly EntityManagerInterface $em,
         private readonly GameGuildRepository $gameGuildRepository,
         private readonly UserRepository $usersRepository,
+        private readonly GameCharacterRepository $gameCharacterRepository,
     ) {}
 
     #[Route('/api/gameguild/create', name: 'gameGuild_create', methods: ['POST'])]
@@ -75,6 +79,19 @@ final class GameGuildController extends AbstractController
         }
 
         return $this->json(['status' => 'ok', 'id' => $gameGuild->getUuidToString()], 201);
+    }
+
+    #[Route('/api/gameguild/{id}/members', name: 'getGameGuildMembers', methods: ['GET'])]
+    public function getGameguildMembers(string $id): JsonResponse
+    {
+        $guild = $this->gameGuildRepository->find($id);
+        if (!$guild) {
+            return $this->json(['error' => 'Guild not found'], 404);
+        }
+
+        $this->denyAccessUnlessGranted('GUILD_VIEW', $guild);
+
+        return $this->json(CharacterDTO::fromEntities($guild->getGameCharacters()));
     }
 
     #[Route('/api/gameguild', name: 'get_allGameGuild', methods: ['GET'])]

@@ -3,6 +3,7 @@
 namespace App\Repository;
 
 use App\Entity\GameCharacter;
+use App\Entity\GameGuild;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -40,4 +41,13 @@ class GameCharacterRepository extends ServiceEntityRepository
     //            ->getOneOrNullResult()
     //        ;
     //    }
+
+    public function findCharactersInGuilde(GameGuild $gameGuild)
+    {
+        return $this->createQueryBuilder('c')
+            ->where('c.guild = :guild')
+            ->setParameter('guild', $gameGuild)
+            ->getQuery()
+            ->getResult();
+    }
 }

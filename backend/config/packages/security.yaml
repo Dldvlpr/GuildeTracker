@@ -10,10 +10,15 @@ security:
                 class: App\Entity\User
                 property: discordId
     firewalls:
+        api:
+            pattern: ^/api/
+            stateless: true
+            entry_point: App\Security\ApiAuthenticationEntryPoint
         dev:
             pattern: ^/(_(profiler|wdt)|css|images|js)/
             security: false
         main:
+            pattern: ^/
             lazy: true
             provider: app_user_provider
             custom_authenticators:

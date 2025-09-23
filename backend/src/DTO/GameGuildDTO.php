@@ -6,29 +6,14 @@ use App\Entity\GameGuild;
 
 class GameGuildDTO
 {
-    public string $id;
-    public string $name;
-    public string $faction;
-    /** @var string[] */
-    public array $userIds;
-    public int $nbrGuildMembers;
-    public int $nbrCharacters;
-
     private function __construct(
-        string $id,
-        string $name,
-        string $faction,
-        int $nbrGuildMembers,
-        int $nbrCharacters,
-        array $userIds = []
-    ) {
-        $this->id = $id;
-        $this->name = $name;
-        $this->faction = $faction;
-        $this->nbrGuildMembers = $nbrGuildMembers;
-        $this->nbrCharacters = $nbrCharacters;
-        $this->userIds = $userIds;
-    }
+        public readonly string $id,
+        public readonly string $name,
+        public readonly string $faction,
+        public readonly int $nbrGuildMembers,
+        public readonly int $nbrCharacters,
+        public readonly array $userIds = []
+    ) {}
 
     public static function fromEntity(GameGuild $guild): self
     {

@@ -49,7 +49,9 @@
       </div>
 
       <ul class="px-2 space-y-1">
-        <li v-if="gameGuilds.length === 0" class="px-3 py-2 text-xs text-slate-400">Aucune guilde</li>
+        <li v-if="gameGuilds.length === 0" class="px-3 py-2 text-xs text-slate-400">
+          Aucune guilde
+        </li>
         <li v-for="guild in gameGuilds" :key="guild.id">
           <RouterLink
             :to="guildRoute(guild)"
@@ -83,13 +85,13 @@
         <h2 class="text-[11px] uppercase tracking-wide text-slate-400">Personnages</h2>
         <button
           @click="$emit('add-character')"
-          class="inline-flex h-7 px-2 rounded-lg bg-white/5 ring-1 ring-inset ring-white/10 hover:bg-white/10 text-xs"
+          class="h-7 px-2 rounded-lg bg-white/5 ring-1 ring-inset ring-white/10 hover:bg-white/10 text-xs"
         >
           ➕
         </button>
       </div>
 
-       <ul class="px-2 space-y-1">
+      <ul class="px-2 space-y-1">
         <li v-if="characters.length === 0" class="px-3 py-2 text-xs text-slate-400">
           Aucun personnage
         </li>
@@ -143,14 +145,14 @@
       <button
         v-if="userStore.isAuthenticated && !userStore.isLoading"
         @click="logoutWithDiscord"
-        class="w-full inline-flex items-center gap-3 px-3 py-2 rounded-xl text-sm ring-1 ring-inset ring-white/10 hover:bg-white/5 hover:text-white transition"
+        class="w-full inline-flex items-center gap-3 px-3 py-2 rounded-xl text-sm ring-1 ring-inset ring-white/10 hover:bg-white/5 hover:text-white transition cursor-pointer"
       >
         🚪 Déconnexion
       </button>
       <button
         v-else
         @click="loginWithDiscord"
-        class="w-full inline-flex items-center gap-3 px-3 py-2 rounded-xl text-sm ring-1 ring-inset ring-white/10 hover:bg-white/5 hover:text-white transition"
+        class="w-full inline-flex items-center gap-3 px-3 py-2 rounded-xl text-sm ring-1 ring-inset ring-white/10 hover:bg-white/5 hover:text-white transition cursor-pointer"
       >
         🔑 Connexion
       </button>
