@@ -28,6 +28,17 @@
       />
 
       <main class="flex-1 overflow-auto md:pl-64">
+        <header class="md:hidden sticky top-0 z-30 bg-slate-950/80 backdrop-blur border-b border-white/10 px-4 py-3">
+          <button
+            @click="sidebarOpen = true"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-inset ring-white/10 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-indigo-300 transition"
+            aria-label="Ouvrir le menu"
+          >
+            <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 12h18M3 6h18M3 18h18" />
+            </svg>
+          </button>
+        </header>
         <div class="pointer-events-none -z-10 h-0">
           <div class="relative" aria-hidden="true">
             <div

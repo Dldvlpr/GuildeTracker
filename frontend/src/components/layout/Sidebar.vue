@@ -29,7 +29,8 @@
       </button>
     </div>
 
-    <nav class="flex-1 overflow-y-auto py-4">
+    <nav v-if="userStore.isAuthenticated && !userStore.isLoading"
+      class="flex-1 overflow-y-auto py-4">
       <div class="px-4 pb-2 flex items-center justify-between">
         <h2 class="text-[11px] uppercase tracking-wide text-slate-400">Guildes</h2>
         <div class="flex items-center gap-2">
@@ -128,20 +129,6 @@
     </nav>
 
     <div class="px-4 py-4 border-t border-white/10 space-y-3">
-      <a
-        href="https://github.com/dldvlpr"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="flex items-center gap-2 text-sm rounded-xl px-3 py-2 ring-1 ring-inset ring-white/10 hover:bg-white/5 hover:text-white transition"
-      >
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path
-            d="M12 .3A11.7 11.7 0 0 0 0 12c0 5.16 3.35 9.53 8.01 11.07.59.1.81-.26.81-.58v-2.04c-3.26.71-3.95-1.57-3.95-1.57-.54-1.38-1.32-1.75-1.32-1.75-1.08-.74.08-.72.08-.72 1.2.09 1.83 1.24 1.83 1.24 1.07 1.84 2.8 1.31 3.48 1 .1-.78.42-1.31.76-1.61-2.66-.3-5.47-1.33-5.47-5.93 0-1.3.47-2.38 1.23-3.22-.12-.3-.53-1.52.12-3.17 0 0 1.01-.32 3.29 1.23.96-.27 1.99-.41 3.02-.41s2.06.14 3.02.41c2.28-1.55 3.29-1.23 3.29-1.23.65 1.65.24 2.86.12 3.17.77.84 1.23 1.92 1.23 3.22 0 4.61-2.8 5.62-5.48 5.92.43.37.81 1.1.81 2.23V22c0 .32.22.69.82.58A11.7 11.7 0 0 0 24 12 11.7 11.7 0 0 0 12 .3z"
-          />
-        </svg>
-        <span>GitHub</span>
-      </a>
-
       <button
         v-if="userStore.isAuthenticated && !userStore.isLoading"
         @click="logoutWithDiscord"

@@ -28,6 +28,7 @@ final class GameGuildController extends AbstractController
     ) {}
 
     #[Route('/api/gameguild/create', name: 'gameGuild_create', methods: ['POST'])]
+    #[IsGranted('IS_AUTHENTICATED_FULLY')]
     public function createGameGuild(
         Request $request,
         EntityManagerInterface $em
@@ -92,14 +93,5 @@ final class GameGuildController extends AbstractController
         $this->denyAccessUnlessGranted('GUILD_VIEW', $guild);
 
         return $this->json(CharacterDTO::fromEntities($guild->getGameCharacters()));
-    }
-
-    #[Route('/api/gameguild', name: 'get_allGameGuild', methods: ['GET'])]
-    public function getGameGuild(): JsonResponse
-    {
-        $gameGuilds = $this->gameGuildRepository->findAll();
-        $response = GameGuildDTO::fromEntities($gameGuilds);
-
-        return $this->json($response, 201);
     }
 }

@@ -1,9 +1,9 @@
 <template>
   <section class="mx-auto max-w-6xl flex flex-col gap-4">
     <PlayersHeaderStats
-      :total="characters.length"
-      :tanks="getCharactersByRole('Tanks').length"
-      :healers="getCharactersByRole('Healers').length"
+      :total="charactersWithCalculatedRoles.length"
+      :tanks="getCharactersByRole(Role.TANKS).length"
+      :healers="getCharactersByRole(Role.HEALERS).length"
       :dps="getDpsCount()"
     />
 
@@ -34,11 +34,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import PlayersHeaderStats from '@/components/PlayersHeaderStats.vue'
 import PlayersFilters from '@/components/PlayersFilters.vue'
 import CharacterCard from '@/components/CharacterCard.vue'
 import Toaster from '@/components/Toaster.vue'
-
+import { getCharactersByGuildId } from '@/services/character.service'
+import { getRoleByClassAndSpec } from '@/data/gameData'
+import { Role } from '@/interfaces/game.interface'
 import type { Character } from '@/interfaces/game.interface'
 
 type ToastType = 'success' | 'error' | 'warning' | 'info'
@@ -48,26 +51,60 @@ interface Notification {
   type: ToastType
 }
 
+const route = useRoute()
 const characters = ref<Character[]>([])
 const notifications = ref<Notification[]>([])
+const loading = ref(false)
 
 const filters = ref<{ class: string; role: string }>({ class: '', role: '' })
 
 const availableClasses = computed<string[]>(() => {
-  const s = new Set(characters.value.map((c) => c.class))
+  const s = new Set(charactersWithCalculatedRoles.value.map((c) => c.class).filter(Boolean))
   return Array.from(s).sort()
 })
 
+const normalizeRole = (role: string | undefined): Role | undefined => {
+  if (!role) return undefined
+
+  const roleMap: Record<string, Role> = {
+    'melee': Role.MELEE,
+    'ranged': Role.RANGED,
+    'tank': Role.TANKS,
+    'tanks': Role.TANKS,
+    'healer': Role.HEALERS,
+    'healers': Role.HEALERS,
+    'Melee': Role.MELEE,
+    'Ranged': Role.RANGED,
+    'Tanks': Role.TANKS,
+    'Healers': Role.HEALERS
+  }
+
+  return roleMap[role] || roleMap[role.toLowerCase()]
+}
+
+const charactersWithCalculatedRoles = computed<Character[]>(() => {
+  return characters.value.map(character => {
+    let finalRole = normalizeRole(character.role)
+
+    // Si pas de rôle ou rôle invalide, calculer à partir de classe/spé
+    if (!finalRole && character.class && character.spec) {
+      finalRole = getRoleByClassAndSpec(character.class, character.spec)
+    }
+
+    return { ...character, role: finalRole }
+  })
+})
+
 const filteredCharacters = computed<Character[]>(() => {
-  let out = [...characters.value]
+  let out = [...charactersWithCalculatedRoles.value]
   if (filters.value.class) out = out.filter((c) => c.class === filters.value.class)
   if (filters.value.role) out = out.filter((c) => c.role === filters.value.role)
   return out.sort((a, b) => a.name.localeCompare(b.name))
 })
 
-const getCharactersByRole = (role: string) => characters.value.filter((c) => c.role === role)
+const getCharactersByRole = (role: string) => charactersWithCalculatedRoles.value.filter((c) => c.role === role)
 
-const getDpsCount = () => getCharactersByRole('Melee').length + getCharactersByRole('Ranged').length
+const getDpsCount = () => getCharactersByRole(Role.MELEE).length + getCharactersByRole(Role.RANGED).length
 
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2)
 
@@ -85,42 +122,38 @@ const editCharacter = () => {
 }
 
 const deleteCharacter = (id: string) => {
-  const c = characters.value.find((x) => x.id === id)
-  if (!c) return
-  if (confirm(`Are you sure you want to delete "${c.name}"?`)) {
-    characters.value = characters.value.filter((x) => x.id !== id)
-    saveToLocalStorage()
-    pushToast(`Character "${c.name}" deleted.`, 'success')
-  }
+  pushToast('Delete feature to be implemented.', 'info')
 }
 
 const clearFilters = () => {
   filters.value = { class: '', role: '' }
 }
 
-const saveToLocalStorage = () => {
-  try {
-    localStorage.setItem('wow-characters', JSON.stringify(characters.value))
-  } catch {
-    pushToast('An error occurred while saving.', 'error')
+const getAllCharactersByGuild = async () => {
+  const guildId = route.params.id as string
+  if (!guildId) {
+    pushToast('Guild ID not found in URL', 'error')
+    return
   }
-}
 
-const loadFromLocalStorage = () => {
+  loading.value = true
   try {
-    const saved = localStorage.getItem('wow-characters')
-    if (saved) {
-      const parsed = JSON.parse(saved)
-      if (Array.isArray(parsed)) {
-        characters.value = parsed
-      }
+    const result = await getCharactersByGuildId(guildId)
+    if (result.ok) {
+      characters.value = result.data
+    } else {
+      pushToast(result.error, 'error')
     }
-  } catch {
-    pushToast('An error occurred while loading saved data.', 'warning')
+  } catch (error: any) {
+    pushToast(error?.message ?? 'Failed to load characters', 'error')
+  } finally {
+    loading.value = false
   }
 }
 
-onMounted(loadFromLocalStorage)
+onMounted(() => {
+  getAllCharactersByGuild()
+})
 </script>
 
 <style scoped>

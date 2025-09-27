@@ -13,7 +13,7 @@ const router = createRouter({
     { path: '/player/add', name: 'addPlayer', component: AddPlayerView },
     { path: '/guild/create', name: 'guildCreate', component: CreateGuildView },
     { path: '/guild/:id', name: 'guildDetails', component: GuildDetailView, props: true },
-    { path: '/list', name: 'listPlayer', component: ListPlayerView },
+    { path: '/guild/:id/characters', name: 'listPlayer', component: ListPlayerView },
     { path: '/assignments', name: 'assignments', component: AssignementView },
   ],
 })

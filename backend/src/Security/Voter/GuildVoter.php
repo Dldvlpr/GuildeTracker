@@ -23,7 +23,7 @@ class GuildVoter extends Voter
             return false;
         }
 
-        foreach ($guild->getMemberships() as $m) {
+        foreach ($guild->getGuildMemberships() as $m) {
             if ($m->getUser()->getId() === $user->getId()) {
                 return true;
             }
