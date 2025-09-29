@@ -26,7 +26,6 @@
     </div>
 
     <div v-else>
-      <!-- Stats Overview -->
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-12">
         <div class="rounded-xl border border-white/10 bg-white/5 p-4">
           <div class="text-sm text-slate-400">Faction</div>
@@ -42,7 +41,6 @@
         </div>
       </div>
 
-      <!-- Priorité 1 - Core Features -->
       <div class="mb-12">
         <div class="flex items-center gap-3 mb-6">
           <div class="flex items-center justify-center w-8 h-8 rounded-full bg-red-500/20 text-red-400">
@@ -56,17 +54,17 @@
 
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <FeatureCard
-            title="Système de rôles"
-            description="Gérer les rôles et permissions des membres dans vos guildes"
-            icon="ROLES"
+            title="Gestion des membres"
+            description="Gérer les membres et leurs rôles (GM, Officier, Membre)"
+            icon="MEMBRES"
             :available="true"
-            :route="`/guild/${guild?.id}/roles`"
+            :route="`/guild/${guild?.id}/members`"
             priority="high"
           />
           <FeatureCard
-            title="Gestion des membres"
-            description="Inviter, expulser et modifier les rôles des membres"
-            icon="MEMBRES"
+            title="Liste des personnages"
+            description="Voir et gérer tous les personnages des membres"
+            icon="CHARS"
             :available="true"
             :route="`/guild/${guild?.id}/characters`"
             priority="high"
@@ -82,7 +80,6 @@
         </div>
       </div>
 
-      <!-- Priorité 2 - Gameplay -->
       <div class="mb-12">
         <div class="flex items-center gap-3 mb-6">
           <div class="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400">
@@ -122,7 +119,6 @@
         </div>
       </div>
 
-      <!-- Priorité 3 - Analytics -->
       <div class="mb-8">
         <div class="flex items-center gap-3 mb-6">
           <div class="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400">
