@@ -23,8 +23,10 @@ onMounted(async () => {
     type.value = 'success'
     if (!store.isAuthenticated) {
       const { isAuthenticated, user } = await checkAuthStatus()
-      if (isAuthenticated && user) store.setUser(user)
-      else {
+      if (isAuthenticated && user) {
+        store.setUser(user)
+        msg.value = 'Connexion réussie. Sélectionnez une guilde dans la sidebar pour commencer.'
+      } else {
         type.value = 'error'
         msg.value = "Session introuvable après l'authentification."
       }
@@ -76,12 +78,19 @@ onMounted(async () => {
       <div class="mx-auto max-w-6xl px-4 py-16 md:py-24">
         <div class="grid gap-10 md:grid-cols-2 md:items-center">
           <div class="space-y-6">
-            <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight">
+            <h1 v-if="!store.isAuthenticated" class="text-4xl md:text-5xl font-extrabold tracking-tight">
               Gérez votre <span class="text-indigo-400">guilde</span> en toute simplicité
             </h1>
-            <p class="text-slate-300/90 leading-relaxed">
+            <h1 v-else class="text-4xl md:text-5xl font-extrabold tracking-tight">
+              Bon retour, <span class="text-indigo-400">{{ store.user?.username }}</span> !
+            </h1>
+            <p v-if="!store.isAuthenticated" class="text-slate-300/90 leading-relaxed">
               Centralisez les informations de vos joueurs, suivez leurs personnages, et gardez une
               organisation claire par factions — le tout dans une interface rapide et moderne.
+            </p>
+            <p v-else class="text-slate-300/90 leading-relaxed">
+              Sélectionnez une guilde dans la sidebar pour accéder aux fonctionnalités de gestion.
+              Créez une nouvelle guilde ou rejoignez une guilde existante pour commencer.
             </p>
           </div>
 

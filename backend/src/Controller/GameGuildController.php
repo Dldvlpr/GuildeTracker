@@ -94,4 +94,17 @@ final class GameGuildController extends AbstractController
 
         return $this->json(CharacterDTO::fromEntities($guild->getGameCharacters()));
     }
+
+    #[Route('/api/gameguild/{id}', name: 'getGameGuildMembers', methods: ['GET'])]
+    public function getGameguild(string $id): JsonResponse
+    {
+        $guild = $this->gameGuildRepository->find($id);
+        if (!$guild) {
+            return $this->json(['error' => 'Guild not found'], 404);
+        }
+
+        $this->denyAccessUnlessGranted('GUILD_VIEW', $guild);
+
+        return $this->json(GameGuildDTO::fromEntity($guild));
+    }
 }

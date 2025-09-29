@@ -1,5 +1,15 @@
 <template>
   <section class="mx-auto max-w-6xl flex flex-col gap-4">
+    <header class="flex items-center justify-between">
+      <h1 class="text-xl font-semibold">Membres de la guilde</h1>
+      <RouterLink
+        :to="`/guild/${route.params.id}`"
+        class="text-sm rounded-lg px-3 py-1.5 ring-1 ring-inset ring-white/10 hover:ring-white/20 transition"
+      >
+        ← Retour à la guilde
+      </RouterLink>
+    </header>
+
     <PlayersHeaderStats
       :total="charactersWithCalculatedRoles.length"
       :tanks="getCharactersByRole(Role.TANKS).length"

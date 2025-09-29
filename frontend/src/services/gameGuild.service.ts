@@ -16,7 +16,7 @@ export async function getGameGuild(guildId: string, opts?: { signal?: AbortSigna
   }
 
   try {
-    const res = await fetch(`${BASE}/api/getGuild/${encodeURIComponent(guildId)}`, {
+    const res = await fetch(`${BASE}/api/gameguild/${encodeURIComponent(guildId)}`, {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },
