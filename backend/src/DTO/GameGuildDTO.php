@@ -4,15 +4,15 @@ namespace App\DTO;
 
 use App\Entity\GameGuild;
 
-class GameGuildDTO
+readonly class GameGuildDTO
 {
     private function __construct(
-        public readonly string $id,
-        public readonly string $name,
-        public readonly string $faction,
-        public readonly int $nbrGuildMembers,
-        public readonly int $nbrCharacters,
-        public readonly array $userIds = []
+        public string $id,
+        public string $name,
+        public string $faction,
+        public int    $nbrGuildMembers,
+        public int    $nbrCharacters,
+        public array  $userIds = []
     ) {}
 
     public static function fromEntity(GameGuild $guild): self

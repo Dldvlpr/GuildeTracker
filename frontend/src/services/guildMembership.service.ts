@@ -1,23 +1,22 @@
-import type { Character } from "@/interfaces/game.interface";
-import type { GameGuild } from '@/interfaces/GameGuild.interface.ts'
+import type { guildMembership } from '@/interfaces/guildMemebership.interface.ts';
 
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
-export type characterResult =
-  | { ok: true; data: Character[] }
+export type GuildMembershipResult =
+  | { ok: true; data: guildMembership[] }
   | { ok: false; error: string; status?: number };
 
-export type characterOneResult =
-  | { ok: true; data: Character }
+export type GuildMembershipOneResult =
+  | { ok: true; data: guildMembership }
   | { ok: false; error: string; status?: number };
 
-export async function getCharactersByGuildId(guildId: string, opts?: { signal?: AbortSignal }): Promise<characterResult> {
+export async function getAllMembership(guildId: string, opts?: { signal?: AbortSignal }): Promise<GuildMembershipResult> {
   if (!BASE) {
     return { ok: false, error: 'VITE_API_BASE_URL is not set' };
   }
 
   try {
-    const res = await fetch(`${BASE}/api/gameguild/${encodeURIComponent(guildId)}/members`, {
+    const res = await fetch(`${BASE}/api/guildmembers/${encodeURIComponent(guildId)}`, {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },
@@ -52,7 +51,8 @@ export async function getCharactersByGuildId(guildId: string, opts?: { signal?: 
       return { ok: false, error: 'Unexpected payload: expected an array' };
     }
 
-    const data = json as Character[];
+    const data = json as guildMembership[];
+    console.log(data)
 
     return { ok: true, data };
   } catch (e: any) {

@@ -15,7 +15,7 @@ const router = createRouter({
     { path: '/guild/create', name: 'guildCreate', component: CreateGuildView },
     { path: '/guild/:id', name: 'guildDetails', component: FeaturesView, props: true },
     { path: '/guild/:id/characters', name: 'listPlayer', component: ListPlayerView },
-    { path: '/guild/:id/roles', name: 'guildRoles', component: () => import('@/views/GuildRolesView.vue'), props: true },
+    { path: '/guild/:id/members', name: 'guildMembers', component: () => import('@/views/GuildRolesView.vue'), props: true },
     { path: '/guild/:id/dashboard', name: 'guildDashboard', component: () => import('@/views/GuildDashboardView.vue'), props: true },
     { path: '/guild/:id/import-events', name: 'importEvents', component: () => import('@/views/ImportEventsView.vue'), props: true },
     { path: '/guild/:id/dkp-system', name: 'dkpSystem', component: () => import('@/views/DkpSystemView.vue'), props: true },

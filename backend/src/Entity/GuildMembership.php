@@ -59,6 +59,11 @@ class GuildMembership
         return $this->user;
     }
 
+    public function getUserName(): string
+    {
+        return $this->user->getUsername();
+    }
+
     public function setUser(User $user): self
     {
         $this->user = $user;
