@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\DTO\GuildMembershipDTO;
 use App\Entity\GameGuild;
+use App\Repository\GameCharacterRepository;
 use App\Repository\GameGuildRepository;
 use App\Repository\GuildMembershipRepository;
 use App\Repository\UserRepository;
@@ -20,6 +21,7 @@ class GuildMembershipController extends AbstractController
         private readonly GuildMembershipRepository $guildMembershipRepository,
         private readonly GameGuildRepository $gameGuildRepository,
         private readonly userRepository $userRepository,
+        private readonly GameCharacterRepository $gameCharacterRepository,
         private readonly EntityManagerInterface $entityManager,
     )
     {}
@@ -75,6 +77,20 @@ class GuildMembershipController extends AbstractController
         $guildMember = $this->guildMembershipRepository->findOneBy(['id' => $id]);
         if (!$guildMember) {
             return $this->json(['message' => 'Aucun membre trouvé !'], 400);
+        }
+
+        // $this->denyAccessUnlessGranted('GUILD_MANAGE', $guildMember->getGuild());
+
+        $user = $guildMember->getUser();
+        $guild = $guildMember->getGuild();
+
+        $characters = $this->gameCharacterRepository->findBy([
+            'userPlayer' => $user,
+            'guild' => $guild
+        ]);
+
+        foreach ($characters as $character) {
+            $this->entityManager->remove($character);
         }
 
         $this->entityManager->remove($guildMember);
