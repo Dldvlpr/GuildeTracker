@@ -127,7 +127,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import type { GameGuild } from '@/interfaces/GameGuild.interface'
 import type { guildMembership } from '@/interfaces/guildMemebership.interface.ts'
-import { getAllMembership } from '@/services/guildMembership.service.ts'
+import { getAllMembership, updateMemberRole } from '@/services/guildMembership.service.ts'
 
 defineOptions({ name: 'GuildRolesView' })
 
@@ -181,7 +181,36 @@ const toggleSort = (column: 'name' | 'role') => {
 }
 
 const updateRole = async (memberId: string, newRole: string) => {
-  // TODO: Appel API pour mettre à jour le rôle
+  try {
+    const member = guildMemberships.value.find(m => m.id === memberId)
+    const oldRole = member?.role
+
+    if (member) {
+      member.role = newRole
+    }
+
+    const result = await updateMemberRole(memberId, newRole)
+
+    if (!result.ok) {
+      if (member && oldRole) {
+        member.role = oldRole
+      }
+      error.value = `Erreur lors de la mise à jour du rôle: ${result.error}`
+
+      setTimeout(() => {
+        if (error.value?.startsWith('Erreur lors de la mise à jour du rôle:')) {
+          error.value = null
+        }
+      }, 5000)
+    } else {
+      console.log('Rôle mis à jour avec succès:', result.data)
+    }
+  } catch (e: any) {
+    console.error('Erreur inattendue:', e)
+    error.value = 'Une erreur inattendue est survenue'
+
+    await load()
+  }
 }
 
 const deleteMember = async (memberId: string) => {
