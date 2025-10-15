@@ -68,4 +68,18 @@ class GuildMembershipController extends AbstractController
 
         return $this->json(GuildMembershipDTO::fromEntity($guildMember));
     }
+
+    #[Route('/api/guildmembers/{id}', name: 'api_guildmembers_delete', methods: ['DELETE'])]
+    public function deleteGuildMembership(string $id, Request $request): JsonResponse
+    {
+        $guildMember = $this->guildMembershipRepository->findOneBy(['id' => $id]);
+        if (!$guildMember) {
+            return $this->json(['message' => 'Aucun membre trouvé !'], 400);
+        }
+
+        $this->entityManager->remove($guildMember);
+        $this->entityManager->flush();
+
+        return $this->json('ok', 204);
+    }
 }

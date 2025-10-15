@@ -10,6 +10,10 @@ export type GuildMembershipOneResult =
   | { ok: true; data: guildMembership }
   | { ok: false; error: string; status?: number };
 
+export type GuildMembershipDeleteResult =
+  | { ok: true }
+  | { ok: false; error: string; status?: number };
+
 export async function getAllMembership(guildId: string, opts?: { signal?: AbortSignal }): Promise<GuildMembershipResult> {
   if (!BASE) {
     return { ok: false, error: 'VITE_API_BASE_URL is not set' };
@@ -107,6 +111,45 @@ export async function updateMemberRole(memberId: string, role: string, opts?: { 
 
     const data = json as guildMembership;
     return { ok: true, data };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? 'Network error' };
+  }
+}
+
+export async function deleteMemberRole(memberId: string, opts?: { signal?: AbortSignal }): Promise<GuildMembershipDeleteResult> {
+  if (!BASE) {
+    return { ok: false, error: 'VITE_API_BASE_URL is not set' };
+  }
+
+  try {
+    const res = await fetch(`${BASE}/api/guildmembers/${encodeURIComponent(memberId)}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      signal: opts?.signal,
+    });
+
+    if (!res.ok) {
+      let message = `HTTP ${res.status}`;
+      try {
+        const bodyText = await res.text();
+        if (bodyText) {
+          const body = JSON.parse(bodyText);
+          if (typeof body?.message === 'string') message = body.message;
+          if (Array.isArray(body?.violations) && body.violations.length) {
+            message = body.violations.map((v: any) => v.message).join(' · ');
+          }
+        }
+      } catch {
+        return { ok: false, error: message, status: res.status };
+      }
+      return { ok: false, error: message, status: res.status };
+    }
+
+    return { ok: true };
   } catch (e: any) {
     return { ok: false, error: e?.message ?? 'Network error' };
   }

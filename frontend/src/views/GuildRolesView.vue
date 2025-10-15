@@ -62,7 +62,10 @@
                     {{ sortDirection === 'asc' ? '↑' : '↓' }}
                   </span>
                 </th>
-                <th class="px-6 py-4 text-center text-sm font-medium text-slate-300" style="width: 30%">
+                <th
+                  class="px-6 py-4 text-center text-sm font-medium text-slate-300"
+                  style="width: 30%"
+                >
                   Actions
                 </th>
               </tr>
@@ -98,9 +101,7 @@
 
         <!-- Pagination -->
         <div v-if="totalPages > 1" class="flex items-center justify-between">
-          <div class="text-sm text-slate-400">
-            Page {{ currentPage }} sur {{ totalPages }}
-          </div>
+          <div class="text-sm text-slate-400">Page {{ currentPage }} sur {{ totalPages }}</div>
           <div class="flex gap-2">
             <button
               @click="currentPage = Math.max(1, currentPage - 1)"
@@ -118,7 +119,8 @@
             </button>
           </div>
         </div>
-      </div>    </div>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -127,7 +129,11 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import type { GameGuild } from '@/interfaces/GameGuild.interface'
 import type { guildMembership } from '@/interfaces/guildMemebership.interface.ts'
-import { getAllMembership, updateMemberRole } from '@/services/guildMembership.service.ts'
+import {
+  deleteMemberRole,
+  getAllMembership,
+  updateMemberRole,
+} from '@/services/guildMembership.service.ts'
 
 defineOptions({ name: 'GuildRolesView' })
 
@@ -182,7 +188,7 @@ const toggleSort = (column: 'name' | 'role') => {
 
 const updateRole = async (memberId: string, newRole: string) => {
   try {
-    const member = guildMemberships.value.find(m => m.id === memberId)
+    const member = guildMemberships.value.find((m) => m.id === memberId)
     const oldRole = member?.role
 
     if (member) {
@@ -206,7 +212,6 @@ const updateRole = async (memberId: string, newRole: string) => {
       console.log('Rôle mis à jour avec succès:', result.data)
     }
   } catch (e: any) {
-    console.error('Erreur inattendue:', e)
     error.value = 'Une erreur inattendue est survenue'
 
     await load()
@@ -214,9 +219,20 @@ const updateRole = async (memberId: string, newRole: string) => {
 }
 
 const deleteMember = async (memberId: string) => {
-  // TODO: Appel API pour supprimer le membre
-}
+  try {
+    const member = guildMemberships.value.find((m) => m.id === memberId)
 
+    if (!member) {
+      error.value = 'Une erreur inattendue est survenue'
+    }
+
+    await deleteMemberRole(memberId);
+  } catch (e: any) {
+    error.value = 'Une erreur inattendue est survenue'
+  }
+
+  await load()
+}
 
 const load = async () => {
   if (!guildId.value) return
