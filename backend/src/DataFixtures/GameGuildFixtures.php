@@ -3,6 +3,7 @@
 namespace App\DataFixtures;
 
 use App\Entity\GameGuild;
+use App\Enum\RecruitingStatus;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
 use Faker\Factory as Faker;
@@ -23,7 +24,15 @@ class GameGuildFixtures extends Fixture
         for ($i = 1; $i <= $guildsCount; $i++) {
             $guild = new GameGuild();
             $guild->setName($faker->unique()->company())
-                ->setFaction($faker->randomElement(['HORDE', 'ALLIANCE']));
+                ->setFaction($faker->randomElement(['HORDE', 'ALLIANCE']))
+                ->setIsPublic($faker->boolean(80))
+                ->setShowDkpPublic($faker->boolean(90))
+                ->setRecruitingStatus($faker->randomElement([
+                    RecruitingStatus::OPEN,
+                    RecruitingStatus::OPEN,
+                    RecruitingStatus::OPEN,
+                    RecruitingStatus::CLOSED
+                ]));
 
             $manager->persist($guild);
             $this->addReference('guild_' . $i, $guild);

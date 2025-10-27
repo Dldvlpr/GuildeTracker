@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Enum\RecruitingStatus;
 use App\Repository\GameGuildRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -36,6 +37,15 @@ class GameGuild
      */
     #[ORM\OneToMany(targetEntity: GuildMembership::class, mappedBy: 'guild')]
     private Collection $guildMemberships;
+
+    #[ORM\Column]
+    private ?bool $isPublic = null;
+
+    #[ORM\Column]
+    private ?bool $showDkpPublic = null;
+
+    #[ORM\Column(enumType: RecruitingStatus::class)]
+    private ?RecruitingStatus $recruitingStatus = null;
 
     public function __construct()
     {
@@ -134,6 +144,42 @@ class GameGuild
                 // Do not set to null to avoid violating non-nullable constraint
             }
         }
+
+        return $this;
+    }
+
+    public function isPublic(): ?bool
+    {
+        return $this->isPublic;
+    }
+
+    public function setIsPublic(bool $isPublic): static
+    {
+        $this->isPublic = $isPublic;
+
+        return $this;
+    }
+
+    public function isShowDkpPublic(): ?bool
+    {
+        return $this->showDkpPublic;
+    }
+
+    public function setShowDkpPublic(bool $showDkpPublic): static
+    {
+        $this->showDkpPublic = $showDkpPublic;
+
+        return $this;
+    }
+
+    public function getRecruitingStatus(): ?RecruitingStatus
+    {
+        return $this->recruitingStatus;
+    }
+
+    public function setRecruitingStatus(RecruitingStatus $recruitingStatus): static
+    {
+        $this->recruitingStatus = $recruitingStatus;
 
         return $this;
     }
