@@ -9,5 +9,6 @@ export interface GameGuild {
   recruitingStatus: string;
   nbrGuildMembers: number;
   nbrCharacters: number;
+  isValid: boolean;
   players?: PlayerInterface[] | [];
 }

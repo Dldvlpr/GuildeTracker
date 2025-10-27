@@ -2,12 +2,20 @@
   <section class="mx-auto max-w-6xl flex flex-col gap-4">
     <header class="flex items-center justify-between">
       <h1 class="text-xl font-semibold">Membres de la guilde</h1>
-      <RouterLink
-        :to="`/guild/${route.params.id}`"
-        class="text-sm rounded-lg px-3 py-1.5 ring-1 ring-inset ring-white/10 hover:ring-white/20 transition"
-      >
-        ← Retour à la guilde
-      </RouterLink>
+      <div class="flex items-center gap-2">
+        <button
+          @click="showCharacterForm = true"
+          class="text-sm rounded-lg px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition"
+        >
+          + Ajouter un personnage
+        </button>
+        <RouterLink
+          :to="`/guild/${route.params.id}`"
+          class="text-sm rounded-lg px-3 py-1.5 ring-1 ring-inset ring-white/10 hover:ring-white/20 transition"
+        >
+          ← Retour à la guilde
+        </RouterLink>
+      </div>
     </header>
 
     <PlayersHeaderStats
@@ -39,6 +47,31 @@
     </div>
 
     <Toaster :items="notifications" />
+
+    <!-- Modal for adding character -->
+    <Teleport to="body">
+      <div
+        v-if="showCharacterForm"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        @click.self="showCharacterForm = false"
+      >
+        <div class="max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div class="relative">
+            <button
+              @click="showCharacterForm = false"
+              class="absolute -top-2 -right-2 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition"
+              aria-label="Fermer"
+            >
+              ✕
+            </button>
+            <CharacterForm
+              @submit="handleCharacterSubmit"
+              @bulkImport="handleBulkImport"
+            />
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </section>
 </template>
 
@@ -48,11 +81,12 @@ import { useRoute } from 'vue-router'
 import PlayersHeaderStats from '@/components/PlayersHeaderStats.vue'
 import PlayersFilters from '@/components/PlayersFilters.vue'
 import CharacterCard from '@/components/CharacterCard.vue'
+import CharacterForm from '@/components/CharacterForm.vue'
 import Toaster from '@/components/Toaster.vue'
-import { getCharactersByGuildId } from '@/services/character.service'
+import { getCharactersByGuildId, createCharacter } from '@/services/character.service'
 import { getRoleByClassAndSpec } from '@/data/gameData'
 import { Role } from '@/interfaces/game.interface'
-import type { Character } from '@/interfaces/game.interface'
+import type { Character, FormSubmitEvent } from '@/interfaces/game.interface'
 
 type ToastType = 'success' | 'error' | 'warning' | 'info'
 interface Notification {
@@ -65,6 +99,7 @@ const route = useRoute()
 const characters = ref<Character[]>([])
 const notifications = ref<Notification[]>([])
 const loading = ref(false)
+const showCharacterForm = ref(false)
 
 const filters = ref<{ class: string; role: string }>({ class: '', role: '' })
 
@@ -158,6 +193,55 @@ const getAllCharactersByGuild = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const handleCharacterSubmit = async (event: FormSubmitEvent) => {
+  const guildId = route.params.id as string
+  if (!guildId) {
+    pushToast('Guild ID not found', 'error')
+    return
+  }
+
+  const result = await createCharacter(event.character, guildId)
+
+  if (result.ok) {
+    pushToast(`Personnage "${event.character.name}" créé avec succès !`, 'success')
+    showCharacterForm.value = false
+    await getAllCharactersByGuild()
+  } else {
+    pushToast(result.error, 'error')
+  }
+}
+
+const handleBulkImport = async (charactersToImport: Omit<Character, 'id' | 'createdAt'>[]) => {
+  const guildId = route.params.id as string
+  if (!guildId) {
+    pushToast('Guild ID not found', 'error')
+    return
+  }
+
+  let successCount = 0
+  let errorCount = 0
+
+  for (const char of charactersToImport) {
+    const result = await createCharacter(char, guildId)
+    if (result.ok) {
+      successCount++
+    } else {
+      errorCount++
+      console.error(`Failed to import ${char.name}:`, result.error)
+    }
+  }
+
+  if (successCount > 0) {
+    pushToast(`${successCount} personnage(s) importé(s) avec succès !`, 'success')
+  }
+  if (errorCount > 0) {
+    pushToast(`${errorCount} personnage(s) n'ont pas pu être importés`, 'error')
+  }
+
+  showCharacterForm.value = false
+  await getAllCharactersByGuild()
 }
 
 onMounted(() => {

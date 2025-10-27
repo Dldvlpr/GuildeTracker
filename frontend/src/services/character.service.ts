@@ -58,3 +58,67 @@ export async function getCharactersByGuildId(guildId: string, opts?: { signal?: 
     return { ok: false, error: e?.message ?? 'Network error' };
   }
 }
+
+export async function createCharacter(
+  character: Omit<Character, 'id' | 'createdAt'>,
+  guildId?: string,
+  opts?: { signal?: AbortSignal }
+): Promise<characterOneResult> {
+  if (!BASE) {
+    return { ok: false, error: 'VITE_API_BASE_URL is not set' };
+  }
+
+  const payload: any = {
+    name: character.name,
+    class: character.class,
+    classSpec: character.spec,
+    role: character.role,
+  };
+
+  if (guildId) {
+    payload.guildId = guildId;
+  }
+
+  try {
+    const res = await fetch(`${BASE}/api/gamecharacter/create`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal: opts?.signal,
+    });
+
+    if (!res.ok) {
+      let message = `HTTP ${res.status}`;
+      try {
+        const bodyText = await res.text();
+        if (bodyText) {
+          const body = JSON.parse(bodyText);
+          if (typeof body?.error === 'string') message = body.error;
+          if (Array.isArray(body?.violations) && body.violations.length) {
+            message = body.violations.join(' · ');
+          }
+          if (Array.isArray(body?.details) && body.details.length) {
+            message = body.details.join(' · ');
+          }
+        }
+      } catch {
+        return { ok: false, error: message, status: res.status };
+      }
+      return { ok: false, error: message, status: res.status };
+    }
+
+    const json = await res.json();
+
+    if (!json.character) {
+      return { ok: false, error: 'Unexpected response: missing character data' };
+    }
+
+    return { ok: true, data: json.character as Character };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? 'Network error' };
+  }
+}

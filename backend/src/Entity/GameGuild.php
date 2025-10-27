@@ -108,7 +108,6 @@ class GameGuild
     public function removeGameCharacter(GameCharacter $gameCharacter): static
     {
         if ($this->gameCharacters->removeElement($gameCharacter)) {
-            // set the owning side to null (unless already changed)
             if ($gameCharacter->getGuild() === $this) {
                 $gameCharacter->setGuild(null);
             }
@@ -138,7 +137,6 @@ class GameGuild
     public function removeGuildMembership(GuildMembership $guildMembership): static
     {
         if ($this->guildMemberships->removeElement($guildMembership)) {
-            // set the owning side to null (unless already changed)
             if ($guildMembership->getGuild() === $this) {
                 // Relationship is non-nullable on owning side; rely on orphanRemoval if enabled
                 // Do not set to null to avoid violating non-nullable constraint
@@ -182,5 +180,15 @@ class GameGuild
         $this->recruitingStatus = $recruitingStatus;
 
         return $this;
+    }
+
+    public function hasCharacters(): bool
+    {
+        return $this->gameCharacters->count() > 0;
+    }
+
+    public function isValid(): bool
+    {
+        return $this->hasCharacters();
     }
 }

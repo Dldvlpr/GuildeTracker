@@ -14,10 +14,11 @@ class GuildVoter extends Voter
     public const VIEW = 'GUILD_VIEW';
     public const MANAGE = 'GUILD_MANAGE';
     public const DELETE = 'GUILD_DELETE';
+    public const USE_FEATURES = 'GUILD_USE_FEATURES';
 
     protected function supports(string $attribute, mixed $subject): bool
     {
-        return in_array($attribute, [self::VIEW, self::MANAGE, self::DELETE], true)
+        return in_array($attribute, [self::VIEW, self::MANAGE, self::DELETE, self::USE_FEATURES], true)
             && $subject instanceof GameGuild;
     }
 
@@ -39,6 +40,7 @@ class GuildVoter extends Voter
             self::VIEW => $this->canView($membership),
             self::MANAGE => $this->canManage($membership),
             self::DELETE => $this->canDelete($membership),
+            self::USE_FEATURES => $this->canUseFeatures($membership, $guild),
             default => false,
         };
     }
@@ -66,5 +68,11 @@ class GuildVoter extends Voter
     private function canDelete(GuildMembership $membership): bool
     {
         return $membership->getRole() === GuildRole::GM;
+    }
+
+    private function canUseFeatures(GuildMembership $membership, GameGuild $guild): bool
+    {
+        // Membre doit être dans la guilde ET la guilde doit avoir au moins un personnage
+        return $guild->isValid();
     }
 }

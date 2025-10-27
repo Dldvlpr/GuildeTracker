@@ -33,8 +33,8 @@ class GuildMembershipController extends AbstractController
         if (!($guild instanceof GameGuild))
             return $this->json(['error' => 'Guild not found'], 404);
 
-        // $this->denyAccessUnlessGranted('GUILD_VIEW', $guild);
-
+        $this->denyAccessUnlessGranted('GUILD_VIEW', $guild);
+        $this->denyAccessUnlessGranted('GUILD_USE_FEATURES', $guild);
 
         $guildMembers = $this->guildMembershipRepository->findBy(['guild' => $guild]);
 
@@ -50,7 +50,8 @@ class GuildMembershipController extends AbstractController
             return $this->json(['message' => 'Membre non trouvé'], 404);
         }
 
-        // $this->denyAccessUnlessGranted('GUILD_MANAGE', $guildMember->getGuild());
+        $this->denyAccessUnlessGranted('GUILD_MANAGE', $guildMember->getGuild());
+        $this->denyAccessUnlessGranted('GUILD_USE_FEATURES', $guildMember->getGuild());
 
         $data = json_decode($request->getContent(), true);
 
@@ -79,7 +80,8 @@ class GuildMembershipController extends AbstractController
             return $this->json(['message' => 'Aucun membre trouvé !'], 400);
         }
 
-        // $this->denyAccessUnlessGranted('GUILD_MANAGE', $guildMember->getGuild());
+        $this->denyAccessUnlessGranted('GUILD_MANAGE', $guildMember->getGuild());
+        $this->denyAccessUnlessGranted('GUILD_USE_FEATURES', $guildMember->getGuild());
 
         $user = $guildMember->getUser();
         $guild = $guildMember->getGuild();

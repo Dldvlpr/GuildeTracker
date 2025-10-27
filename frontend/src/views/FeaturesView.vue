@@ -26,15 +26,31 @@
     </div>
 
     <div v-else>
+      <!-- Alerte si guilde non valide (pas de personnages) -->
+      <div v-if="!guild?.isValid" class="mb-8 p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
+        <div class="flex items-start gap-3">
+          <div class="text-2xl">⚠️</div>
+          <div>
+            <h3 class="text-amber-400 font-semibold mb-1">Guilde incomplète</h3>
+            <p class="text-amber-200/80 text-sm mb-3">
+              Vous devez ajouter au moins un personnage à votre guilde pour pouvoir accéder aux fonctionnalités.
+            </p>
+            <RouterLink
+              :to="`/guild/${guild?.id}/characters`"
+              class="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition text-sm font-medium"
+            >
+              Ajouter mon premier personnage →
+            </RouterLink>
+          </div>
+        </div>
+      </div>
+
       <div class="mb-12">
         <div class="flex items-center gap-3 mb-6">
           <div class="flex items-center justify-center w-8 h-8 rounded-full bg-red-500/20 text-red-400">
             P1
           </div>
-          <h2 class="text-xl font-semibold text-white">Fonctionnalités principales</h2>
-          <span class="text-xs px-2 py-1 bg-red-500/15 text-red-300 rounded-full ring-1 ring-red-400/20">
-            PRIORITÉ 1
-          </span>
+          <h2 class="text-xl font-semibold text-white">Organisation de la guilde</h2>
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -42,7 +58,7 @@
             title="Gestion des membres"
             description="Gérer les membres et leurs rôles (GM, Officier, Membre)"
             icon="MEMBRES"
-            :available="!!guild?.id"
+            :available="!!guild?.id && !!guild?.isValid"
             :route="guild?.id ? `/guild/${guild.id}/members` : '#'"
             priority="high"
           />
@@ -62,10 +78,7 @@
           <div class="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400">
             P2
           </div>
-          <h2 class="text-xl font-semibold text-white">Fonctionnalités de jeu</h2>
-          <span class="text-xs px-2 py-1 bg-indigo-500/15 text-indigo-300 rounded-full ring-1 ring-indigo-400/20">
-            PRIORITÉ 2
-          </span>
+          <h2 class="text-xl font-semibold text-white">Raids & Événements</h2>
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -73,7 +86,7 @@
             title="Import d'événements"
             description="Importer des événements depuis des fichiers JSON"
             icon="IMPORT"
-            :available="true"
+            :available="!!guild?.isValid"
             :route="`/guild/${guild?.id}/import-events`"
             priority="medium"
           />
@@ -101,10 +114,7 @@
           <div class="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400">
             P3
           </div>
-          <h2 class="text-xl font-semibold text-white">Analytics & Rapports</h2>
-          <span class="text-xs px-2 py-1 bg-emerald-500/15 text-emerald-300 rounded-full ring-1 ring-emerald-400/20">
-            PRIORITÉ 3
-          </span>
+          <h2 class="text-xl font-semibold text-white">Statistiques & Suivi</h2>
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

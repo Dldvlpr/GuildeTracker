@@ -15,6 +15,7 @@ readonly class GameGuildDTO
         public string $recruitingStatus,
         public int    $nbrGuildMembers,
         public int    $nbrCharacters,
+        public bool   $isValid,
         public array  $userIds = []
     ) {}
 
@@ -32,6 +33,7 @@ readonly class GameGuildDTO
             $guild->getRecruitingStatus()->value,
             $nbrGuildMembers,
             $nbrCharacters,
+            $guild->isValid(),
             $guild?->getGuildMemberships()?->map(
                 static fn($m) => $m?->getUser()?->getId()?->toRfc4122()
             )->toArray()
