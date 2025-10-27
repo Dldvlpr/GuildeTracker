@@ -9,15 +9,14 @@ use App\Enum\GuildRole;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Authorization\Voter\Voter;
 
-class GuildVoter extends Voter
+class MembershipVoter extends Voter
 {
     public const VIEW = 'GUILD_VIEW';
     public const MANAGE = 'GUILD_MANAGE';
-    public const DELETE = 'GUILD_DELETE';
 
     protected function supports(string $attribute, mixed $subject): bool
     {
-        return in_array($attribute, [self::VIEW, self::MANAGE, self::DELETE], true)
+        return in_array($attribute, [self::VIEW, self::MANAGE], true)
             && $subject instanceof GameGuild;
     }
 
@@ -38,7 +37,6 @@ class GuildVoter extends Voter
         return match ($attribute) {
             self::VIEW => $this->canView($membership),
             self::MANAGE => $this->canManage($membership),
-            self::DELETE => $this->canDelete($membership),
             default => false,
         };
     }
@@ -61,10 +59,5 @@ class GuildVoter extends Voter
     private function canManage(GuildMembership $membership): bool
     {
         return in_array($membership->getRole(), [GuildRole::OFFICER, GuildRole::GM], true);
-    }
-
-    private function canDelete(GuildMembership $membership): bool
-    {
-        return $membership->getRole() === GuildRole::GM;
     }
 }
