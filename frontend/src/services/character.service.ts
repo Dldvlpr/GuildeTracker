@@ -15,9 +15,8 @@ export async function getCharactersByGuildId(guildId: string, opts?: { signal?: 
   if (!BASE) {
     return { ok: false, error: 'VITE_API_BASE_URL is not set' };
   }
-
   try {
-    const res = await fetch(`${BASE}/api/gameguild/${encodeURIComponent(guildId)}/members`, {
+    const res = await fetch(`${BASE}/api/gameguild/${encodeURIComponent(guildId)}/characters`, {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },

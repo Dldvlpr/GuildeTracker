@@ -96,7 +96,6 @@ const charactersWithCalculatedRoles = computed<Character[]>(() => {
   return characters.value.map(character => {
     let finalRole = normalizeRole(character.role)
 
-    // Si pas de rôle ou rôle invalide, calculer à partir de classe/spé
     if (!finalRole && character.class && character.spec) {
       finalRole = getRoleByClassAndSpec(character.class, character.spec)
     }

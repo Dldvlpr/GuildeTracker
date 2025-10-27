@@ -82,8 +82,8 @@ final class GameGuildController extends AbstractController
         return $this->json(['status' => 'ok', 'id' => $gameGuild->getUuidToString()], 201);
     }
 
-    #[Route('/api/gameguild/{id}/members', name: 'getGameGuildMembers', methods: ['GET'])]
-    public function getGameguildMembers(string $id): JsonResponse
+    #[Route('/api/gameguild/{id}/characters', name: 'getGameGuildMembers', methods: ['GET'])]
+    public function getGameguildCharacters(string $id): JsonResponse
     {
         $guild = $this->gameGuildRepository->find($id);
         if (!$guild) {
@@ -95,7 +95,7 @@ final class GameGuildController extends AbstractController
         return $this->json(CharacterDTO::fromEntities($guild->getGameCharacters()));
     }
 
-    #[Route('/api/gameguild/{id}', name: 'getGameGuildMembers', methods: ['GET'])]
+    #[Route('/api/gameguild/{id}', name: 'getGameGuild', methods: ['GET'])]
     public function getGameguild(string $id): JsonResponse
     {
         $guild = $this->gameGuildRepository->find($id);

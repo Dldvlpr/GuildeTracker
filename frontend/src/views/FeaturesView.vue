@@ -26,21 +26,6 @@
     </div>
 
     <div v-else>
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-12">
-        <div class="rounded-xl border border-white/10 bg-white/5 p-4">
-          <div class="text-sm text-slate-400">Faction</div>
-          <div class="text-lg font-semibold text-white">{{ guild?.faction }}</div>
-        </div>
-        <div class="rounded-xl border border-white/10 bg-white/5 p-4">
-          <div class="text-sm text-slate-400">Membres</div>
-          <div class="text-lg font-semibold text-white">{{ guild?.nbrGuildMembers ?? '—' }}</div>
-        </div>
-        <div class="rounded-xl border border-white/10 bg-white/5 p-4">
-          <div class="text-sm text-slate-400">Personnages</div>
-          <div class="text-lg font-semibold text-white">{{ guild?.nbrCharacters ?? '—' }}</div>
-        </div>
-      </div>
-
       <div class="mb-12">
         <div class="flex items-center gap-3 mb-6">
           <div class="flex items-center justify-center w-8 h-8 rounded-full bg-red-500/20 text-red-400">
@@ -67,14 +52,6 @@
             icon="CHARS"
             :available="true"
             :route="`/guild/${guild?.id}/characters`"
-            priority="high"
-          />
-          <FeatureCard
-            title="Dashboard guilde"
-            description="Vue d'ensemble avec statistiques et membres actifs"
-            icon="DASH"
-            :available="true"
-            :route="`/guild/${guild?.id}/dashboard`"
             priority="high"
           />
         </div>
