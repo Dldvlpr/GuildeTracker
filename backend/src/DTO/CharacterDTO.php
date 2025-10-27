@@ -4,7 +4,7 @@ namespace App\DTO;
 
 use App\Entity\GameCharacter;
 
-class CharacterDTO
+readonly class CharacterDTO
 {
     public function __construct(
         public readonly string $id,

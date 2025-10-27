@@ -4,7 +4,10 @@ export interface GameGuild {
   id: string;
   name: string;
   faction: string;
-  nbrGuildMembers: string;
-  nbrCharacters: string;
+  isPublic: boolean;
+  showDkpPublic: boolean;
+  recruitingStatus: string;
+  nbrGuildMembers: number;
+  nbrCharacters: number;
   players?: PlayerInterface[] | [];
 }

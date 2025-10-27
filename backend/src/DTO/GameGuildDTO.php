@@ -10,6 +10,9 @@ readonly class GameGuildDTO
         public string $id,
         public string $name,
         public string $faction,
+        public bool $isPublic,
+        public bool $showDkpPublic,
+        public string $recruitingStatus,
         public int    $nbrGuildMembers,
         public int    $nbrCharacters,
         public array  $userIds = []
@@ -24,6 +27,9 @@ readonly class GameGuildDTO
             $guild->getId()->toRfc4122(),
             $guild->getName(),
             $guild->getFaction() ?? '',
+            $guild->isPublic(),
+            $guild->isShowDkpPublic(),
+            $guild->getRecruitingStatus()->value,
             $nbrGuildMembers,
             $nbrCharacters,
             $guild?->getGuildMemberships()?->map(

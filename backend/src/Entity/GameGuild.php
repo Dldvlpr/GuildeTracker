@@ -39,13 +39,13 @@ class GameGuild
     private Collection $guildMemberships;
 
     #[ORM\Column]
-    private ?bool $isPublic = null;
+    private ?bool $isPublic = false;
 
     #[ORM\Column]
-    private ?bool $showDkpPublic = null;
+    private ?bool $showDkpPublic = false;
 
-    #[ORM\Column(enumType: RecruitingStatus::class)]
-    private ?RecruitingStatus $recruitingStatus = null;
+    #[ORM\Column(type: 'string', enumType: RecruitingStatus::class)]
+    private ?RecruitingStatus $recruitingStatus = RecruitingStatus::CLOSED;
 
     public function __construct()
     {
