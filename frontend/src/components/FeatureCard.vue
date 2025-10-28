@@ -12,11 +12,11 @@
         <div class="text-xs font-bold text-slate-400 mb-4 px-2 py-1 bg-slate-700 rounded">{{ icon }}</div>
         <div v-if="available" class="flex items-center gap-1 text-xs text-emerald-400">
           <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
-          Disponible
+          Available
         </div>
         <div v-else class="flex items-center gap-1 text-xs text-slate-500">
           <div class="w-2 h-2 rounded-full bg-slate-500"></div>
-          Bientôt
+          Coming soon
         </div>
       </div>
 
@@ -29,7 +29,7 @@
       </p>
 
       <div class="mt-4 flex items-center text-sm text-indigo-400 group-hover:text-indigo-300 transition">
-        <span>Accéder</span>
+        <span>Open</span>
         <svg class="ml-1 w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
         </svg>
@@ -46,7 +46,7 @@
       <div class="text-xs font-bold text-slate-500 mb-4 px-2 py-1 bg-slate-800 rounded grayscale">{{ icon }}</div>
       <div class="flex items-center gap-1 text-xs text-slate-500">
         <div class="w-2 h-2 rounded-full bg-slate-500"></div>
-        Bientôt
+        Coming soon
       </div>
     </div>
 
@@ -59,7 +59,7 @@
     </p>
 
     <div class="mt-4 flex items-center text-sm text-slate-500">
-      <span>En développement</span>
+      <span>In development</span>
       <svg class="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
       </svg>

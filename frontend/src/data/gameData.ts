@@ -145,13 +145,13 @@ export function validateClassSpecSelection(
   if (!className) {
     errors.push({
       field: 'class',
-      message: 'Une classe doit être sélectionnée',
+      message: 'A class must be selected',
       code: 'REQUIRED'
     });
   } else if (!isValidClassName(className)) {
     errors.push({
       field: 'class',
-      message: `Classe invalide: ${className}`,
+      message: `Invalid class: ${className}`,
       value: className,
       code: 'INVALID_CLASS'
     });
@@ -161,7 +161,7 @@ export function validateClassSpecSelection(
     if (!isValidClassSpec(className, specName)) {
       errors.push({
         field: 'spec',
-        message: `Spécialisation "${specName}" invalide pour la classe "${className}"`,
+        message: `Invalid specialization "${specName}" for class "${className}"`,
         value: { className, specName },
         code: 'INVALID_SPEC'
       });

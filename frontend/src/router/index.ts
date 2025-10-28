@@ -5,6 +5,7 @@ import AddPlayerView from '../views/AddPlayerView.vue'
 import ListPlayerView from '@/views/ListPlayerView.vue'
 import AssignementView from '../views/AssignementView.vue'
 import CreateGuildView from '@/views/CreateGuildView.vue'
+import AcceptInvitationView from '@/views/AcceptInvitationView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -13,6 +14,7 @@ const router = createRouter({
     { path: '/features', name: 'features', component: FeaturesView },
     { path: '/player/add', name: 'addPlayer', component: AddPlayerView },
     { path: '/guild/create', name: 'guildCreate', component: CreateGuildView },
+    { path: '/invite/:token', name: 'acceptInvitation', component: AcceptInvitationView, props: true },
     { path: '/guild/:id', name: 'guildDetails', component: FeaturesView, props: true },
     { path: '/guild/:id/characters', name: 'listPlayer', component: ListPlayerView },
     { path: '/guild/:id/members', name: 'guildMembers', component: () => import('@/views/GuildRolesView.vue'), props: true },

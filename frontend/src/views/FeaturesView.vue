@@ -57,7 +57,7 @@
           <FeatureCard
             title="Member Management"
             description="Manage members and their roles (GM, Officer, Member)"
-            icon="MEMBRES"
+            icon="MEMBERS"
             :available="!!guild?.id && !!guild?.isValid"
             :route="guild?.id ? `/guild/${guild.id}/members` : '#'"
             priority="high"
@@ -78,7 +78,7 @@
           <div class="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400">
             P2
           </div>
-          <h2 class="text-xl font-semibold text-white">Raids & Événements</h2>
+          <h2 class="text-xl font-semibold text-white">Raids & Events</h2>
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -191,4 +191,3 @@ watch(
 
 <style scoped>
 </style>
-

@@ -56,17 +56,14 @@ final class GuildInvitationController extends AbstractController
             $payload = [];
         }
 
-        // Parse role (default MEMBER)
         $roleString = $payload['role'] ?? 'Member';
         $role = GuildRole::tryFrom($roleString) ?? GuildRole::MEMBER;
 
-        // Parse expiration (default 7 days)
         $expiresAt = null;
         if (isset($payload['expiresInDays']) && is_numeric($payload['expiresInDays'])) {
-            $days = max(1, min(30, (int)$payload['expiresInDays'])); // Between 1 and 30 days
+            $days = max(1, min(30, (int)$payload['expiresInDays']));
             $expiresAt = (new \DateTimeImmutable())->modify("+{$days} days");
         } else {
-            // Default: 7 days
             $expiresAt = (new \DateTimeImmutable())->modify('+7 days');
         }
 
@@ -119,7 +116,6 @@ final class GuildInvitationController extends AbstractController
             return $this->json(['error' => 'User not found'], Response::HTTP_NOT_FOUND);
         }
 
-        // Check if user is already in the guild
         $existingMembership = $this->membershipRepository->findOneBy([
             'user' => $user,
             'guild' => $invitation->getGuild(),
@@ -130,7 +126,6 @@ final class GuildInvitationController extends AbstractController
         }
 
         try {
-            // Create membership
             $membership = new \App\Entity\GuildMembership(
                 $user,
                 $invitation->getGuild(),
@@ -139,7 +134,6 @@ final class GuildInvitationController extends AbstractController
 
             $this->em->persist($membership);
 
-            // Mark invitation as used
             $invitation->markAsUsed($user);
             $this->em->persist($invitation);
 

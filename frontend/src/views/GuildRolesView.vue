@@ -14,12 +14,21 @@
             Manage roles and permissions for {{ guild?.name }} members
           </p>
         </div>
-        <RouterLink
-          :to="`/guild/${guildId}`"
-          class="text-sm px-4 py-2 rounded-lg ring-1 ring-inset ring-white/10 hover:ring-white/20 text-slate-200 hover:text-white transition"
-        >
-          ← Back to features
-        </RouterLink>
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            @click="openInviteModal"
+            class="text-sm px-4 py-2 rounded-lg bg-emerald-500/20 text-emerald-200 ring-1 ring-inset ring-emerald-500/30 hover:bg-emerald-500/30 transition"
+          >
+            ➕ Invite Player
+          </button>
+          <RouterLink
+            :to="`/guild/${guildId}`"
+            class="text-sm px-4 py-2 rounded-lg ring-1 ring-inset ring-white/10 hover:ring-white/20 text-slate-200 hover:text-white transition"
+          >
+            ← Back to features
+          </RouterLink>
+        </div>
       </header>
 
       <div class="space-y-6">
@@ -122,6 +131,72 @@
       </div>
     </div>
   </section>
+
+  <!-- Invitation Modal -->
+  <BaseModal v-model="inviteOpen" title="Invite a player">
+    <div class="space-y-4">
+      <div class="text-sm text-slate-300">Create an invitation link to let a player join the guild with a predefined role.</div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-200 mb-1">Role to assign</label>
+          <select
+            v-model="inviteRole"
+            class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="Member">Member</option>
+            <option value="Officer">Officer</option>
+            <option value="GM">GM</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-200 mb-1">Expiration (days)</label>
+          <input
+            v-model.number="inviteDays"
+            type="number"
+            min="1"
+            max="30"
+            class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          <p class="mt-1 text-xs text-slate-400">Default: 7 days (min 1, max 30)</p>
+        </div>
+      </div>
+
+      <div v-if="inviteError" class="text-sm text-red-400">{{ inviteError }}</div>
+
+      <div v-if="inviteResult" class="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm">
+        <div class="text-emerald-300 mb-1">Invitation created ✔</div>
+        <div class="text-slate-200 break-all"><span class="text-slate-400">Link:</span> {{ inviteLink }}</div>
+        <div class="text-slate-400 mt-1">Expires: {{ formatDate(inviteResult.expiresAt) }}</div>
+        <div class="mt-3 flex gap-2">
+          <button type="button" @click="copy(inviteLink)" class="px-3 py-1.5 text-xs rounded-lg ring-1 ring-inset ring-white/10 hover:ring-white/20">Copy link</button>
+          <button type="button" @click="closeInviteModal" class="px-3 py-1.5 text-xs rounded-lg bg-white/10 hover:bg-white/20">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <template #footer>
+      <div class="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          class="px-4 py-2 text-sm rounded-lg ring-1 ring-inset ring-white/10 hover:ring-white/20"
+          @click="closeInviteModal"
+          :disabled="inviteLoading"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="px-4 py-2 text-sm rounded-lg bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-500/30 hover:bg-indigo-500/30 disabled:opacity-60"
+          @click="submitInvitation"
+          :disabled="inviteLoading || !!inviteResult"
+        >
+          <span v-if="!inviteLoading">Generate invitation</span>
+          <span v-else>Creating…</span>
+        </button>
+      </div>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
@@ -134,6 +209,8 @@ import {
   getAllMembership,
   updateMemberRole,
 } from '@/services/guildMembership.service.ts'
+import BaseModal from '@/components/ui/BaseModal.vue'
+import { createGuildInvitation } from '@/services/guildInvitation.service'
 
 defineOptions({ name: 'GuildRolesView' })
 
@@ -260,6 +337,88 @@ watch(
     load()
   },
 )
+
+// Invitation state & handlers
+const inviteOpen = ref(false)
+const inviteRole = ref<'GM' | 'Officer' | 'Member'>('Member')
+const inviteDays = ref<number>(7)
+const inviteLoading = ref(false)
+const inviteError = ref<string | null>(null)
+const inviteResult = ref<{ token: string; expiresAt?: string } | null>(null)
+const inviteLink = ref('')
+
+function openInviteModal() {
+  inviteOpen.value = true
+  inviteRole.value = 'Member'
+  inviteDays.value = 7
+  inviteError.value = null
+  inviteResult.value = null
+  inviteLink.value = ''
+}
+
+function closeInviteModal() {
+  inviteOpen.value = false
+}
+
+function formatDate(iso?: string) {
+  if (!iso) return '—'
+  try {
+    const d = new Date(iso)
+    return d.toLocaleString()
+  } catch {
+    return iso
+  }
+}
+
+async function submitInvitation() {
+  if (!guildId.value) return
+  inviteLoading.value = true
+  inviteError.value = null
+  inviteResult.value = null
+  try {
+    const res = await createGuildInvitation(guildId.value, {
+      role: inviteRole.value,
+      expiresInDays: Math.max(1, Math.min(30, Number(inviteDays.value) || 7)),
+    })
+    if (!res.ok) {
+      inviteError.value = res.error
+      return
+    }
+    inviteResult.value = { token: res.data.token, expiresAt: res.data.expiresAt }
+    inviteLink.value = buildInviteUrl(res.data.token)
+  } catch (e: any) {
+    inviteError.value = e?.message ?? 'Unexpected error'
+  } finally {
+    inviteLoading.value = false
+  }
+}
+
+async function copy(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    // Fallback
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    try { document.execCommand('copy') } catch {}
+    document.body.removeChild(ta)
+  }
+}
+
+function buildInviteUrl(token: string) {
+  const base = (import.meta.env.BASE_URL || '/') as string
+  const trimmed = base.endsWith('/') ? base.slice(0, -1) : base
+  const path = `${trimmed}/invite/${token}`
+  try {
+    return new URL(path, window.location.origin).toString()
+  } catch {
+    return `${window.location.origin}${path}`
+  }
+}
 </script>
 
 <style scoped></style>

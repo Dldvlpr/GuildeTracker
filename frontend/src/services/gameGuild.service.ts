@@ -177,7 +177,7 @@ export async function createGuild(name: string, faction: 'HORDE' | 'ALLIANCE') {
     })
 
     if (!res.ok) {
-      let msg = `Erreur ${res.status}`
+      let msg = `Error ${res.status}`
       try {
         const data = await res.json()
         if (data?.message) msg = data.message
@@ -193,6 +193,6 @@ export async function createGuild(name: string, faction: 'HORDE' | 'ALLIANCE') {
 
     return (await res.json()) as { status: string; id: string }
   } catch (e: any) {
-    throw new Error(e?.message ?? 'Erreur réseau')
+    throw new Error(e?.message ?? 'Network error')
   }
 }

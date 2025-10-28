@@ -146,7 +146,7 @@ export function useGameData(): UseGameDataReturn {
 
   const setClass = (className: string): boolean => {
     if (!isValidClassName(className)) {
-      console.warn(`[useGameData] Classe invalide: ${className}`);
+      console.warn(`[useGameData] Invalid class: ${className}`);
       return false;
     }
 
@@ -158,12 +158,12 @@ export function useGameData(): UseGameDataReturn {
 
   const setSpec = (specName: string): boolean => {
     if (!selectedClass.value) {
-      console.warn('[useGameData] Aucune classe sélectionnée');
+      console.warn('[useGameData] No class selected');
       return false;
     }
 
     if (!isValidClassSpec(selectedClass.value, specName)) {
-      console.warn(`[useGameData] Spécialisation invalide: ${specName} pour ${selectedClass.value}`);
+      console.warn(`[useGameData] Invalid specialization: ${specName} for ${selectedClass.value}`);
       return false;
     }
 
@@ -191,7 +191,7 @@ export function useGameData(): UseGameDataReturn {
   };
 
   /**
-   * Valide la sélection actuelle
+   * Validate current selection
    */
   const validateSelection = (): ValidationResult => {
     return validationResult.value;
