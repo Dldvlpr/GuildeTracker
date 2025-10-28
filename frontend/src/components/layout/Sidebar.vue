@@ -129,20 +129,32 @@
     </nav>
 
     <div class="px-4 py-4 border-t border-white/10 space-y-3">
-      <button
-        v-if="userStore.isAuthenticated && !userStore.isLoading"
-        @click="logoutWithDiscord"
-        class="w-full inline-flex items-center gap-3 px-3 py-2 rounded-xl text-sm ring-1 ring-inset ring-white/10 hover:bg-white/5 hover:text-white transition cursor-pointer"
-      >
-        🚪 Logout
-      </button>
-      <button
-        v-else
-        @click="loginWithDiscord"
-        class="w-full inline-flex items-center gap-3 px-3 py-2 rounded-xl text-sm ring-1 ring-inset ring-white/10 hover:bg-white/5 hover:text-white transition cursor-pointer"
-      >
-        🔑 Login
-      </button>
+      <template v-if="userStore.isAuthenticated && !userStore.isLoading">
+        <div v-if="userStore.user?.blizzardLinked" class="w-full inline-flex items-center gap-3 px-3 py-2 rounded-xl text-sm ring-1 ring-inset ring-white/10 bg-emerald-500/10 text-emerald-200">
+          ✅ Account linked
+        </div>
+        <button
+          v-else
+          @click="linkBlizzard"
+          class="w-full inline-flex items-center gap-3 px-3 py-2 rounded-xl text-sm ring-1 ring-inset ring-white/10 hover:bg-white/5 hover:text-white transition cursor-pointer"
+        >
+          🌀 Link Blizzard
+        </button>
+        <button
+          @click="logoutWithDiscord"
+          class="w-full inline-flex items-center gap-3 px-3 py-2 rounded-xl text-sm ring-1 ring-inset ring-white/10 hover:bg-white/5 hover:text-white transition cursor-pointer"
+        >
+          🚪 Logout
+        </button>
+      </template>
+      <template v-else>
+        <button
+          @click="loginWithDiscord"
+          class="w-full inline-flex items-center gap-3 px-3 py-2 rounded-xl text-sm ring-1 ring-inset ring-white/10 hover:bg-white/5 hover:text-white transition cursor-pointer"
+        >
+          🔑 Login
+        </button>
+      </template>
     </div>
   </aside>
 </template>
@@ -153,7 +165,7 @@ import type { GameGuild } from '@/interfaces/GameGuild.interface.ts'
 defineOptions({ name: 'AppSidebar' })
 import { onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { redirectToDiscordAuth, logoutUser } from '@/services/auth'
+import { redirectToDiscordAuth, redirectToBlizzardAuth, logoutUser } from '@/services/auth'
 import { useUserStore } from '@/stores/userStore'
 import { getMyGuild } from '@/services/gameGuild.service.ts'
 
@@ -193,6 +205,9 @@ const characterRoute = (c: { id: string }) => `/list`
 
 function loginWithDiscord() {
   redirectToDiscordAuth()
+}
+function linkBlizzard() {
+  redirectToBlizzardAuth()
 }
 async function logoutWithDiscord() {
   const result = await logoutUser()

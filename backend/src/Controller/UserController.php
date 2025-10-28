@@ -31,6 +31,8 @@ final class UserController extends AbstractController
             'id' => $user->getDiscordId(),
             'username' => $user->getUsername(),
             'email' => $user->getEmail(),
+            'blizzardId' => method_exists($user, 'getBlizzardId') ? $user->getBlizzardId() : null,
+            'blizzardLinked' => (bool) (method_exists($user, 'getBlizzardId') ? $user->getBlizzardId() : null),
         ]);
     }
 

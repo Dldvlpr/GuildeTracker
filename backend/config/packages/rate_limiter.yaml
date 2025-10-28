@@ -9,3 +9,13 @@ framework:
             policy: token_bucket
             limit: 10
             rate: { interval: '1 minute', amount: 5 }
+
+        blizzard_oauth_start:
+            policy: fixed_window
+            limit: 10
+            interval: '1 minute'
+
+        blizzard_oauth_callback:
+            policy: token_bucket
+            limit: 10
+            rate: { interval: '1 minute', amount: 5 }

@@ -6,6 +6,8 @@
 parameters:
     front.success_uri: '%env(FRONT_SUCCESS_URI)%'
     front.error_uri: '%env(FRONT_ERROR_URI)%'
+    blizzard.region: '%env(BLIZZARD_REGION)%'
+    blizzard.locale: '%env(BLIZZARD_LOCALE)%'
 
 services:
     # default configuration for services in *this* file

@@ -11,6 +11,10 @@ export function redirectToDiscordAuth() {
   window.location.href = `${API_BASE}/connect/discord`;
 }
 
+export function redirectToBlizzardAuth() {
+  window.location.href = `${API_BASE}/api/oauth/blizzard/connect`;
+}
+
 export async function checkAuthStatus(): Promise<UserResult> {
   try {
     const response = await fetch(`${API_BASE}/api/me`, {
