@@ -7,6 +7,7 @@ use App\DTO\CharacterDTO;
 use App\Entity\GameCharacter;
 use App\Entity\User;
 use App\Form\GameCharacterType;
+use App\Repository\GameCharacterRepository;
 use App\Repository\GameGuildRepository;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -23,6 +24,7 @@ final class GuildCharacterController extends AbstractController
         private readonly EntityManagerInterface $em,
         private readonly GameGuildRepository $gameGuildRepository,
         private readonly UserRepository $userRepository,
+        private readonly GameCharacterRepository $gameCharacterRepository
     ) {}
 
     #[Route('api/characters/{id}', name: 'api_character_show', methods: ['GET'])]
@@ -109,5 +111,42 @@ final class GuildCharacterController extends AbstractController
             'id' => $gameCharacter->getUuidToString(),
             'character' => CharacterDTO::fromEntity($gameCharacter)
         ], 201);
+    }
+
+    #[Route('/api/characters/{id}', name: 'api_character_delete', methods: ['DELETE'])]
+    public function deleteCharacter(GameCharacter $character): JsonResponse
+    {
+        $user = $this->getUser();
+        if (!$user instanceof User) {
+            return new JsonResponse(['error' => 'Unauthenticated'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        if ($character->getUserPlayer()?->getId() !== $user->getId()) {
+            $guild = $character->getGuild();
+            if (!$guild) {
+                return new JsonResponse(['error' => 'Character does not belong to any guild'], Response::HTTP_BAD_REQUEST);
+            }
+
+            try {
+                $this->denyAccessUnlessGranted('GUILD_MANAGE', $guild);
+            } catch (\Exception $e) {
+                return new JsonResponse(['error' => 'You do not have permission to delete this character'], Response::HTTP_FORBIDDEN);
+            }
+        }
+
+        try {
+            $this->em->remove($character);
+            $this->em->flush();
+
+            return new JsonResponse([
+                'status' => 'ok',
+                'message' => 'Character successfully deleted'
+            ], Response::HTTP_OK);
+        } catch (\Throwable $e) {
+            return new JsonResponse([
+                'error' => 'Failed to delete character',
+                'message' => $e->getMessage()
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 }
