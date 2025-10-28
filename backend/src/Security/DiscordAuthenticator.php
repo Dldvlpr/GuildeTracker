@@ -45,7 +45,7 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
             $request->getSession()->remove('discord_pkce_verifier');
             $options = $verifier ? ['code_verifier' => $verifier] : [];
             $accessToken = $this->fetchAccessToken($client, $options);
-            
+
             /** @var DiscordResourceOwner $discordUser */
             $discordUser = $client->fetchUserFromToken($accessToken);
 
