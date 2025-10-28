@@ -52,23 +52,21 @@
     <Teleport to="body">
       <div
         v-if="showCharacterForm"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
         @click.self="showCharacterForm = false"
       >
-        <div class="max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-          <div class="relative">
-            <button
-              @click="showCharacterForm = false"
-              class="absolute -top-2 -right-2 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition"
-              aria-label="Close"
-            >
-              ✕
-            </button>
-            <CharacterForm
-              @submit="handleCharacterSubmit"
-              @bulkImport="handleBulkImport"
-            />
-          </div>
+        <div class="relative max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+          <button
+            @click="showCharacterForm = false"
+            class="sticky top-0 left-full z-10 w-10 h-10 -mb-10 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition cursor-pointer shadow-lg"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+          <CharacterForm
+            @submit="handleCharacterSubmit"
+            @bulkImport="handleBulkImport"
+          />
         </div>
       </div>
     </Teleport>

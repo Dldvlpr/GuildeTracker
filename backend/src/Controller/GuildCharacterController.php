@@ -25,8 +25,8 @@ final class GuildCharacterController extends AbstractController
         private readonly UserRepository $userRepository,
     ) {}
 
-    #[Route('api/guildcharacter/{id}', name: 'guild_character', methods: ['GET'])]
-    public function guildCharacter(GameCharacter $character): JsonResponse
+    #[Route('api/characters/{id}', name: 'api_character_show', methods: ['GET'])]
+    public function showCharacter(GameCharacter $character): JsonResponse
     {
         $user = $this->getUser();
         if (!$user instanceof User) {
@@ -38,9 +38,9 @@ final class GuildCharacterController extends AbstractController
         return $this->json(CharacterDTO::fromEntity($character));
     }
 
-    #[Route('api/gamecharacter/create', name: 'guild_character_create', methods: ['POST'])]
+    #[Route('api/characters', name: 'api_character_create', methods: ['POST'])]
     #[IsGranted('IS_AUTHENTICATED_FULLY')]
-    public function guildCharacterCreate(Request $request): JsonResponse
+    public function createCharacter(Request $request): JsonResponse
     {
         try {
             $payload = $request->toArray();

@@ -20,7 +20,7 @@ export async function getAllMembership(guildId: string, opts?: { signal?: AbortS
   }
 
   try {
-    const res = await fetch(`${BASE}/api/guildmembers/${encodeURIComponent(guildId)}`, {
+    const res = await fetch(`${BASE}/api/guilds/${encodeURIComponent(guildId)}/members`, {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },
@@ -70,7 +70,7 @@ export async function updateMemberRole(memberId: string, role: string, opts?: { 
   }
 
   try {
-    const res = await fetch(`${BASE}/api/guildmembers/${encodeURIComponent(memberId)}`, {
+    const res = await fetch(`${BASE}/api/members/${encodeURIComponent(memberId)}`, {
       method: 'PATCH',
       credentials: 'include',
       headers: {
@@ -122,7 +122,7 @@ export async function deleteMemberRole(memberId: string, opts?: { signal?: Abort
   }
 
   try {
-    const res = await fetch(`${BASE}/api/guildmembers/${encodeURIComponent(memberId)}`, {
+    const res = await fetch(`${BASE}/api/members/${encodeURIComponent(memberId)}`, {
       method: 'DELETE',
       credentials: 'include',
       headers: {

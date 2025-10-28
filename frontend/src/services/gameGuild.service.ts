@@ -16,7 +16,7 @@ export async function getGameGuild(guildId: string, opts?: { signal?: AbortSigna
   }
 
   try {
-    const res = await fetch(`${BASE}/api/gameguild/${encodeURIComponent(guildId)}`, {
+    const res = await fetch(`${BASE}/api/guilds/${encodeURIComponent(guildId)}`, {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },
@@ -166,7 +166,7 @@ export async function createGuild(name: string, faction: 'HORDE' | 'ALLIANCE') {
   }
 
   try {
-    const res = await fetch(`${BASE}/api/gameguild/create`, {
+    const res = await fetch(`${BASE}/api/guilds`, {
       method: 'POST',
       credentials: 'include',
       headers: {

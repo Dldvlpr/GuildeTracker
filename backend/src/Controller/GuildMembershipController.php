@@ -26,8 +26,8 @@ class GuildMembershipController extends AbstractController
     )
     {}
 
-    #[Route('/api/guildmembers/{id}', name: 'api_guildmembers', methods: ['GET'])]
-    public function getGuildMembership(string $id): JsonResponse
+    #[Route('/api/guilds/{id}/members', name: 'api_guild_members_list', methods: ['GET'])]
+    public function listGuildMembers(string $id): JsonResponse
     {
         $guild = $this->gameGuildRepository->findOneBy(['id' => $id]);
         if (!($guild instanceof GameGuild))
@@ -41,8 +41,8 @@ class GuildMembershipController extends AbstractController
         return $this->json(GuildMembershipDTO::fromEntities($guildMembers));
     }
 
-    #[Route('/api/guildmembers/{id}', name: 'api_guildmembers_update', methods: ['PATCH'])]
-    public function editGuildMembership(string $id, Request $request): JsonResponse
+    #[Route('/api/members/{id}', name: 'api_member_update', methods: ['PATCH'])]
+    public function updateMember(string $id, Request $request): JsonResponse
     {
         $guildMember = $this->guildMembershipRepository->findOneBy(['id' => $id]);
 
@@ -72,8 +72,8 @@ class GuildMembershipController extends AbstractController
         return $this->json(GuildMembershipDTO::fromEntity($guildMember));
     }
 
-    #[Route('/api/guildmembers/{id}', name: 'api_guildmembers_delete', methods: ['DELETE'])]
-    public function deleteGuildMembership(string $id, Request $request): JsonResponse
+    #[Route('/api/members/{id}', name: 'api_member_delete', methods: ['DELETE'])]
+    public function deleteMember(string $id, Request $request): JsonResponse
     {
         $guildMember = $this->guildMembershipRepository->findOneBy(['id' => $id]);
         if (!$guildMember) {

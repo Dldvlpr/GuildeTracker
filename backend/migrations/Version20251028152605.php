@@ -10,7 +10,7 @@ use Doctrine\Migrations\AbstractMigration;
 /**
  * Auto-generated Migration: Please modify to your needs!
  */
-final class Version20251027214824 extends AbstractMigration
+final class Version20251028152605 extends AbstractMigration
 {
     public function getDescription(): string
     {
@@ -28,6 +28,20 @@ final class Version20251027214824 extends AbstractMigration
         $this->addSql('COMMENT ON COLUMN game_character.user_player_id IS \'(DC2Type:uuid)\'');
         $this->addSql('CREATE TABLE game_guild (id UUID NOT NULL, name VARCHAR(255) NOT NULL, faction VARCHAR(255) NOT NULL, is_public BOOLEAN NOT NULL, show_dkp_public BOOLEAN NOT NULL, recruiting_status VARCHAR(255) NOT NULL, PRIMARY KEY(id))');
         $this->addSql('COMMENT ON COLUMN game_guild.id IS \'(DC2Type:uuid)\'');
+        $this->addSql('CREATE TABLE guild_invitation (id UUID NOT NULL, guild_id UUID NOT NULL, created_by_id UUID NOT NULL, used_by_id UUID DEFAULT NULL, token VARCHAR(64) NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, expires_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, role VARCHAR(20) NOT NULL, max_uses INT NOT NULL, used_count INT NOT NULL, is_active BOOLEAN NOT NULL, used_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, PRIMARY KEY(id))');
+        $this->addSql('CREATE UNIQUE INDEX UNIQ_799F3E0D5F37A13B ON guild_invitation (token)');
+        $this->addSql('CREATE INDEX IDX_799F3E0D5F2131EF ON guild_invitation (guild_id)');
+        $this->addSql('CREATE INDEX IDX_799F3E0DB03A8386 ON guild_invitation (created_by_id)');
+        $this->addSql('CREATE INDEX IDX_799F3E0D4C2B72A8 ON guild_invitation (used_by_id)');
+        $this->addSql('CREATE INDEX token_idx ON guild_invitation (token)');
+        $this->addSql('CREATE INDEX active_idx ON guild_invitation (is_active)');
+        $this->addSql('COMMENT ON COLUMN guild_invitation.id IS \'(DC2Type:uuid)\'');
+        $this->addSql('COMMENT ON COLUMN guild_invitation.guild_id IS \'(DC2Type:uuid)\'');
+        $this->addSql('COMMENT ON COLUMN guild_invitation.created_by_id IS \'(DC2Type:uuid)\'');
+        $this->addSql('COMMENT ON COLUMN guild_invitation.used_by_id IS \'(DC2Type:uuid)\'');
+        $this->addSql('COMMENT ON COLUMN guild_invitation.created_at IS \'(DC2Type:datetime_immutable)\'');
+        $this->addSql('COMMENT ON COLUMN guild_invitation.expires_at IS \'(DC2Type:datetime_immutable)\'');
+        $this->addSql('COMMENT ON COLUMN guild_invitation.used_at IS \'(DC2Type:datetime_immutable)\'');
         $this->addSql('CREATE TABLE guild_membership (id UUID NOT NULL, user_id UUID NOT NULL, guild_id UUID NOT NULL, role VARCHAR(20) NOT NULL, joined_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, PRIMARY KEY(id))');
         $this->addSql('CREATE INDEX IDX_E7D8D2AA76ED395 ON guild_membership (user_id)');
         $this->addSql('CREATE INDEX IDX_E7D8D2A5F2131EF ON guild_membership (guild_id)');
@@ -41,6 +55,9 @@ final class Version20251027214824 extends AbstractMigration
         $this->addSql('COMMENT ON COLUMN "user".id IS \'(DC2Type:uuid)\'');
         $this->addSql('ALTER TABLE game_character ADD CONSTRAINT FK_41DC71365F2131EF FOREIGN KEY (guild_id) REFERENCES game_guild (id) NOT DEFERRABLE INITIALLY IMMEDIATE');
         $this->addSql('ALTER TABLE game_character ADD CONSTRAINT FK_41DC71369906783B FOREIGN KEY (user_player_id) REFERENCES "user" (id) NOT DEFERRABLE INITIALLY IMMEDIATE');
+        $this->addSql('ALTER TABLE guild_invitation ADD CONSTRAINT FK_799F3E0D5F2131EF FOREIGN KEY (guild_id) REFERENCES game_guild (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE');
+        $this->addSql('ALTER TABLE guild_invitation ADD CONSTRAINT FK_799F3E0DB03A8386 FOREIGN KEY (created_by_id) REFERENCES "user" (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE');
+        $this->addSql('ALTER TABLE guild_invitation ADD CONSTRAINT FK_799F3E0D4C2B72A8 FOREIGN KEY (used_by_id) REFERENCES "user" (id) ON DELETE SET NULL NOT DEFERRABLE INITIALLY IMMEDIATE');
         $this->addSql('ALTER TABLE guild_membership ADD CONSTRAINT FK_E7D8D2AA76ED395 FOREIGN KEY (user_id) REFERENCES "user" (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE');
         $this->addSql('ALTER TABLE guild_membership ADD CONSTRAINT FK_E7D8D2A5F2131EF FOREIGN KEY (guild_id) REFERENCES game_guild (id) ON DELETE CASCADE NOT DEFERRABLE INITIALLY IMMEDIATE');
     }
@@ -51,10 +68,14 @@ final class Version20251027214824 extends AbstractMigration
         $this->addSql('CREATE SCHEMA public');
         $this->addSql('ALTER TABLE game_character DROP CONSTRAINT FK_41DC71365F2131EF');
         $this->addSql('ALTER TABLE game_character DROP CONSTRAINT FK_41DC71369906783B');
+        $this->addSql('ALTER TABLE guild_invitation DROP CONSTRAINT FK_799F3E0D5F2131EF');
+        $this->addSql('ALTER TABLE guild_invitation DROP CONSTRAINT FK_799F3E0DB03A8386');
+        $this->addSql('ALTER TABLE guild_invitation DROP CONSTRAINT FK_799F3E0D4C2B72A8');
         $this->addSql('ALTER TABLE guild_membership DROP CONSTRAINT FK_E7D8D2AA76ED395');
         $this->addSql('ALTER TABLE guild_membership DROP CONSTRAINT FK_E7D8D2A5F2131EF');
         $this->addSql('DROP TABLE game_character');
         $this->addSql('DROP TABLE game_guild');
+        $this->addSql('DROP TABLE guild_invitation');
         $this->addSql('DROP TABLE guild_membership');
         $this->addSql('DROP TABLE "user"');
     }
