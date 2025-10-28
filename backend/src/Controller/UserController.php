@@ -24,7 +24,7 @@ final class UserController extends AbstractController
     {
         $user = $this->getUser();
         if (!$user) {
-            return new JsonResponse(['error' => 'Non authentifié'], Response::HTTP_UNAUTHORIZED);
+            return new JsonResponse(['error' => 'Unauthenticated'], Response::HTTP_UNAUTHORIZED);
         }
 
         return $this->json([
@@ -39,7 +39,7 @@ final class UserController extends AbstractController
     {
         $user = $this->getUser();
         if (!$user instanceof \App\Entity\User) {
-            return new JsonResponse(['error' => 'Non authentifié'], Response::HTTP_UNAUTHORIZED);
+            return new JsonResponse(['error' => 'Unauthenticated'], Response::HTTP_UNAUTHORIZED);
         }
 
         $guild = $this->gameGuildRepository->findByUserId($user->getUuidToString());

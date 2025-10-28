@@ -1,6 +1,6 @@
 <template>
   <section class="mx-auto max-w-6xl px-4 py-8">
-    <div v-if="loading" class="text-center text-slate-400 py-12">Chargement...</div>
+    <div v-if="loading" class="text-center text-slate-400 py-12">Loading...</div>
 
     <div v-else-if="error" class="text-center text-red-400 py-12">
       {{ error }}
@@ -9,32 +9,32 @@
     <div v-else>
       <header class="flex items-center justify-between mb-8">
         <div>
-          <h1 class="text-2xl md:text-3xl font-bold text-white mb-2">👑 Système de rôles</h1>
+          <h1 class="text-2xl md:text-3xl font-bold text-white mb-2">👑 Roles System</h1>
           <p class="text-slate-300">
-            Gérer les rôles et permissions des membres de {{ guild?.name }}
+            Manage roles and permissions for {{ guild?.name }} members
           </p>
         </div>
         <RouterLink
           :to="`/guild/${guildId}`"
           class="text-sm px-4 py-2 rounded-lg ring-1 ring-inset ring-white/10 hover:ring-white/20 text-slate-200 hover:text-white transition"
         >
-          ← Retour aux fonctionnalités
+          ← Back to features
         </RouterLink>
       </header>
 
       <div class="space-y-6">
-        <!-- Barre de recherche -->
+        <!-- Search bar -->
         <div class="flex gap-4 items-center">
           <div class="flex-1">
             <input
               v-model="searchTerm"
               type="text"
-              placeholder="Rechercher un membre..."
+              placeholder="Search for a member..."
               class="w-full px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div class="text-sm text-slate-400">
-            {{ paginatedMembers.length }} / {{ filteredMembers.length }} membres
+            {{ paginatedMembers.length }} / {{ filteredMembers.length }} members
           </div>
         </div>
 
@@ -47,7 +47,7 @@
                   class="px-6 py-4 text-left text-sm font-medium text-slate-300 hover:text-white cursor-pointer"
                   style="width: 40%"
                 >
-                  Nom
+                  Name
                   <span v-if="sortColumn === 'name'" class="ml-1">
                     {{ sortDirection === 'asc' ? '↑' : '↓' }}
                   </span>
@@ -57,7 +57,7 @@
                   class="px-6 py-4 text-center text-sm font-medium text-slate-300 hover:text-white cursor-pointer"
                   style="width: 30%"
                 >
-                  Rôle
+                  Role
                   <span v-if="sortColumn === 'role'" class="ml-1">
                     {{ sortDirection === 'asc' ? '↑' : '↓' }}
                   </span>
@@ -82,8 +82,8 @@
                     class="bg-white/5 border border-white/10 rounded-lg px-3 py-1 text-white text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="GM">GM</option>
-                    <option value="Officer">Officier</option>
-                    <option value="Member">Membre</option>
+                    <option value="Officer">Officer</option>
+                    <option value="Member">Member</option>
                   </select>
                 </td>
                 <td class="px-6 py-4 text-center" style="width: 30%">
@@ -91,7 +91,7 @@
                     @click="deleteMember(member.id)"
                     class="text-red-400 hover:text-red-300 text-sm px-3 py-1 rounded-lg hover:bg-red-500/10 transition"
                   >
-                    Supprimer
+                    Delete
                   </button>
                 </td>
               </tr>
@@ -101,21 +101,21 @@
 
         <!-- Pagination -->
         <div v-if="totalPages > 1" class="flex items-center justify-between">
-          <div class="text-sm text-slate-400">Page {{ currentPage }} sur {{ totalPages }}</div>
+          <div class="text-sm text-slate-400">Page {{ currentPage }} of {{ totalPages }}</div>
           <div class="flex gap-2">
             <button
               @click="currentPage = Math.max(1, currentPage - 1)"
               :disabled="currentPage <= 1"
               class="px-4 py-2 rounded-lg text-sm border border-white/10 text-slate-300 hover:bg-white/5 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
-              Précédent
+              Previous
             </button>
             <button
               @click="currentPage = Math.min(totalPages, currentPage + 1)"
               :disabled="currentPage >= totalPages"
               class="px-4 py-2 rounded-lg text-sm border border-white/10 text-slate-300 hover:bg-white/5 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
-              Suivant
+              Next
             </button>
           </div>
         </div>
@@ -201,18 +201,18 @@ const updateRole = async (memberId: string, newRole: string) => {
       if (member && oldRole) {
         member.role = oldRole
       }
-      error.value = `Erreur lors de la mise à jour du rôle: ${result.error}`
+      error.value = `Error updating role: ${result.error}`
 
       setTimeout(() => {
-        if (error.value?.startsWith('Erreur lors de la mise à jour du rôle:')) {
+        if (error.value?.startsWith('Error updating role:')) {
           error.value = null
         }
       }, 5000)
     } else {
-      console.log('Rôle mis à jour avec succès:', result.data)
+      console.log('Role updated successfully:', result.data)
     }
   } catch (e: any) {
-    error.value = 'Une erreur inattendue est survenue'
+    error.value = 'An unexpected error occurred'
 
     await load()
   }
@@ -223,12 +223,12 @@ const deleteMember = async (memberId: string) => {
     const member = guildMemberships.value.find((m) => m.id === memberId)
 
     if (!member) {
-      error.value = 'Une erreur inattendue est survenue'
+      error.value = 'An unexpected error occurred'
     }
 
     await deleteMemberRole(memberId);
   } catch (e: any) {
-    error.value = 'Une erreur inattendue est survenue'
+    error.value = 'An unexpected error occurred'
   }
 
   await load()

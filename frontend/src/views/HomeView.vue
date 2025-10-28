@@ -25,18 +25,18 @@ onMounted(async () => {
       const { isAuthenticated, user } = await checkAuthStatus()
       if (isAuthenticated && user) {
         store.setUser(user)
-        msg.value = 'Connexion réussie. Sélectionnez une guilde dans la sidebar pour commencer.'
+        msg.value = 'Login successful. Select a guild from the sidebar to get started.'
       } else {
         type.value = 'error'
-        msg.value = "Session introuvable après l'authentification."
+        msg.value = "Session not found after authentication."
       }
     } else {
-      msg.value = 'Connexion réussie.'
+      msg.value = 'Login successful.'
     }
     clearQuery()
   } else if (status === 'error') {
     type.value = 'error'
-    msg.value = reason ?? "Échec de l'authentification."
+    msg.value = reason ?? "Authentication failed."
     clearQuery()
   }
 })
@@ -57,7 +57,7 @@ onMounted(async () => {
       >
         <div v-if="type === 'success'"
              class="rounded-xl border border-green-500/30 bg-green-500/10 text-green-200 px-4 py-3 text-sm shadow-md shadow-green-500/10">
-          {{ msg || 'Opération réussie.' }}
+          {{ msg || 'Operation successful.' }}
         </div>
       </Transition>
 
@@ -79,18 +79,18 @@ onMounted(async () => {
         <div class="grid gap-10 md:grid-cols-2 md:items-center">
           <div class="space-y-6">
             <h1 v-if="!store.isAuthenticated" class="text-4xl md:text-5xl font-extrabold tracking-tight">
-              Gérez votre <span class="text-indigo-400">guilde</span> en toute simplicité
+              Manage your <span class="text-indigo-400">guild</span> with ease
             </h1>
             <h1 v-else class="text-4xl md:text-5xl font-extrabold tracking-tight">
-              Bon retour, <span class="text-indigo-400">{{ store.user?.username }}</span> !
+              Welcome back, <span class="text-indigo-400">{{ store.user?.username }}</span>!
             </h1>
             <p v-if="!store.isAuthenticated" class="text-slate-300/90 leading-relaxed">
-              Centralisez les informations de vos joueurs, suivez leurs personnages, et gardez une
-              organisation claire par factions — le tout dans une interface rapide et moderne.
+              Centralize your player information, track their characters, and maintain clear
+              organization by faction — all in a fast, modern interface.
             </p>
             <p v-else class="text-slate-300/90 leading-relaxed">
-              Sélectionnez une guilde dans la sidebar pour accéder aux fonctionnalités de gestion.
-              Créez une nouvelle guilde ou rejoignez une guilde existante pour commencer.
+              Select a guild from the sidebar to access management features.
+              Create a new guild or join an existing one to get started.
             </p>
           </div>
 
@@ -99,17 +99,17 @@ onMounted(async () => {
             <div class="rounded-3xl border border-white/10 bg-white/5 p-4 shadow-2xl backdrop-blur">
               <div class="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
                 <div class="flex items-center justify-between">
-                  <div class="font-semibold">Tableau de guilde</div>
-                  <div class="text-xs text-slate-400">aperçu</div>
+                  <div class="font-semibold">Guild Dashboard</div>
+                  <div class="text-xs text-slate-400">preview</div>
                 </div>
                 <div class="mt-4 grid grid-cols-2 gap-3 text-center">
                   <div class="rounded-xl bg-white/5 p-4">
                     <div class="text-2xl font-bold">128</div>
-                    <div class="text-xs text-slate-400">Membres</div>
+                    <div class="text-xs text-slate-400">Members</div>
                   </div>
                   <div class="rounded-xl bg-white/5 p-4">
                     <div class="text-2xl font-bold">342</div>
-                    <div class="text-xs text-slate-400">Personnages</div>
+                    <div class="text-xs text-slate-400">Characters</div>
                   </div>
                 </div>
                 <div class="mt-5 h-24 rounded-xl bg-gradient-to-r from-indigo-600/20 via-white/10 to-transparent"></div>
@@ -121,27 +121,27 @@ onMounted(async () => {
     </section>
 
     <section id="features" class="mx-auto max-w-6xl px-4 pb-16 md:pb-24">
-      <h2 class="text-2xl md:text-3xl font-bold">Fonctionnalités principales</h2>
+      <h2 class="text-2xl md:text-3xl font-bold">Key Features</h2>
       <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <article class="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
           <div class="text-2xl">👥</div>
-          <h3 class="mt-3 font-semibold">Gestion des joueurs</h3>
-          <p class="mt-1 text-sm text-slate-300/80">Profils, tags, disponibilités et rôles.</p>
+          <h3 class="mt-3 font-semibold">Player Management</h3>
+          <p class="mt-1 text-sm text-slate-300/80">Profiles, tags, availability and roles.</p>
         </article>
         <article class="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
           <div class="text-2xl">📊</div>
-          <h3 class="mt-3 font-semibold">Suivi des personnages</h3>
-          <p class="mt-1 text-sm text-slate-300/80">Classes, niveaux, équipements par jeu.</p>
+          <h3 class="mt-3 font-semibold">Character Tracking</h3>
+          <p class="mt-1 text-sm text-slate-300/80">Classes, levels, equipment per game.</p>
         </article>
         <article class="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
           <div class="text-2xl">🏰</div>
-          <h3 class="mt-3 font-semibold">Organisation par faction</h3>
-          <p class="mt-1 text-sm text-slate-300/80">Hiérarchies, permissions et canaux.</p>
+          <h3 class="mt-3 font-semibold">Faction Organization</h3>
+          <p class="mt-1 text-sm text-slate-300/80">Hierarchies, permissions and channels.</p>
         </article>
         <article class="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
           <div class="text-2xl">⚡</div>
-          <h3 class="mt-3 font-semibold">Outils de raid</h3>
-          <p class="mt-1 text-sm text-slate-300/80">Planif, présences, groupes & rôles.</p>
+          <h3 class="mt-3 font-semibold">Raid Tools</h3>
+          <p class="mt-1 text-sm text-slate-300/80">Planning, attendance, groups & roles.</p>
         </article>
       </div>
     </section>

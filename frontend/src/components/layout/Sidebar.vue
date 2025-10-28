@@ -16,7 +16,7 @@
           class="inline-grid place-items-center h-9 w-9 rounded-xl bg-indigo-600 shadow-lg shadow-indigo-600/30"
           >🛡️</span
         >
-        <span class="text-lg">GuildeTracker</span>
+        <span class="text-lg">GuildTracker</span>
       </RouterLink>
       <button
         class="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-inset ring-white/10 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-indigo-300 transition"
@@ -32,7 +32,7 @@
     <nav v-if="userStore.isAuthenticated && !userStore.isLoading"
       class="flex-1 overflow-y-auto py-4">
       <div class="px-4 pb-2 flex items-center justify-between">
-        <h2 class="text-[11px] uppercase tracking-wide text-slate-400">Guildes</h2>
+        <h2 class="text-[11px] uppercase tracking-wide text-slate-400">Guilds</h2>
         <div class="flex items-center gap-2">
           <button
             @click="$emit('create-guild')"
@@ -51,7 +51,7 @@
 
       <ul class="px-2 space-y-1">
         <li v-if="gameGuilds.length === 0" class="px-3 py-2 text-xs text-slate-400">
-          Aucune guilde
+          No guilds
         </li>
         <li v-for="guild in gameGuilds" :key="guild.id">
           <RouterLink
@@ -75,7 +75,7 @@
               </span>
               <span class="truncate">{{ guild.name }}</span>
               <span v-if="guild.nbrGuildMembers != null" class="ml-auto text-[11px] text-slate-400"
-                >{{ guild.nbrGuildMembers }} membres</span
+                >{{ guild.nbrGuildMembers }} members</span
               >
             </span>
           </RouterLink>
@@ -83,7 +83,7 @@
       </ul>
 
       <div class="mt-6 px-4 pb-2 flex items-center justify-between">
-        <h2 class="text-[11px] uppercase tracking-wide text-slate-400">Personnages</h2>
+        <h2 class="text-[11px] uppercase tracking-wide text-slate-400">Characters</h2>
         <button
           @click="$emit('add-character')"
           class="h-7 px-2 rounded-lg bg-white/5 ring-1 ring-inset ring-white/10 hover:bg-white/10 text-xs"
@@ -94,7 +94,7 @@
 
       <ul class="px-2 space-y-1">
         <li v-if="characters.length === 0" class="px-3 py-2 text-xs text-slate-400">
-          Aucun personnage
+          No characters
         </li>
         <li v-for="c in characters" :key="c.id">
           <RouterLink
@@ -119,7 +119,7 @@
               <div class="min-w-0">
                 <div class="truncate">{{ c.name }}</div>
                 <div class="text-[11px] text-slate-400 truncate">
-                  {{ c.guildName || 'Sans guilde' }}
+                  {{ c.guildName || 'No guild' }}
                 </div>
               </div>
             </span>
@@ -134,14 +134,14 @@
         @click="logoutWithDiscord"
         class="w-full inline-flex items-center gap-3 px-3 py-2 rounded-xl text-sm ring-1 ring-inset ring-white/10 hover:bg-white/5 hover:text-white transition cursor-pointer"
       >
-        🚪 Déconnexion
+        🚪 Logout
       </button>
       <button
         v-else
         @click="loginWithDiscord"
         class="w-full inline-flex items-center gap-3 px-3 py-2 rounded-xl text-sm ring-1 ring-inset ring-white/10 hover:bg-white/5 hover:text-white transition cursor-pointer"
       >
-        🔑 Connexion
+        🔑 Login
       </button>
     </div>
   </aside>

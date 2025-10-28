@@ -31,7 +31,7 @@ class PersonalFixtures extends Fixture implements DependentFixtureInterface
         if (!$gmUser) {
             $gmUser = $this->userRepository->findOneBy([], ['id' => 'ASC']);
             if (!$gmUser) {
-                throw new \RuntimeException('Aucun utilisateur trouvé pour le GM ; assure un jeu de données UserFixtures.');
+                throw new \RuntimeException('No user found for GM; ensure UserFixtures has been loaded.');
             }
         }
 
@@ -75,7 +75,7 @@ class PersonalFixtures extends Fixture implements DependentFixtureInterface
 
         if (count($usersPool) < $needed) {
             throw new \RuntimeException(sprintf(
-                'Il faut au moins %d utilisateurs (hors GM). Trouvés: %d.',
+                'At least %d users (excluding GM) are required. Found: %d.',
                 $needed,
                 count($usersPool)
             ));

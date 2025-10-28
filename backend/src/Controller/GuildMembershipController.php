@@ -47,7 +47,7 @@ class GuildMembershipController extends AbstractController
         $guildMember = $this->guildMembershipRepository->findOneBy(['id' => $id]);
 
         if (!$guildMember) {
-            return $this->json(['message' => 'Membre non trouvé'], 404);
+            return $this->json(['message' => 'Member not found'], 404);
         }
 
         $this->denyAccessUnlessGranted('GUILD_MANAGE', $guildMember->getGuild());
@@ -56,14 +56,14 @@ class GuildMembershipController extends AbstractController
         $data = json_decode($request->getContent(), true);
 
         if (!isset($data['role'])) {
-            return $this->json(['message' => 'Le rôle est requis'], 400);
+            return $this->json(['message' => 'Role is required'], 400);
         }
 
         $roleString = $data['role'];
 
         $role = GuildRole::tryFrom($roleString);
         if (!$role) {
-            return $this->json(['message' => 'Rôle invalide. Valeurs acceptées: Member, Officer, GM'], 400);
+            return $this->json(['message' => 'Invalid role. Accepted values: Member, Officer, GM'], 400);
         }
 
         $guildMember->setRole($role);
@@ -77,7 +77,7 @@ class GuildMembershipController extends AbstractController
     {
         $guildMember = $this->guildMembershipRepository->findOneBy(['id' => $id]);
         if (!$guildMember) {
-            return $this->json(['message' => 'Aucun membre trouvé !'], 400);
+            return $this->json(['message' => 'No member found!'], 400);
         }
 
         $this->denyAccessUnlessGranted('GUILD_MANAGE', $guildMember->getGuild());

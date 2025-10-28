@@ -72,7 +72,7 @@ class GuildVoter extends Voter
 
     private function canUseFeatures(GuildMembership $membership, GameGuild $guild): bool
     {
-        // Membre doit être dans la guilde ET la guilde doit avoir au moins un personnage
+        // Member must be in the guild AND the guild must have at least one character
         return $guild->isValid();
     }
 }

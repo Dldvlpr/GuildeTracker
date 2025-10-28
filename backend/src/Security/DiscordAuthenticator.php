@@ -90,7 +90,7 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
                 })
             );
         } catch (\Exception $e) {
-            throw new AuthenticationException('Erreur on auth: ' . $e->getMessage());
+            throw new AuthenticationException('Authentication error: ' . $e->getMessage());
         }
     }
 
@@ -128,7 +128,7 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
     public function onAuthenticationFailure(Request $request, AuthenticationException $exception): ?Response
     {
         $message = $exception->getMessage();
-        error_log("Échec de l'authentification Discord: {$message}");
+        error_log("Discord authentication failed: {$message}");
 
         $errorUrl = (string) $this->params->get('front.error_uri');
         $glue = str_contains($errorUrl, '?') ? '&' : '?';

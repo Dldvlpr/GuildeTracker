@@ -27,7 +27,7 @@ final class DiscordController extends AbstractController
     #[Route('/logout', name: 'api_logout', methods: ['GET', 'POST'])]
     public function logout(): void
     {
-        throw new \LogicException('Cette méthode ne devrait jamais être atteinte !');
+        throw new \LogicException('This method should never be reached!');
     }
 }
 

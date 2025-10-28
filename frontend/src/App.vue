@@ -56,7 +56,7 @@
       <div
         class="mx-auto max-w-7xl px-4 py-6 text-xs text-slate-400 flex items-center justify-between"
       >
-        <span>© {{ currentYear }} GuildeTracker</span>
+        <span>© {{ currentYear }} GuildTracker</span>
         <div class="flex gap-4">
           <p>privacy</p>
           <p>condition</p>

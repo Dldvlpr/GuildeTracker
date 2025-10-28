@@ -1,19 +1,19 @@
 <template>
   <section class="mx-auto max-w-6xl flex flex-col gap-4">
     <header class="flex items-center justify-between">
-      <h1 class="text-xl font-semibold">Membres de la guilde</h1>
+      <h1 class="text-xl font-semibold">Guild Members</h1>
       <div class="flex items-center gap-2">
         <button
           @click="showCharacterForm = true"
           class="text-sm rounded-lg px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition"
         >
-          + Ajouter un personnage
+          + Add a character
         </button>
         <RouterLink
           :to="`/guild/${route.params.id}`"
           class="text-sm rounded-lg px-3 py-1.5 ring-1 ring-inset ring-white/10 hover:ring-white/20 transition"
         >
-          ← Retour à la guilde
+          ← Back to guild
         </RouterLink>
       </div>
     </header>
@@ -60,7 +60,7 @@
             <button
               @click="showCharacterForm = false"
               class="absolute -top-2 -right-2 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition"
-              aria-label="Fermer"
+              aria-label="Close"
             >
               ✕
             </button>
@@ -205,7 +205,7 @@ const handleCharacterSubmit = async (event: FormSubmitEvent) => {
   const result = await createCharacter(event.character, guildId)
 
   if (result.ok) {
-    pushToast(`Personnage "${event.character.name}" créé avec succès !`, 'success')
+    pushToast(`Character "${event.character.name}" created successfully!`, 'success')
     showCharacterForm.value = false
     await getAllCharactersByGuild()
   } else {
@@ -234,10 +234,10 @@ const handleBulkImport = async (charactersToImport: Omit<Character, 'id' | 'crea
   }
 
   if (successCount > 0) {
-    pushToast(`${successCount} personnage(s) importé(s) avec succès !`, 'success')
+    pushToast(`${successCount} character(s) imported successfully!`, 'success')
   }
   if (errorCount > 0) {
-    pushToast(`${errorCount} personnage(s) n'ont pas pu être importés`, 'error')
+    pushToast(`${errorCount} character(s) could not be imported`, 'error')
   }
 
   showCharacterForm.value = false

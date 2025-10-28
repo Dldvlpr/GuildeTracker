@@ -130,7 +130,7 @@ async function onSubmit() {
     }
   } catch (e: any) {
     submitError.value = e?.message ?? 'Network error'
-    toast('error guild cant created', 'error')
+    toast('Error: guild could not be created', 'error')
   } finally {
     loading.value = false
   }
