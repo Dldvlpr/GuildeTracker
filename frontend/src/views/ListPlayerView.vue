@@ -81,7 +81,7 @@ import PlayersFilters from '@/components/PlayersFilters.vue'
 import CharacterCard from '@/components/CharacterCard.vue'
 import CharacterForm from '@/components/CharacterForm.vue'
 import Toaster from '@/components/Toaster.vue'
-import { getCharactersByGuildId, createCharacter } from '@/services/character.service'
+import { getCharactersByGuildId, createCharacter, deleteCharacter as deleteCharacterService } from '@/services/character.service'
 import { getRoleByClassAndSpec } from '@/data/gameData'
 import { Role } from '@/interfaces/game.interface'
 import type { Character, FormSubmitEvent } from '@/interfaces/game.interface'
@@ -163,8 +163,37 @@ const editCharacter = () => {
   pushToast('Edit feature to be implemented.', 'info')
 }
 
-const deleteCharacter = (id: string) => {
-  pushToast('Delete feature to be implemented.', 'info')
+const deleteCharacter = async (id: string) => {
+  const character = characters.value.find(c => c.id === id)
+  if (!character) {
+    pushToast('Character not found', 'error')
+    return
+  }
+
+  const confirmed = window.confirm(
+    `Are you sure you want to delete "${character.name}"?\n\nThis action cannot be undone.`
+  )
+
+  if (!confirmed) return
+
+  loading.value = true
+  try {
+    const result = await deleteCharacterService(id)
+
+    if (result.ok) {
+      pushToast(result.message || 'Character deleted successfully', 'success')
+      const index = characters.value.findIndex(c => c.id === id)
+      if (index >= 0) {
+        characters.value.splice(index, 1)
+      }
+    } else {
+      pushToast(result.error, 'error')
+    }
+  } catch (error: any) {
+    pushToast(error?.message ?? 'Failed to delete character', 'error')
+  } finally {
+    loading.value = false
+  }
 }
 
 const clearFilters = () => {
