@@ -10,9 +10,7 @@ use KnpU\OAuth2ClientBundle\Security\Authenticator\OAuth2Authenticator;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
-use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Routing\RouterInterface;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
@@ -47,9 +45,7 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
             $request->getSession()->remove('discord_pkce_verifier');
             $options = $verifier ? ['code_verifier' => $verifier] : [];
             $accessToken = $this->fetchAccessToken($client, $options);
-
-            $request->getSession()->set('discord_access_token', $accessToken->getToken());
-
+            
             /** @var DiscordResourceOwner $discordUser */
             $discordUser = $client->fetchUserFromToken($accessToken);
 
@@ -99,30 +95,7 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
         $targetUrl = $this->getTargetPath($request->getSession(), $firewallName) ??
             (string) $this->params->get('front.success_uri');
 
-        $accessToken = $request->getSession()->get('discord_access_token');
-        if (!$accessToken) {
-            return new Response("Token not found", Response::HTTP_UNAUTHORIZED);
-        }
-
-        $response = new RedirectResponse($targetUrl);
-
-        $isSecure = $request->isSecure();
-
-        $user = $token->getUser();
-        if ($user instanceof \App\Entity\User) {
-            $cookieValue = base64_encode(json_encode(['uid' => $user->getId()]));
-
-            $cookie = Cookie::create('APP_SESSION')
-                ->withValue($cookieValue)
-                ->withPath('/')
-                ->withSecure($isSecure)
-                ->withHttpOnly(true)
-                ->withSameSite($isSecure ? 'None' : 'Lax');
-
-            $response->headers->setCookie($cookie);
-        }
-
-        return $response;
+        return new RedirectResponse($targetUrl);
     }
 
     public function onAuthenticationFailure(Request $request, AuthenticationException $exception): ?Response
@@ -132,7 +105,7 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
 
         $errorUrl = (string) $this->params->get('front.error_uri');
         $glue = str_contains($errorUrl, '?') ? '&' : '?';
-        $errorUrl .= $glue . 'reason=auth_failed&message=' . urlencode($message);
+        $errorUrl .= $glue . 'reason=auth_failed';
         return new RedirectResponse($errorUrl);
     }
 

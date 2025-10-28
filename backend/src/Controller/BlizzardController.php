@@ -10,6 +10,7 @@ use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
@@ -23,17 +24,27 @@ final class BlizzardController extends AbstractController
     ) {}
 
     #[Route('/api/oauth/blizzard/connect', name: 'connect_blizzard_start', methods: ['GET'])]
-    public function connect(Request $request): Response
+    public function connect(Request $request, RateLimiterFactory $blizzardOauthStartLimiter): Response
     {
         $this->denyAccessUnlessGranted('ROLE_USER');
+
+        $limiter = $blizzardOauthStartLimiter->create($request->getClientIp());
+        if (false === $limiter->consume(1)->isAccepted()) {
+            throw $this->createAccessDeniedException('Too many requests');
+        }
 
         return $this->clientRegistry->getClient('blizzard')->redirect(['wow.profile']);
     }
 
     #[Route('/api/oauth/blizzard/callback', name: 'connect_blizzard_check', methods: ['GET'])]
-    public function callback(Request $request): Response
+    public function callback(Request $request, RateLimiterFactory $blizzardOauthCallbackLimiter): Response
     {
         $this->denyAccessUnlessGranted('ROLE_USER');
+
+        $limiter = $blizzardOauthCallbackLimiter->create($request->getClientIp());
+        if (false === $limiter->consume(1)->isAccepted()) {
+            throw $this->createAccessDeniedException('Too many requests');
+        }
 
         $client = $this->clientRegistry->getClient('blizzard');
 
@@ -42,10 +53,8 @@ final class BlizzardController extends AbstractController
         } catch (\Throwable $e) {
             $errorUrl = (string) $this->params->get('front.error_uri');
             $glue = str_contains($errorUrl, '?') ? '&' : '?';
-            return new RedirectResponse($errorUrl . $glue . 'reason=bnet_token&message=' . urlencode($e->getMessage()));
+            return new RedirectResponse($errorUrl . $glue . 'reason=bnet_token');
         }
-
-        $request->getSession()->set('blizzard_access_token', $accessToken->getToken());
 
         $region = (string) $this->params->get('blizzard.region');
         $locale = (string) $this->params->get('blizzard.locale');
@@ -85,9 +94,11 @@ final class BlizzardController extends AbstractController
             $glue = str_contains($successUrl, '?') ? '&' : '?';
             return new RedirectResponse($successUrl . $glue . 'linked=blizzard');
         } catch (\Throwable $e) {
+            error_log("Blizzard profile fetch failed: {$e->getMessage()}");
             $errorUrl = (string) $this->params->get('front.error_uri');
             $glue = str_contains($errorUrl, '?') ? '&' : '?';
-            return new RedirectResponse($errorUrl . $glue . 'reason=bnet_profile&message=' . urlencode($e->getMessage()));
+
+            return new RedirectResponse($errorUrl . $glue . 'reason=bnet_profile');
         }
     }
 }
