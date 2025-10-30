@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/userStore'
 import { redirectToDiscordAuth, redirectToBlizzardAuth } from '@/services/auth'
@@ -9,25 +9,49 @@ const router = useRouter()
 const userStore = useUserStore()
 const guilds = ref<any[]>([])
 const loadingGuilds = ref(false)
+const shouldAutoRedirect = ref(false)
 
 const isAuthenticated = computed(() => userStore.isAuthenticated)
+const isUserLoading = computed(() => userStore.isLoading)
 const user = computed(() => userStore.user)
 const hasBlizzardLinked = computed(() => user.value?.blizzardId)
 const hasGuilds = computed(() => guilds.value.length > 0)
 
-onMounted(async () => {
-  if (isAuthenticated.value) {
-    loadingGuilds.value = true
-    try {
-      const res = await getMyGuild()
-      if (res.ok) {
-        guilds.value = res.data || []
+async function fetchGuilds() {
+  loadingGuilds.value = true
+  try {
+    const res = await getMyGuild()
+    if (res.ok) {
+      guilds.value = res.data || []
+      if (guilds.value.length > 0 && shouldAutoRedirect.value) {
+        const firstGuild = guilds.value[0]
+        router.replace({ name: 'guildDetails', params: { id: firstGuild.id } })
       }
-    } catch (e) {
-      console.error('Failed to load guilds:', e)
-    } finally {
-      loadingGuilds.value = false
     }
+  } catch (e) {
+    console.error('Failed to load guilds:', e)
+  } finally {
+    loadingGuilds.value = false
+  }
+}
+
+onMounted(async () => {
+  const urlParams = new URLSearchParams(window.location.search)
+  if (urlParams.get('stay') === 'true') {
+    shouldAutoRedirect.value = false
+    window.history.replaceState({}, '', '/')
+  }
+
+  if (isAuthenticated.value) {
+    await fetchGuilds()
+  }
+})
+
+watch(isAuthenticated, async (v) => {
+  if (v) {
+    await fetchGuilds()
+  } else {
+    guilds.value = []
   }
 })
 
@@ -57,13 +81,13 @@ function handleSelectGuild(guildId: string) {
 
 <template>
   <main class="min-h-screen">
-    <!-- Hero Section -->
     <section class="relative overflow-hidden">
       <div class="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60rem_60rem_at_50%_-10%,rgba(99,102,241,0.20),transparent_60%)]"></div>
 
       <div class="mx-auto max-w-6xl px-4 py-16 md:py-24">
-        <!-- Not Authenticated -->
-        <div v-if="!isAuthenticated" class="grid gap-12 md:grid-cols-2 md:items-center">
+        <div v-if="isUserLoading" class="text-center text-slate-400 py-16">Loading…</div>
+
+        <div v-else-if="!isAuthenticated" class="grid gap-12 md:grid-cols-2 md:items-center">
           <div class="space-y-6">
             <div class="inline-flex items-center gap-2 rounded-full bg-indigo-500/10 px-4 py-2 text-sm ring-1 ring-inset ring-indigo-500/20">
               <span class="relative flex h-2 w-2">
@@ -105,7 +129,6 @@ function handleSelectGuild(guildId: string) {
             </div>
           </div>
 
-          <!-- Preview Card -->
           <div class="relative">
             <div class="absolute -inset-4 -z-10 rounded-3xl bg-gradient-to-tr from-indigo-600/30 via-fuchsia-500/20 to-cyan-400/20 blur-2xl"></div>
             <div class="rounded-2xl border border-white/10 bg-slate-900/60 p-6 shadow-2xl backdrop-blur">
@@ -128,64 +151,62 @@ function handleSelectGuild(guildId: string) {
           </div>
         </div>
 
-        <!-- Authenticated: Onboarding Steps -->
         <div v-else class="space-y-8">
           <div class="text-center space-y-4">
             <h1 class="text-3xl md:text-4xl font-bold">
-              Welcome back, <span class="text-indigo-400">{{ user?.username }}</span>!
+              Welcome to GuildTracker, <span class="text-indigo-400">{{ user?.username }}</span>!
             </h1>
-            <p v-if="!hasGuilds" class="text-slate-400">Let's get your guild set up in just a few steps</p>
+            <p v-if="loadingGuilds" class="text-slate-400">Loading your guilds…</p>
+            <p v-else-if="hasGuilds" class="text-slate-400">Select a guild or create a new one</p>
+            <p v-else class="text-slate-400">Let's get your guild set up in just a few steps</p>
           </div>
 
-          <!-- User has guilds → Show them -->
-          <div v-if="hasGuilds" class="max-w-3xl mx-auto">
-            <div class="flex items-center justify-between mb-6">
-              <h2 class="text-xl font-semibold">Your Guilds</h2>
-              <div class="flex gap-2">
+          <div v-if="loadingGuilds" class="max-w-3xl mx-auto">
+            <div class="rounded-xl border border-white/10 bg-white/5 p-6 text-center text-slate-400">Loading…</div>
+          </div>
+
+          <div v-else-if="hasGuilds" class="max-w-3xl mx-auto">
+            <div class="rounded-xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+              <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-semibold">Your Guilds</h2>
+                <div class="flex gap-2">
+                  <button
+                    @click="handleClaimGuild"
+                    class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-sm font-medium transition"
+                  >
+                    Claim from Blizzard
+                  </button>
+                  <button
+                    @click="handleCreateGuild"
+                    class="inline-flex items-center gap-2 px-4 py-2 rounded-lg ring-1 ring-inset ring-white/10 hover:bg-white/5 text-sm font-medium transition"
+                  >
+                    Create Manually
+                  </button>
+                </div>
+              </div>
+              <div class="space-y-3">
                 <button
-                  @click="handleClaimGuild"
-                  class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-sm font-medium transition"
+                  v-for="guild in guilds"
+                  :key="guild.id"
+                  @click="handleSelectGuild(guild.id)"
+                  class="w-full flex items-center gap-4 p-4 rounded-xl border border-white/10 bg-white/5 hover:border-indigo-500/50 hover:bg-white/10 transition-all group"
                 >
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                  <div class="h-12 w-12 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-600 grid place-items-center font-bold text-lg">
+                    {{ guild.name.substring(0, 2).toUpperCase() }}
+                  </div>
+                  <div class="flex-1 text-left">
+                    <h3 class="font-semibold text-lg group-hover:text-indigo-300 transition">{{ guild.name }}</h3>
+                    <p class="text-sm text-slate-400">{{ guild.faction || 'Unknown' }} • {{ guild.nbrGuildMembers || 0 }} members</p>
+                  </div>
+                  <svg class="w-5 h-5 text-slate-400 group-hover:text-indigo-300 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
-                  Claim from Blizzard
-                </button>
-                <button
-                  @click="handleCreateGuild"
-                  class="inline-flex items-center gap-2 px-4 py-2 rounded-lg ring-1 ring-inset ring-white/10 hover:bg-white/5 text-sm font-medium transition"
-                >
-                  Create Manually
                 </button>
               </div>
             </div>
-
-            <div class="grid gap-4 sm:grid-cols-2">
-              <button
-                v-for="guild in guilds"
-                :key="guild.id"
-                @click="handleSelectGuild(guild.id)"
-                class="text-left rounded-xl border border-white/10 bg-white/5 p-5 hover:border-indigo-500/50 hover:bg-white/10 transition-all group"
-              >
-                <div class="flex items-center gap-4">
-                  <div class="h-12 w-12 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-600 grid place-items-center text-xl font-bold shadow-lg shadow-indigo-600/30">
-                    {{ guild.name.substring(0, 2).toUpperCase() }}
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <h3 class="font-semibold text-lg truncate group-hover:text-indigo-400 transition">{{ guild.name }}</h3>
-                    <p class="text-sm text-slate-400">{{ guild.faction || 'Unknown faction' }}</p>
-                  </div>
-                  <svg class="w-5 h-5 text-slate-400 group-hover:text-indigo-400 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </button>
-            </div>
           </div>
 
-          <!-- No guilds → Onboarding flow -->
           <div v-else class="max-w-3xl mx-auto space-y-6">
-            <!-- Step 1: Blizzard Link -->
             <div class="rounded-xl border border-white/10 bg-white/5 p-6 backdrop-blur">
               <div class="flex items-start gap-4">
                 <div
@@ -219,7 +240,6 @@ function handleSelectGuild(guildId: string) {
               </div>
             </div>
 
-            <!-- Step 2: Claim Guild (if Blizzard linked) -->
             <div
               class="rounded-xl border p-6 backdrop-blur transition-all"
               :class="hasBlizzardLinked
@@ -260,23 +280,12 @@ function handleSelectGuild(guildId: string) {
               </div>
             </div>
 
-            <!-- Quick tip -->
-            <div class="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4">
-              <div class="flex gap-3">
-                <div class="text-lg">💡</div>
-                <div class="text-sm text-slate-300">
-                  <span class="font-medium text-indigo-400">Pro tip:</span>
-                  Claiming from Blizzard automatically syncs your members, characters, and ranks. You can always create manually if preferred.
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Features Section -->
-    <section class="border-t border-white/5 py-16 md:py-24">
+    <section v-if="!isAuthenticated" class="border-t border-white/5 py-16 md:py-24">
       <div class="mx-auto max-w-6xl px-4">
         <div class="text-center mb-12">
           <h2 class="text-2xl md:text-3xl font-bold mb-3">Powerful Features for Guild Masters</h2>

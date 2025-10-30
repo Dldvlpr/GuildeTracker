@@ -16,7 +16,7 @@
           :to="`/guild/${guildId}`"
           class="text-sm px-4 py-2 rounded-lg ring-1 ring-inset ring-white/10 hover:ring-white/20 text-slate-200 hover:text-white transition"
         >
-          ← Back to features
+          ← Back to guild hub
         </RouterLink>
       </header>
 

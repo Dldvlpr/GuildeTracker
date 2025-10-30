@@ -47,6 +47,6 @@ final class UserController extends AbstractController
         $guild = $this->gameGuildRepository->findByUserId($user->getUuidToString());
 
         $response = GameGuildDTO::fromEntities($guild) ?? [];
-        return $this->json($response, 201);
+        return $this->json($response, 200);
     }
 }

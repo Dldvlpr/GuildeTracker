@@ -10,7 +10,7 @@
         </p>
       </div>
       <div class="text-right">
-        <RouterLink to="/" class="text-sm px-4 py-2 rounded-lg ring-1 ring-inset ring-white/10 hover:ring-white/20 text-slate-200 hover:text-white transition mb-2 block">
+        <RouterLink :to="{ name: 'home', query: { stay: 'true' } }" class="text-sm px-4 py-2 rounded-lg ring-1 ring-inset ring-white/10 hover:ring-white/20 text-slate-200 hover:text-white transition mb-2 block">
           ← Back to home
         </RouterLink>
         <div class="text-sm text-slate-400">{{ guild?.faction }}</div>
@@ -26,7 +26,6 @@
     </div>
 
     <div v-else>
-      <!-- Warning if guild is invalid (no characters) -->
       <div v-if="!guild?.isValid" class="mb-8 p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
         <div class="flex items-start gap-3">
           <div class="text-2xl">⚠️</div>

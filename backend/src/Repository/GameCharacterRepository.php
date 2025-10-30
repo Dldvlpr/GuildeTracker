@@ -42,12 +42,5 @@ class GameCharacterRepository extends ServiceEntityRepository
     //        ;
     //    }
 
-    public function findCharactersInGuilde(GameGuild $gameGuild)
-    {
-        return $this->createQueryBuilder('c')
-            ->where('c.guild = :guild')
-            ->setParameter('guild', $gameGuild)
-            ->getQuery()
-            ->getResult();
-    }
+    // Intentionally left minimal; add custom queries when needed.
 }

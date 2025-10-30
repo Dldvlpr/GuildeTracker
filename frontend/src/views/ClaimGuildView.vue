@@ -23,7 +23,6 @@ const characters = ref<Character[]>([])
 const selectedCharacter = ref<Character | null>(null)
 const error = ref('')
 
-// Auto-load on mount if Blizzard is linked
 onMounted(() => {
   if (hasBlizzardLinked.value) {
     loadCharacters()
@@ -76,7 +75,6 @@ async function handleClaimGuild() {
 
     step.value = 'success'
 
-    // Redirect to guild dashboard after 2 seconds
     setTimeout(() => {
       if (result?.guild?.id) {
         router.push({ name: 'guildDetails', params: { id: result.guild.id } })
@@ -91,23 +89,19 @@ async function handleClaimGuild() {
 }
 
 function goBack() {
-  router.push({ name: 'home' })
+  router.push({ name: 'home', query: { stay: 'true' } })
 }
 </script>
 
 <template>
   <div class="min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-4xl">
-      <!-- Header -->
       <div class="text-center mb-8">
         <button
           @click="goBack"
           class="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white transition mb-6"
         >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          Back to Home
+          ← Back to home
         </button>
 
         <h1 class="text-3xl md:text-4xl font-bold mb-3">
@@ -116,7 +110,6 @@ function goBack() {
         <p class="text-slate-400">Import your guild directly from Battle.net with real-time API sync</p>
       </div>
 
-      <!-- Error Alert -->
       <div v-if="error" class="mb-6 rounded-xl bg-red-500/10 border border-red-500/20 p-4">
         <div class="flex items-start gap-3">
           <svg class="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -133,7 +126,6 @@ function goBack() {
         </div>
       </div>
 
-      <!-- Step: Link Battle.net -->
       <div v-if="step === 'link'" class="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-8 md:p-12 text-center">
         <div class="inline-flex h-20 w-20 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 items-center justify-center mb-6 shadow-lg shadow-blue-600/30">
           <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -157,7 +149,6 @@ function goBack() {
         </button>
       </div>
 
-      <!-- Step: Loading Characters -->
       <div v-else-if="step === 'loading'" class="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-12 text-center">
         <div class="inline-flex h-20 w-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 items-center justify-center mb-6 animate-pulse">
           <svg class="w-10 h-10 text-white animate-spin" fill="none" viewBox="0 0 24 24">
@@ -169,7 +160,6 @@ function goBack() {
         <p class="text-slate-400">Fetching your character list from Blizzard API</p>
       </div>
 
-      <!-- Step: Select Character -->
       <div v-else-if="step === 'select'" class="space-y-6">
         <div class="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4">
           <div class="flex gap-3">
@@ -202,7 +192,6 @@ function goBack() {
                   <h3 class="font-semibold text-lg truncate" :class="selectedCharacter?.name === char.name ? 'text-indigo-300' : 'text-white'">
                     {{ char.name }}
                   </h3>
-                  <p class="text-xs text-slate-400 truncate">{{ char.realm.name }}</p>
                 </div>
                 <div class="flex-shrink-0 ml-2">
                   <div class="text-xs font-medium px-2 py-1 rounded-md" :class="selectedCharacter?.name === char.name ? 'bg-indigo-500/20 text-indigo-300' : 'bg-white/5 text-slate-400'">
@@ -213,10 +202,9 @@ function goBack() {
 
               <div class="flex items-center justify-between text-xs">
                 <span class="text-slate-400">{{ char.playable_class?.name || 'Unknown' }}</span>
-                <span class="text-indigo-400 font-medium">{{ char.wow_type || 'Retail' }}</span>
+                <span class="text-indigo-400 font-medium">{{ char.realm.name }}</span>
               </div>
 
-              <!-- Selection Checkmark -->
               <div
                 v-if="selectedCharacter?.name === char.name && selectedCharacter?.realm.slug === char.realm.slug"
                 class="absolute top-2 right-2 h-6 w-6 rounded-full bg-indigo-500 flex items-center justify-center"
@@ -229,7 +217,6 @@ function goBack() {
           </div>
         </div>
 
-        <!-- Action Buttons -->
         <div v-if="selectedCharacter" class="flex flex-col sm:flex-row gap-4 items-center justify-center">
           <button
             @click="handleClaimGuild"
@@ -243,7 +230,6 @@ function goBack() {
         </div>
       </div>
 
-      <!-- Step: Claiming -->
       <div v-else-if="step === 'claiming'" class="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-12 text-center">
         <div class="inline-flex h-20 w-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 items-center justify-center mb-6 animate-pulse">
           <svg class="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -254,7 +240,6 @@ function goBack() {
         <p class="text-slate-400">Verifying Guild Master status and importing data from Blizzard</p>
       </div>
 
-      <!-- Step: Success -->
       <div v-else-if="step === 'success'" class="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 backdrop-blur p-12 text-center">
         <div class="inline-flex h-20 w-20 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 items-center justify-center mb-6 shadow-lg shadow-emerald-600/30">
           <svg class="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">

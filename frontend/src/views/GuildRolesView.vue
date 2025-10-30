@@ -26,13 +26,12 @@
             :to="`/guild/${guildId}`"
             class="text-sm px-4 py-2 rounded-lg ring-1 ring-inset ring-white/10 hover:ring-white/20 text-slate-200 hover:text-white transition"
           >
-            ← Back to features
+            ← Back to guild hub
           </RouterLink>
         </div>
       </header>
 
       <div class="space-y-6">
-        <!-- Search bar -->
         <div class="flex gap-4 items-center">
           <div class="flex-1">
             <input
@@ -108,7 +107,6 @@
           </table>
         </div>
 
-        <!-- Pagination -->
         <div v-if="totalPages > 1" class="flex items-center justify-between">
           <div class="text-sm text-slate-400">Page {{ currentPage }} of {{ totalPages }}</div>
           <div class="flex gap-2">
@@ -132,7 +130,6 @@
     </div>
   </section>
 
-  <!-- Invitation Modal -->
   <BaseModal v-model="inviteOpen" title="Invite a player">
     <div class="space-y-4">
       <div class="text-sm text-slate-300">Create an invitation link to let a player join the guild with a predefined role.</div>
@@ -203,7 +200,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import type { GameGuild } from '@/interfaces/GameGuild.interface'
-import type { guildMembership } from '@/interfaces/guildMemebership.interface.ts'
+import type { GuildMembership } from '@/interfaces/GuildMembership.interface.ts'
 import {
   deleteMemberRole,
   getAllMembership,
@@ -219,7 +216,7 @@ const guildId = ref<string | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 const guild = ref<GameGuild | null>(null)
-const guildMemberships = ref<guildMembership[]>([])
+const guildMemberships = ref<GuildMembership[]>([])
 const searchTerm = ref<string>('')
 const currentPage = ref(1)
 const sortColumn = ref<string | null>(null)
@@ -233,8 +230,8 @@ const filteredMembers = computed(() => {
   }
   if (sortColumn.value) {
     result = result.sort((a, b) => {
-      const aValue = a[sortColumn.value as keyof guildMembership]
-      const bValue = b[sortColumn.value as keyof guildMembership]
+      const aValue = a[sortColumn.value as keyof GuildMembership]
+      const bValue = b[sortColumn.value as keyof GuildMembership]
       if (sortDirection.value === 'asc') {
         return aValue < bValue ? -1 : aValue > bValue ? 1 : 0
       } else {
@@ -338,7 +335,6 @@ watch(
   },
 )
 
-// Invitation state & handlers
 const inviteOpen = ref(false)
 const inviteRole = ref<'GM' | 'Officer' | 'Member'>('Member')
 const inviteDays = ref<number>(7)
@@ -397,7 +393,6 @@ async function copy(text: string) {
   try {
     await navigator.clipboard.writeText(text)
   } catch {
-    // Fallback
     const ta = document.createElement('textarea')
     ta.value = text
     ta.style.position = 'fixed'

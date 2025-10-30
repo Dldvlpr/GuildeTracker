@@ -24,8 +24,8 @@
         @close="sidebarOpen = false"
         @create-guild="router.push({ path: '/guild/create'})"
         @claim-guild="router.push({ path: '/guild/claim'})"
-        @search-guild="router.push({ path: '/guild'})"
-        @add-character="router.push('/add')"
+        @search-guild="router.push({ path: '/features'})"
+        @add-character="router.push('/player/add')"
       />
 
       <main class="flex-1 overflow-auto md:pl-64">

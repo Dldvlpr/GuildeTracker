@@ -1,5 +1,4 @@
 import type { Character } from "@/interfaces/game.interface";
-import type { GameGuild } from '@/interfaces/GameGuild.interface.ts'
 
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 

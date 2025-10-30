@@ -4,10 +4,10 @@
       <div class="mx-auto max-w-4xl px-4 py-6 flex items-center justify-between">
         <h1 class="text-xl font-semibold">Create a Guild</h1>
         <RouterLink
-          to="/"
+          :to="{ name: 'home', query: { stay: 'true' } }"
           class="text-sm rounded-lg px-3 py-1.5 ring-1 ring-inset ring-white/10 hover:ring-white/20"
         >
-          ← Back
+          ← Back to home
         </RouterLink>
       </div>
     </header>

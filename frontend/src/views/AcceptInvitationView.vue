@@ -18,7 +18,7 @@
       <div class="text-2xl mb-2">❌</div>
       <h2 class="text-red-300 font-semibold mb-1">Invalid invitation</h2>
       <p class="text-red-100/80 text-sm">{{ errorMessage }}</p>
-      <RouterLink to="/" class="inline-block mt-4 text-sm px-4 py-2 rounded-lg ring-1 ring-inset ring-white/10 hover:ring-white/20 text-slate-200 hover:text-white">Back to home</RouterLink>
+      <RouterLink :to="{ name: 'home', query: { stay: 'true' } }" class="inline-block mt-4 text-sm px-4 py-2 rounded-lg ring-1 ring-inset ring-white/10 hover:ring-white/20 text-slate-200 hover:text-white">← Back to home</RouterLink>
     </div>
 
     <div v-else-if="state === 'success'" class="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-6">
@@ -51,7 +51,6 @@ const countdown = ref(3)
 let timer: number | null = null
 
 function login() {
-  // Optionally store current URL so user can navigate back after login
   try { localStorage.setItem('postLoginRedirect', window.location.pathname + window.location.search) } catch {}
   redirectToDiscordAuth()
 }
@@ -68,7 +67,6 @@ async function run() {
   }
   result.value = res.data
   state.value = 'success'
-  // Auto-redirect after a short delay
   countdown.value = 3
   timer = window.setInterval(() => {
     countdown.value -= 1

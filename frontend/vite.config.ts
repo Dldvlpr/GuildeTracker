@@ -25,6 +25,13 @@ export default defineConfig({
       const legacyKey = path.join(certDir, 'key.pem')
 
       const useLocalhost = fs.existsSync(localhostCert) && fs.existsSync(localhostKey)
+      const useLegacy = fs.existsSync(legacyCert) && fs.existsSync(legacyKey)
+
+      if (!useLocalhost && !useLegacy) {
+        // No certs found; fall back to HTTP
+        return undefined
+      }
+
       const certPath = useLocalhost ? localhostCert : legacyCert
       const keyPath = useLocalhost ? localhostKey : legacyKey
 

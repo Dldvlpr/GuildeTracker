@@ -1,13 +1,13 @@
-import type { guildMembership } from '@/interfaces/guildMemebership.interface.ts';
+import type { GuildMembership } from '@/interfaces/GuildMembership.interface.ts';
 
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
 export type GuildMembershipResult =
-  | { ok: true; data: guildMembership[] }
+  | { ok: true; data: GuildMembership[] }
   | { ok: false; error: string; status?: number };
 
 export type GuildMembershipOneResult =
-  | { ok: true; data: guildMembership }
+  | { ok: true; data: GuildMembership }
   | { ok: false; error: string; status?: number };
 
 export type GuildMembershipDeleteResult =
@@ -55,8 +55,7 @@ export async function getAllMembership(guildId: string, opts?: { signal?: AbortS
       return { ok: false, error: 'Unexpected payload: expected an array' };
     }
 
-    const data = json as guildMembership[];
-    console.log(data)
+    const data = json as GuildMembership[];
 
     return { ok: true, data };
   } catch (e: any) {
@@ -109,7 +108,7 @@ export async function updateMemberRole(memberId: string, role: string, opts?: { 
       return { ok: false, error: 'Unexpected payload: expected an object' };
     }
 
-    const data = json as guildMembership;
+    const data = json as GuildMembership;
     return { ok: true, data };
   } catch (e: any) {
     return { ok: false, error: e?.message ?? 'Network error' };

@@ -13,7 +13,7 @@
           :to="`/guild/${route.params.id}`"
           class="text-sm rounded-lg px-3 py-1.5 ring-1 ring-inset ring-white/10 hover:ring-white/20 transition"
         >
-          ← Back to guild
+          ← Back to guild hub
         </RouterLink>
       </div>
     </header>
@@ -48,7 +48,6 @@
 
     <Toaster :items="notifications" />
 
-    <!-- Modal for adding character -->
     <BaseModal
       v-model="showCharacterForm"
       title="Add a Character"
