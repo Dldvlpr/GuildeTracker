@@ -1,192 +1,225 @@
 <template>
-  <div class="character-form" role="form" aria-labelledby="character-form-title">
-    <form @submit.prevent="handleSubmit" class="form" novalidate>
-      <div class="form-header">
-        <h2 id="character-form-title">Create a Character</h2>
-        <p class="form-description" id="character-form-desc">
-          Fill in the fields below and select a class and specialization.
-        </p>
-        <p>OR</p>
-        <p>Import Json data from Raid-Helper</p>
-      </div>
-
-      <div class="form-group">
-        <label for="character-name" class="form-label required"> Player name </label>
-        <input
-          id="character-name"
-          v-model="characterName"
-          type="text"
-          class="form-input"
-          :class="{ 'is-invalid': fieldErrors.name }"
-          placeholder="Enter your character's name"
-          required
-          maxlength="50"
-          inputmode="text"
-          autocomplete="off"
-          autocapitalize="none"
-          spellcheck="false"
-          :aria-invalid="!!fieldErrors.name"
-          :aria-describedby="fieldErrors.name ? 'character-name-error' : 'character-name-hint'"
-          @blur="validateCharacterName"
-          @input="clearFieldError('name')"
-        />
-        <div v-if="fieldErrors.name" class="field-error" id="character-name-error" role="alert">
-          {{ fieldErrors.name }}
-        </div>
-        <div v-else class="field-hint" id="character-name-hint">50 characters maximum</div>
-      </div>
-
-      <div class="form-group">
-        <label for="class-select" class="form-label required"> Class </label>
-        <select
-          id="class-select"
-          v-model="selectedClass"
-          class="form-select"
-          :class="{ 'is-invalid': fieldErrors.class }"
-          required
-          :aria-invalid="!!fieldErrors.class"
-          :aria-describedby="fieldErrors.class ? 'class-error' : undefined"
-          @change="handleClassChange"
-        >
-          <option value="">— Select a class —</option>
-          <option
-            v-for="option in classOptions"
-            :key="option.value"
-            :value="option.value"
-            :title="getClassDescription(option.value)"
-          >
-            {{ option.label }} ({{ option.specCount }} specializations)
-          </option>
-        </select>
-        <div v-if="fieldErrors.class" class="field-error" id="class-error" role="alert">
-          {{ fieldErrors.class }}
-        </div>
-      </div>
-
-      <div
-        v-if="canSelectSpec"
-        class="form-group"
-        :class="{ 'form-group--disabled': !hasSelectedClass }"
-      >
-        <label for="spec-select" class="form-label required"> Class spec </label>
-        <select
-          id="spec-select"
-          v-model="selectedSpec"
-          class="form-select"
-          :class="{ 'is-invalid': fieldErrors.spec }"
-          :disabled="!hasSelectedClass"
-          required
-          :aria-invalid="!!fieldErrors.spec"
-          :aria-describedby="fieldErrors.spec ? 'spec-error' : undefined"
-          @change="handleSpecChange"
-        >
-          <option value="">— Select a specialization —</option>
-          <option
-            v-for="spec in specOptions"
-            :key="spec.value"
-            :value="spec.value"
-            :title="`Role: ${spec.role}`"
-          >
-            {{ spec.label }} ({{ spec.role }})
-          </option>
-        </select>
-        <div v-if="fieldErrors.spec" class="field-error" id="spec-error" role="alert">
-          {{ fieldErrors.spec }}
-        </div>
-      </div>
-
-      <div v-if="hasGeneralErrors" class="general-errors" role="alert" aria-live="assertive">
-        <div class="error-list">
-          <div v-for="error in generalErrors" :key="error" class="error-item">
-            {{ error }}
-          </div>
-        </div>
-      </div>
-
-      <div class="form-actions form-actions--center">
-        <button type="button" @click="handleReset" class="btn btn-secondary">Reset</button>
-
-        <button type="submit" class="btn btn-primary" :disabled="!isValidForm">
-          Create the character
-        </button>
-
-        <button type="button" class="btn btn-outline" @click="showImport = true">
-          Import JSON
-        </button>
-      </div>
-    </form>
-
-    <div
-      v-if="showImport"
-      class="backdrop"
-      @click.self="closeImport"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="import-title"
-    >
-      <div class="modal">
-        <header class="modal__header">
-          <h3 id="import-title">Import from Raid-Helper JSON</h3>
-          <button class="icon-btn" @click="closeImport" aria-label="Close">✖</button>
-        </header>
-
-        <section class="modal__body">
-          <p class="hint">
-            Paste the event JSON (must contain a <code>signUps</code> array). Then select a player
-            to prefill this form.
+  <div role="form" aria-labelledby="character-form-title">
+    <form @submit.prevent="handleSubmit" class="space-y-6" novalidate>
+        <div class="text-center border-b border-white/10 pb-6">
+          <h2 id="character-form-title" class="text-2xl font-bold text-white mb-2">Create a Character</h2>
+          <p class="text-slate-400 text-sm mb-3" id="character-form-desc">
+            Fill in the fields below and select a class and specialization.
           </p>
-
-          <textarea
-            v-model="importText"
-            class="textarea"
-            rows="12"
-            placeholder='{"date":"1-9-2025","signUps":[{"name":"shaqx","className":"Druid","specName":"Feral","roleName":"Melee"}]}'
-            spellcheck="false"
-          ></textarea>
-
-          <div class="options">
-            <label class="opt">
-              <input type="checkbox" v-model="includeNonPlayableClasses" />
-              Include non-playable classes (Bench, Absence, Tentative, Late)
-            </label>
-          </div>
-
-          <div v-if="importError" class="error" role="alert">{{ importError }}</div>
-
-          <div v-if="parsedPlayers.length" class="picker">
-            <label class="form-label" for="player-select">Detected players</label>
-            <select id="player-select" v-model="selectedPlayerIndex" class="form-select">
-              <option v-for="(p, idx) in parsedPlayers" :key="idx" :value="idx">
-                {{ p.name }} — {{ p.class }}{{ p.spec ? ` (${p.spec})` : '' }}
-              </option>
-            </select>
-          </div>
-        </section>
-
-        <footer class="modal__footer">
-          <button class="btn btn-outline" @click="closeImport">Cancel</button>
+          <p class="text-slate-500 text-xs">OR</p>
           <button
-            class="btn btn-primary"
+            type="button"
+            @click="showImport = true"
+            class="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium ring-1 ring-inset ring-white/10 hover:bg-white/5 text-slate-300 hover:text-white transition"
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            Import JSON from Raid-Helper
+          </button>
+        </div>
+
+        <!-- Character Name -->
+        <div class="space-y-2">
+          <label for="character-name" class="block text-sm font-semibold text-slate-200">
+            Player name <span class="text-red-400">*</span>
+          </label>
+          <input
+            id="character-name"
+            v-model="characterName"
+            type="text"
+            class="w-full px-4 py-3 rounded-xl border bg-slate-950/50 text-slate-100 placeholder-slate-500 transition focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            :class="fieldErrors.name ? 'border-red-500/50 ring-2 ring-red-500/20' : 'border-white/10 hover:border-white/20'"
+            placeholder="Enter your character's name"
+            required
+            maxlength="50"
+            inputmode="text"
+            autocomplete="off"
+            autocapitalize="none"
+            spellcheck="false"
+            :aria-invalid="!!fieldErrors.name"
+            :aria-describedby="fieldErrors.name ? 'character-name-error' : 'character-name-hint'"
+            @blur="validateCharacterName"
+            @input="clearFieldError('name')"
+          />
+          <p v-if="fieldErrors.name" class="text-sm text-red-400" id="character-name-error" role="alert">
+            {{ fieldErrors.name }}
+          </p>
+          <p v-else class="text-xs text-slate-500" id="character-name-hint">50 characters maximum</p>
+        </div>
+
+        <!-- Class Select -->
+        <div class="space-y-2">
+          <label for="class-select" class="block text-sm font-semibold text-slate-200">
+            Class <span class="text-red-400">*</span>
+          </label>
+          <select
+            id="class-select"
+            v-model="selectedClass"
+            class="w-full px-4 py-3 rounded-xl border bg-slate-950/50 text-slate-100 transition focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            :class="fieldErrors.class ? 'border-red-500/50 ring-2 ring-red-500/20' : 'border-white/10 hover:border-white/20'"
+            required
+            :aria-invalid="!!fieldErrors.class"
+            :aria-describedby="fieldErrors.class ? 'class-error' : undefined"
+            @change="handleClassChange"
+          >
+            <option value="">— Select a class —</option>
+            <option
+              v-for="option in classOptions"
+              :key="option.value"
+              :value="option.value"
+              :title="getClassDescription(option.value)"
+            >
+              {{ option.label }} ({{ option.specCount }} specializations)
+            </option>
+          </select>
+          <p v-if="fieldErrors.class" class="text-sm text-red-400" id="class-error" role="alert">
+            {{ fieldErrors.class }}
+          </p>
+        </div>
+
+        <!-- Spec Select -->
+        <div
+          v-if="canSelectSpec"
+          class="space-y-2"
+          :class="{ 'opacity-50 pointer-events-none': !hasSelectedClass }"
+        >
+          <label for="spec-select" class="block text-sm font-semibold text-slate-200">
+            Class spec <span class="text-red-400">*</span>
+          </label>
+          <select
+            id="spec-select"
+            v-model="selectedSpec"
+            class="w-full px-4 py-3 rounded-xl border bg-slate-950/50 text-slate-100 transition focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            :class="fieldErrors.spec ? 'border-red-500/50 ring-2 ring-red-500/20' : 'border-white/10 hover:border-white/20'"
+            :disabled="!hasSelectedClass"
+            required
+            :aria-invalid="!!fieldErrors.spec"
+            :aria-describedby="fieldErrors.spec ? 'spec-error' : undefined"
+            @change="handleSpecChange"
+          >
+            <option value="">— Select a specialization —</option>
+            <option
+              v-for="spec in specOptions"
+              :key="spec.value"
+              :value="spec.value"
+              :title="`Role: ${spec.role}`"
+            >
+              {{ spec.label }} ({{ spec.role }})
+            </option>
+          </select>
+          <p v-if="fieldErrors.spec" class="text-sm text-red-400" id="spec-error" role="alert">
+            {{ fieldErrors.spec }}
+          </p>
+        </div>
+
+        <!-- General Errors -->
+        <div v-if="hasGeneralErrors" class="rounded-xl bg-red-500/10 border border-red-500/20 p-4" role="alert" aria-live="assertive">
+          <div class="space-y-1">
+            <p v-for="error in generalErrors" :key="error" class="text-sm text-red-300">
+              {{ error }}
+            </p>
+          </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex flex-col sm:flex-row gap-3 pt-4 border-t border-white/10">
+          <button
+            type="button"
+            @click="handleReset"
+            class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-slate-300 ring-1 ring-inset ring-white/10 hover:bg-white/5 hover:text-white transition"
+          >
+            Reset
+          </button>
+
+          <button
+            type="submit"
+            :disabled="!isValidForm"
+            class="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-600 text-white shadow-lg shadow-indigo-600/50 transition disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+          >
+            Create the character
+          </button>
+        </div>
+      </form>
+
+    <!-- Import Modal -->
+    <BaseModal
+      v-model="showImport"
+      title="Import from Raid-Helper JSON"
+      size="lg"
+    >
+      <div class="space-y-4">
+        <p class="text-sm text-slate-400">
+          Paste the event JSON (must contain a <code class="px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300 text-xs">signUps</code> array). Then select a player to prefill this form.
+        </p>
+
+        <textarea
+          v-model="importText"
+          class="w-full min-h-[280px] px-4 py-3 rounded-xl border border-white/10 bg-slate-950/50 text-slate-100 font-mono text-sm placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"
+          placeholder='{"date":"1-9-2025","signUps":[{"name":"shaqx","className":"Druid","specName":"Feral","roleName":"Melee"}]}'
+          spellcheck="false"
+        ></textarea>
+
+        <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+          <input
+            type="checkbox"
+            v-model="includeNonPlayableClasses"
+            class="w-4 h-4 rounded border-white/10 bg-slate-950/50 text-indigo-600 focus:ring-2 focus:ring-indigo-500"
+          />
+          Include non-playable classes (Bench, Absence, Tentative, Late)
+        </label>
+
+        <div v-if="importError" class="rounded-xl bg-red-500/10 border border-red-500/20 p-4" role="alert">
+          <p class="text-sm text-red-300">{{ importError }}</p>
+        </div>
+
+        <div v-if="parsedPlayers.length" class="space-y-2">
+          <label for="player-select" class="block text-sm font-semibold text-slate-200">
+            Detected players ({{ parsedPlayers.length }})
+          </label>
+          <select
+            id="player-select"
+            v-model="selectedPlayerIndex"
+            class="w-full px-4 py-3 rounded-xl border border-white/10 bg-slate-950/50 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option v-for="(p, idx) in parsedPlayers" :key="idx" :value="idx">
+              {{ p.name }} — {{ p.class }}{{ p.spec ? ` (${p.spec})` : '' }}
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="flex flex-col sm:flex-row gap-3 w-full">
+          <button
+            @click="closeImport"
+            class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-slate-300 ring-1 ring-inset ring-white/10 hover:bg-white/5 hover:text-white transition"
+          >
+            Cancel
+          </button>
+          <button
             :disabled="!parsedPlayers.length"
             @click="applySelectedPlayer"
+            class="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-600 text-white shadow-lg shadow-indigo-600/50 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Use selection
           </button>
           <button
-            class="btn btn-primary"
             :disabled="!parsedPlayers.length"
             @click="importAllPlayers"
+            class="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-600 text-white shadow-lg shadow-cyan-600/50 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Import all
           </button>
-        </footer>
-      </div>
-    </div>
+        </div>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import BaseModal from './ui/BaseModal.vue'
 import { useGameData } from '../composables/useGameData.ts'
 import type {
   Character,
@@ -480,278 +513,3 @@ function importAllPlayers() {
   closeImport()
 }
 </script>
-
-<style scoped>
-.character-form {
-  max-width: 700px;
-  margin: 0 auto;
-  padding: 2rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.35);
-  color: #e2e8f0;
-  font-family:
-    'Inter',
-    'Segoe UI',
-    -apple-system,
-    system-ui,
-    sans-serif;
-}
-
-.form-header {
-  text-align: center;
-  margin-bottom: 1.5rem;
-}
-
-.form-header h2 {
-  font-size: 1.6rem;
-  font-weight: 800;
-  color: #ffffff;
-  margin: 0 0 0.4rem 0;
-}
-
-.form-description {
-  color: #94a3b8;
-  margin: 0;
-}
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.form-group--disabled {
-  opacity: 0.6;
-  pointer-events: none;
-}
-.form-label {
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: #cbd5e1;
-}
-.form-label.required::after {
-  content: ' *';
-  color: #fca5a5;
-}
-.form-input,
-.form-select {
-  padding: 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  font-size: 1rem;
-  background: rgba(2, 6, 23, 0.6);
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
-  color: #e2e8f0;
-}
-.form-input:focus,
-.form-select:focus {
-  outline: none;
-  border-color: rgba(99, 102, 241, 0.6);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
-}
-.form-input.is-invalid,
-.form-select.is-invalid {
-  border-color: rgba(244, 63, 94, 0.8);
-  box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.18);
-}
-.form-input:disabled,
-.form-select:disabled {
-  background-color: rgba(255, 255, 255, 0.06);
-  cursor: not-allowed;
-}
-
-.field-error {
-  color: #fca5a5;
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-.field-hint {
-  color: #94a3b8;
-  font-size: 0.875rem;
-}
-
-.general-errors {
-  background: rgba(244, 63, 94, 0.12);
-  border: 1px solid rgba(244, 63, 94, 0.3);
-  border-radius: 12px;
-  padding: 1rem;
-}
-.error-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.error-item {
-  color: #f87171;
-  font-size: 0.9rem;
-  font-weight: 700;
-}
-
-.form-actions {
-  display: flex;
-  gap: 1rem;
-  justify-content: center;
-  padding-top: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-.form-actions--center {
-  justify-content: center;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.8rem 1.4rem;
-  border: none;
-  border-radius: 10px;
-  font-size: 1rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition:
-    transform 0.15s ease,
-    background 0.15s ease,
-    box-shadow 0.15s ease;
-  will-change: transform;
-}
-.btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-  transform: none !important;
-}
-.btn-primary {
-  background: rgba(79, 70, 229, 0.9);
-  color: #fff;
-  box-shadow: 0 10px 18px rgba(79, 70, 229, 0.35);
-}
-.btn-primary:hover:not(:disabled),
-.btn-primary:focus-visible:not(:disabled) {
-  background: rgba(99, 102, 241, 0.95);
-  transform: translateY(-1px);
-}
-.btn-secondary {
-  background: rgba(71, 85, 105, 0.9);
-  color: #fff;
-  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.3);
-}
-.btn-secondary:hover:not(:disabled),
-.btn-secondary:focus-visible:not(:disabled) {
-  background: rgba(51, 65, 85, 0.95);
-  transform: translateY(-1px);
-}
-.btn-outline {
-  background: transparent;
-  color: #e2e8f0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-}
-.btn-outline:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-/* ==== Modal ==== */
-.backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(2, 6, 23, 0.55);
-  display: grid;
-  place-items: center;
-  z-index: 1000;
-}
-.modal {
-  width: min(880px, 94vw);
-  background: rgba(15, 23, 42, 0.85);
-  color: #e2e8f0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  box-shadow: 0 25px 60px rgba(2, 6, 23, 0.45);
-  overflow: hidden;
-}
-.modal__header,
-.modal__footer {
-  padding: 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-.modal__footer {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  border-bottom: 0;
-  justify-content: flex-end;
-}
-.modal__body {
-  padding: 1rem;
-  display: grid;
-  gap: 0.75rem;
-}
-.icon-btn {
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  font-size: 1rem;
-  color: #cbd5e1;
-}
-.hint {
-  color: #94a3b8;
-  margin: 0;
-}
-.textarea {
-  width: 100%;
-  min-height: 220px;
-  resize: vertical;
-  padding: 0.85rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  background: rgba(2, 6, 23, 0.6);
-  color: #e2e8f0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-.textarea:focus {
-  outline: none;
-  border-color: rgba(99, 102, 241, 0.6);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.22);
-}
-.error {
-  color: #f87171;
-  font-weight: 600;
-}
-.options {
-  display: grid;
-  gap: 0.35rem;
-}
-.opt {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #cbd5e1;
-}
-.picker {
-  display: grid;
-  gap: 0.5rem;
-}
-
-@media (max-width: 768px) {
-  .character-form {
-    padding: 1rem;
-    margin: 1rem;
-  }
-  .form-actions {
-    flex-direction: column;
-  }
-  .btn {
-    width: 100%;
-    justify-content: center;
-  }
-  .modal {
-    width: 94vw;
-  }
-}
-</style>

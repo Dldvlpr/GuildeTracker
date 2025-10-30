@@ -2,7 +2,11 @@
 
 namespace App\Controller;
 
+use App\Entity\GameGuild;
+use App\Entity\GuildMembership;
 use App\Entity\User;
+use App\Enum\GuildRole;
+use App\Repository\GameGuildRepository;
 use App\Service\BlizzardService;
 use App\Service\TokenEncryptionService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -25,6 +29,7 @@ final class BlizzardController extends AbstractController
         private readonly ParameterBagInterface $params,
         private readonly TokenEncryptionService $tokenEncryptionService,
         private readonly BlizzardService $blizzardService,
+        private readonly GameGuildRepository $gameGuildRepository,
     ) {}
 
     #[Route('/api/oauth/blizzard/connect', name: 'connect_blizzard_start', methods: ['GET'])]
@@ -243,6 +248,145 @@ final class BlizzardController extends AbstractController
             return $this->json([
                 'error' => 'Failed to fetch guild',
                 'message' => 'An error occurred while retrieving guild information'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[Route('/api/guilds/claim', name: 'blizzard_guild_claim', methods: ['POST'])]
+    public function claimGuild(Request $request): Response
+    {
+        $this->denyAccessUnlessGranted('ROLE_USER');
+
+        $user = $this->getUser();
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Unauthenticated'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        if (!$user->getBlizzardId()) {
+            return $this->json([
+                'error' => 'blizzard_not_linked',
+                'message' => 'Please link your Battle.net account first',
+                'link_url' => '/api/oauth/blizzard/connect'
+            ], Response::HTTP_FORBIDDEN);
+        }
+
+        try {
+            $payload = $request->toArray();
+        } catch (\Throwable) {
+            return $this->json(['error' => 'Invalid JSON payload'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $realm = $payload['realm'] ?? null;
+        $characterName = $payload['characterName'] ?? null;
+
+        if (!$realm || !$characterName) {
+            return $this->json([
+                'error' => 'Missing required fields',
+                'message' => 'Both realm and characterName are required'
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        $accessToken = $this->blizzardService->getValidAccessToken($user);
+
+        if (!$accessToken) {
+            return $this->json([
+                'error' => 'blizzard_token_expired',
+                'message' => 'Your Battle.net session has expired. Please reconnect.',
+                'reconnect_url' => '/api/oauth/blizzard/connect'
+            ], Response::HTTP_UNAUTHORIZED);
+        }
+
+        try {
+            // Get character profile to check guild membership
+            $characterProfile = $this->blizzardService->getCharacterProfile($accessToken, $realm, $characterName);
+
+            if (!isset($characterProfile['guild'])) {
+                return $this->json([
+                    'error' => 'no_guild',
+                    'message' => 'This character is not in a guild'
+                ], Response::HTTP_NOT_FOUND);
+            }
+
+            // Extract guild info from character profile
+            $guildInfo = $characterProfile['guild'];
+            $guildName = $guildInfo['name'] ?? null;
+            $guildFaction = $characterProfile['faction']['name'] ?? 'Unknown';
+            $guildId = $guildInfo['id'] ?? null;
+
+            // Verify the character is GM (rank 0)
+            $isGuildMaster = $this->blizzardService->isGuildMaster($accessToken, $realm, $characterName);
+
+            if (!$isGuildMaster) {
+                return $this->json([
+                    'error' => 'not_guild_master',
+                    'message' => 'You must be the Guild Master (rank 0) to claim this guild'
+                ], Response::HTTP_FORBIDDEN);
+            }
+
+            if (!$guildName || !$guildId) {
+                return $this->json([
+                    'error' => 'invalid_guild_data',
+                    'message' => 'Unable to retrieve guild information from Blizzard'
+                ], Response::HTTP_INTERNAL_SERVER_ERROR);
+            }
+
+            // Check if guild already claimed by someone else
+            $existingGuild = $this->gameGuildRepository->findOneBy([
+                'blizzardId' => (string) $guildId,
+                'realm' => $realm
+            ]);
+
+            if ($existingGuild) {
+                // Check if current user is already GM of this guild
+                foreach ($existingGuild->getGuildMemberships() as $membership) {
+                    if ($membership->getUser()->getId() === $user->getId() && $membership->getRole() === GuildRole::GM) {
+                        return $this->json([
+                            'error' => 'already_claimed_by_you',
+                            'message' => 'You have already claimed this guild',
+                            'guild_id' => $existingGuild->getUuidToString()
+                        ], Response::HTTP_CONFLICT);
+                    }
+                }
+
+                return $this->json([
+                    'error' => 'already_claimed',
+                    'message' => 'This guild has already been claimed by another user'
+                ], Response::HTTP_CONFLICT);
+            }
+
+            // Create new guild
+            $gameGuild = new GameGuild();
+            $gameGuild->setName($guildName);
+            $gameGuild->setFaction($guildFaction);
+            $gameGuild->setRealm($realm);
+            $gameGuild->setBlizzardId((string) $guildId);
+            $gameGuild->setIsPublic(false);
+            $gameGuild->setShowDkpPublic(false);
+
+            // Create GM membership
+            $membership = new GuildMembership($user, $gameGuild, GuildRole::GM);
+
+            $this->em->persist($gameGuild);
+            $this->em->persist($membership);
+            $this->em->flush();
+
+            return $this->json([
+                'success' => true,
+                'message' => 'Guild claimed successfully',
+                'guild' => [
+                    'id' => $gameGuild->getUuidToString(),
+                    'name' => $gameGuild->getName(),
+                    'faction' => $gameGuild->getFaction(),
+                    'realm' => $gameGuild->getRealm(),
+                    'blizzard_id' => $gameGuild->getBlizzardId()
+                ]
+            ], Response::HTTP_CREATED);
+
+        } catch (\Throwable $e) {
+            error_log("Failed to claim guild: {$e->getMessage()}");
+            return $this->json([
+                'error' => 'claim_failed',
+                'message' => 'An error occurred while claiming the guild'
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }

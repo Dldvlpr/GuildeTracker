@@ -47,6 +47,12 @@ class GameGuild
     #[ORM\Column(type: 'string', enumType: RecruitingStatus::class)]
     private ?RecruitingStatus $recruitingStatus = RecruitingStatus::CLOSED;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $realm = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $blizzardId = null;
+
     public function __construct()
     {
         $this->gameCharacters = new ArrayCollection();
@@ -190,5 +196,29 @@ class GameGuild
     public function isValid(): bool
     {
         return $this->hasCharacters();
+    }
+
+    public function getRealm(): ?string
+    {
+        return $this->realm;
+    }
+
+    public function setRealm(?string $realm): static
+    {
+        $this->realm = $realm;
+
+        return $this;
+    }
+
+    public function getBlizzardId(): ?string
+    {
+        return $this->blizzardId;
+    }
+
+    public function setBlizzardId(?string $blizzardId): static
+    {
+        $this->blizzardId = $blizzardId;
+
+        return $this;
     }
 }

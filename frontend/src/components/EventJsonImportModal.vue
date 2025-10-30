@@ -1,85 +1,79 @@
 <template>
-  <div
-    v-if="modelValue"
-    class="fixed inset-0 z-[1000] grid place-items-center bg-black/50 backdrop-blur-sm"
-    @click.self="close"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="import-title"
+  <BaseModal
+    :model-value="modelValue"
+    @update:model-value="(v) => emit('update:modelValue', v)"
+    title="Import players from event JSON"
+    size="lg"
   >
-    <div
-      class="w-[min(900px,94vw)] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/80 text-slate-100 shadow-2xl backdrop-blur"
-    >
-      <header class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
-        <h3 id="import-title" class="text-base font-semibold">Import players from event JSON</h3>
-        <button
-          class="inline-flex items-center justify-center rounded-lg px-2.5 py-1.5 text-sm text-slate-200 ring-1 ring-inset ring-white/10 hover:bg-white/5"
-          @click="close"
-          aria-label="Close"
-        >
-          ✖
-        </button>
-      </header>
+    <div class="space-y-4">
+      <p class="text-sm text-slate-400">
+        Paste your event JSON (must contain a <code class="px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300 text-xs">signUps</code> array). We will extract players and map them to characters.
+      </p>
 
-      <section class="grid gap-3 px-4 py-4">
-        <p class="m-0 text-sm text-slate-400">
-          Paste your event JSON (must contain a <code>signUps</code> array). We will extract players
-          and map them to characters.
-        </p>
+      <textarea
+        v-model="text"
+        class="w-full min-h-[280px] px-4 py-3 rounded-xl border border-white/10 bg-slate-950/50 text-slate-100 font-mono text-sm placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"
+        :placeholder="placeholder"
+        spellcheck="false"
+      />
 
-        <textarea
-          v-model="text"
-          class="min-h-[260px] w-full resize-y rounded-xl bg-slate-950/60 px-3 py-2 text-sm text-slate-100 ring-1 ring-inset ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 font-mono"
-          :placeholder="placeholder"
-          rows="14"
-          spellcheck="false"
-        />
+      <div v-if="error" class="rounded-xl bg-red-500/10 border border-red-500/20 p-4" role="alert">
+        <p class="text-sm text-red-300">{{ error }}</p>
+      </div>
 
-        <div v-if="error" class="text-sm font-semibold text-rose-400" role="alert">{{ error }}</div>
-
-        <details class="rounded-xl bg-white/5 px-3 py-2">
-          <summary class="cursor-pointer text-sm">Required shape</summary>
-          <pre class="m-0 mt-1 whitespace-pre-wrap text-xs text-slate-300">{
+      <details class="rounded-xl bg-white/5 border border-white/10 px-4 py-3 cursor-pointer">
+        <summary class="text-sm font-medium text-slate-300">View required JSON shape</summary>
+        <pre class="mt-3 text-xs text-slate-400 font-mono overflow-x-auto">{
   "date": "1-9-2025",
   "signUps": [
     { "name": "shaqx", "className": "Druid", "specName": "Feral", "roleName": "Melee" }
   ]
 }</pre>
-        </details>
+      </details>
 
-        <div class="grid gap-1">
-          <label class="inline-flex items-center gap-2 text-sm text-slate-300">
-            <input type="checkbox" v-model="includeNonPlayableClasses" />
-            Include non-playable classes (Bench, Absence, Tentative, Late)
-          </label>
-          <label class="inline-flex items-center gap-2 text-sm text-slate-300">
-            <input type="checkbox" v-model="preferSpecRole" />
-            If spec has a role, prefer it over roleName
-          </label>
-        </div>
-      </section>
+      <div class="space-y-2">
+        <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+          <input
+            type="checkbox"
+            v-model="includeNonPlayableClasses"
+            class="w-4 h-4 rounded border-white/10 bg-slate-950/50 text-indigo-600 focus:ring-2 focus:ring-indigo-500"
+          />
+          Include non-playable classes (Bench, Absence, Tentative, Late)
+        </label>
+        <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+          <input
+            type="checkbox"
+            v-model="preferSpecRole"
+            class="w-4 h-4 rounded border-white/10 bg-slate-950/50 text-indigo-600 focus:ring-2 focus:ring-indigo-500"
+          />
+          If spec has a role, prefer it over roleName
+        </label>
+      </div>
+    </div>
 
-      <footer class="flex items-center justify-end gap-2 border-t border-white/10 px-4 py-3">
+    <template #footer>
+      <div class="flex flex-col sm:flex-row gap-3 w-full">
         <button
-          class="inline-flex items-center gap-2 rounded-xl bg-white/0 px-3 py-2 text-sm font-semibold text-slate-200 ring-1 ring-inset ring-white/10 transition hover:bg-white/5 hover:text-white"
           @click="close"
+          class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-slate-300 ring-1 ring-inset ring-white/10 hover:bg-white/5 hover:text-white transition"
         >
           Cancel
         </button>
         <button
-          class="inline-flex items-center gap-2 rounded-xl bg-indigo-600/90 px-3 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-500 disabled:opacity-50"
           @click="confirm"
           :disabled="!text.trim()"
+          class="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-600 text-white shadow-lg shadow-indigo-600/50 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Import
         </button>
-      </footer>
-    </div>
-  </div>
+      </div>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import BaseModal from './ui/BaseModal.vue'
 
 type RoleName = 'Tanks' | 'Healers' | 'Melee' | 'Ranged'
 

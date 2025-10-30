@@ -49,33 +49,23 @@
     <Toaster :items="notifications" />
 
     <!-- Modal for adding character -->
-    <Teleport to="body">
-      <div
-        v-if="showCharacterForm"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-        @click.self="showCharacterForm = false"
-      >
-        <div class="relative max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-          <button
-            @click="showCharacterForm = false"
-            class="sticky top-0 left-full z-10 w-10 h-10 -mb-10 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition cursor-pointer shadow-lg"
-            aria-label="Close"
-          >
-            ✕
-          </button>
-          <CharacterForm
-            @submit="handleCharacterSubmit"
-            @bulkImport="handleBulkImport"
-          />
-        </div>
-      </div>
-    </Teleport>
+    <BaseModal
+      v-model="showCharacterForm"
+      title="Add a Character"
+      size="xl"
+    >
+      <CharacterForm
+        @submit="handleCharacterSubmit"
+        @bulkImport="handleBulkImport"
+      />
+    </BaseModal>
   </section>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import BaseModal from '@/components/ui/BaseModal.vue'
 import PlayersHeaderStats from '@/components/PlayersHeaderStats.vue'
 import PlayersFilters from '@/components/PlayersFilters.vue'
 import CharacterCard from '@/components/CharacterCard.vue'

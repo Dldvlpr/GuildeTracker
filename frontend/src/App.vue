@@ -23,6 +23,7 @@
         :open="sidebarOpen"
         @close="sidebarOpen = false"
         @create-guild="router.push({ path: '/guild/create'})"
+        @claim-guild="router.push({ path: '/guild/claim'})"
         @search-guild="router.push({ path: '/guild'})"
         @add-character="router.push('/add')"
       />

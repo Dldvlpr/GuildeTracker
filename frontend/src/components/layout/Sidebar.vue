@@ -33,18 +33,20 @@
       class="flex-1 overflow-y-auto py-4">
       <div class="px-4 pb-2 flex items-center justify-between">
         <h2 class="text-[11px] uppercase tracking-wide text-slate-400">Guilds</h2>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-1.5">
           <button
-            @click="$emit('create-guild')"
-            class="h-7 px-2 rounded-lg bg-white/5 ring-1 ring-inset ring-white/10 hover:bg-white/10 text-xs cursor-pointer"
+            @click="$emit('claim-guild')"
+            class="h-7 px-2 rounded-lg bg-indigo-600/20 ring-1 ring-inset ring-indigo-500/30 hover:bg-indigo-600/30 text-xs cursor-pointer transition"
+            title="Claim from Blizzard"
           >
-            ➕
+            🎮
           </button>
           <button
-            @click="$emit('search-guild')"
-            class="h-7 px-2 rounded-lg bg-white/5 ring-1 ring-inset ring-white/10 hover:bg-white/10 text-xs cursor-pointer"
+            @click="$emit('create-guild')"
+            class="h-7 px-2 rounded-lg bg-white/5 ring-1 ring-inset ring-white/10 hover:bg-white/10 text-xs cursor-pointer transition"
+            title="Create Manually"
           >
-            🔎
+            ➕
           </button>
         </div>
       </div>
@@ -169,7 +171,7 @@ import { redirectToDiscordAuth, redirectToBlizzardAuth, logoutUser } from '@/ser
 import { useUserStore } from '@/stores/userStore'
 import { getMyGuild } from '@/services/gameGuild.service.ts'
 
-defineEmits(['close', 'create-guild', 'search-guild', 'add-character'])
+defineEmits(['close', 'create-guild', 'claim-guild', 'search-guild', 'add-character'])
 const { open } = defineProps<{ open: boolean }>()
 const loading = ref(true)
 const router = useRouter()
