@@ -1,0 +1,7 @@
+framework:
+    session:
+        cookie_secure: true
+        cookie_httponly: true
+        cookie_samesite: lax
+        cookie_lifetime: 3600
+        gc_maxlifetime: 3600

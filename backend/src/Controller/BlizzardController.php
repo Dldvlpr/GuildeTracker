@@ -37,7 +37,16 @@ final class BlizzardController extends AbstractController
             throw $this->createAccessDeniedException('Too many requests');
         }
 
-        return $this->clientRegistry->getClient('blizzard')->redirect(['wow.profile']);
+        $verifier = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+        $challenge = rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=');
+        $request->getSession()->set('blizzard_pkce_verifier', $verifier);
+
+        return $this->clientRegistry->getClient('blizzard')->redirect([
+            'wow.profile'
+        ], [
+            'code_challenge' => $challenge,
+            'code_challenge_method' => 'S256',
+        ]);
     }
 
     #[Route('/api/oauth/blizzard/callback', name: 'connect_blizzard_check', methods: ['GET'])]
@@ -53,7 +62,10 @@ final class BlizzardController extends AbstractController
         $client = $this->clientRegistry->getClient('blizzard');
 
         try {
-            $accessToken = $client->getAccessToken();
+            $verifier = $request->getSession()->get('blizzard_pkce_verifier');
+            $request->getSession()->remove('blizzard_pkce_verifier');
+            $opts = $verifier ? ['code_verifier' => $verifier] : [];
+            $accessToken = $client->getAccessToken($opts);
             $token = $accessToken->getToken();
             $refreshToken = $accessToken->getRefreshToken();
             $expiresAt = $accessToken->getExpires();
@@ -235,4 +247,3 @@ final class BlizzardController extends AbstractController
         }
     }
 }
-

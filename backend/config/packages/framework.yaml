@@ -4,6 +4,7 @@ framework:
 
     # Secure session configuration
     session:
+        name: APP_SESSION
         handler_id: null
         cookie_secure: auto
         cookie_httponly: true

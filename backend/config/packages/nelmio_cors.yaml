@@ -1,7 +1,7 @@
 nelmio_cors:
     defaults:
         origin_regex: false
-        allow_origin: ['https://localhost:5173']  # Seulement localhost
+        allow_origin: ['%env(FRONT_ORIGIN)%']
         allow_credentials: true
         allow_headers: ['Content-Type', 'Authorization', 'X-Requested-With']
         allow_methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
@@ -9,11 +9,11 @@ nelmio_cors:
         max_age: 3600
     paths:
         '^/connect/':
-            allow_origin: ['https://localhost:5173']
+            allow_origin: ['%env(FRONT_ORIGIN)%']
             allow_credentials: true
         '^/api/':
-            allow_origin: ['https://localhost:5173']
+            allow_origin: ['%env(FRONT_ORIGIN)%']
             allow_credentials: true
         '^/debug/':
-            allow_origin: ['https://localhost:5173']
+            allow_origin: ['%env(FRONT_ORIGIN)%']
             allow_credentials: true

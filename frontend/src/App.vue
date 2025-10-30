@@ -47,6 +47,29 @@
           </div>
         </div>
         <div class="px-4 py-4 md:px-6 md:py-6 max-w-7xl mx-auto">
+          <div v-if="banner.visible" class="mb-3">
+            <div
+              :class="[
+                'rounded-xl px-4 py-3 ring-1 ring-inset',
+                banner.type === 'success'
+                  ? 'bg-emerald-500/10 text-emerald-200 ring-emerald-500/20'
+                  : 'bg-red-500/10 text-red-200 ring-red-500/20',
+              ]"
+              role="status"
+            >
+              <div class="flex items-start gap-3">
+                <span class="text-lg">{{ banner.type === 'success' ? '✅' : '⚠️' }}</span>
+                <div class="flex-1">
+                  <p class="text-sm">{{ banner.message }}</p>
+                </div>
+                <button
+                  class="text-slate-300/70 hover:text-white"
+                  @click="dismissBanner()"
+                  aria-label="Fermer l’alerte"
+                >✕</button>
+              </div>
+            </div>
+          </div>
           <RouterView />
         </div>
       </main>
@@ -78,6 +101,44 @@ const userStore = useUserStore()
 const sidebarOpen = ref(false)
 const currentYear = computed(() => new Date().getFullYear())
 
+type Banner = { visible: boolean; type: 'success' | 'error'; message: string }
+const banner = ref<Banner>({ visible: false, type: 'success', message: '' })
+
+function showBanner(type: 'success' | 'error', message: string) {
+  banner.value = { visible: true, type, message }
+}
+function dismissBanner() {
+  banner.value.visible = false
+}
+
+function checkOAuthParams() {
+  try {
+    const url = new URL(window.location.href)
+    const params = url.searchParams
+    const linked = params.get('linked')
+    const reason = params.get('reason')
+
+    if (linked === 'blizzard') {
+      showBanner('success', 'Votre compte Blizzard a été lié avec succès.')
+    }
+    if (reason) {
+      const map: Record<string, string> = {
+        bnet_token: 'Erreur de connexion à Battle.net. Veuillez réessayer.',
+        bnet_profile: 'Impossible de récupérer le profil Battle.net.',
+        auth_failed: "Échec d’authentification. Veuillez réessayer.",
+      }
+      const msg = map[reason] ?? 'Une erreur est survenue.'
+      showBanner('error', msg)
+    }
+
+    if (linked || reason) {
+      params.delete('linked')
+      params.delete('reason')
+      window.history.replaceState({}, '', url.pathname + (params.toString() ? '?' + params.toString() : '') + url.hash)
+    }
+  } catch {}
+}
+
 onMounted(async () => {
   userStore.setLoading(true)
   try {
@@ -87,5 +148,6 @@ onMounted(async () => {
   } catch {
     userStore.logout()
   }
+  checkOAuthParams()
 })
 </script>

@@ -19,7 +19,17 @@ final class DiscordController extends AbstractController
             throw $this->createAccessDeniedException('Too many requests');
         }
 
-        return $clientRegistry->getClient('discord')->redirect(['identify', 'email']);
+        $verifier = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+        $challenge = rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=');
+        $request->getSession()->set('discord_pkce_verifier', $verifier);
+
+        return $clientRegistry->getClient('discord')->redirect(
+            ['identify', 'email'],
+            [
+                'code_challenge' => $challenge,
+                'code_challenge_method' => 'S256',
+            ]
+        );
     }
 
     #[Route('/connect/discord/check', name: 'connect_discord_check', methods: ['GET'])]
@@ -38,4 +48,3 @@ final class DiscordController extends AbstractController
         throw new \LogicException('This method should never be reached!');
     }
 }
-

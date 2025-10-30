@@ -4,8 +4,10 @@ namespace App\Service;
 
 class TokenEncryptionService
 {
-    private const CIPHER_ALGO = 'aes-256-cbc';
-    private const IV_LENGTH = 16;
+    private const CIPHER_ALGO_GCM = 'aes-256-gcm';
+    private const NONCE_LENGTH = 12;
+    private const TAG_LENGTH = 16;
+    private const PREFIX_V2 = 'v2:';
 
     private readonly string $encryptionKey;
 
@@ -20,58 +22,67 @@ class TokenEncryptionService
 
     public function encrypt(string $plainText): string
     {
-        if (empty($plainText)) {
+        if ($plainText === '') {
             throw new \InvalidArgumentException('Cannot encrypt empty string');
         }
 
-        $iv = openssl_random_pseudo_bytes(self::IV_LENGTH);
-
-        $encrypted = openssl_encrypt(
+        $nonce = random_bytes(self::NONCE_LENGTH);
+        $tag = '';
+        $cipher = openssl_encrypt(
             $plainText,
-            self::CIPHER_ALGO,
+            self::CIPHER_ALGO_GCM,
             $this->encryptionKey,
             OPENSSL_RAW_DATA,
-            $iv
+            $nonce,
+            $tag,
+            '',
+            self::TAG_LENGTH
         );
 
-        if ($encrypted === false) {
+        if ($cipher === false || $tag === '') {
             throw new \RuntimeException('Encryption failed');
         }
 
-        return base64_encode($iv . $encrypted);
+        return self::PREFIX_V2 . base64_encode($nonce . $tag . $cipher);
     }
 
     public function decrypt(string $encryptedText): string
     {
-        if (empty($encryptedText)) {
+        if ($encryptedText === '') {
             throw new \InvalidArgumentException('Cannot decrypt empty string');
         }
 
-        $data = base64_decode($encryptedText, true);
+        if (!str_starts_with($encryptedText, self::PREFIX_V2)) {
+            throw new \RuntimeException('Unsupported ciphertext format');
+        }
 
+        $b64 = substr($encryptedText, strlen(self::PREFIX_V2));
+        $data = base64_decode($b64, true);
         if ($data === false) {
             throw new \RuntimeException('Invalid base64 encoding');
         }
 
-        $iv = substr($data, 0, self::IV_LENGTH);
-        $encrypted = substr($data, self::IV_LENGTH);
+        $nonce = substr($data, 0, self::NONCE_LENGTH);
+        $tag = substr($data, self::NONCE_LENGTH, self::TAG_LENGTH);
+        $cipher = substr($data, self::NONCE_LENGTH + self::TAG_LENGTH);
 
-        if (strlen($iv) !== self::IV_LENGTH) {
-            throw new \RuntimeException('Invalid IV length');
+        if (strlen($nonce) !== self::NONCE_LENGTH || strlen($tag) !== self::TAG_LENGTH || $cipher === '') {
+            throw new \RuntimeException('Invalid ciphertext format');
         }
 
-        $decrypted = openssl_decrypt(
-            $encrypted,
-            self::CIPHER_ALGO,
+        $plain = openssl_decrypt(
+            $cipher,
+            self::CIPHER_ALGO_GCM,
             $this->encryptionKey,
             OPENSSL_RAW_DATA,
-            $iv
+            $nonce,
+            $tag
         );
 
-        if ($decrypted === false) {
+        if ($plain === false) {
             throw new \RuntimeException('Decryption failed');
         }
 
-        return $decrypted;
+        return $plain;
     }
 }

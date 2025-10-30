@@ -22,7 +22,7 @@ security:
             entry_point: App\Security\DiscordAuthenticator
             logout:
                 path: api_logout
-                target: 'https://localhost:5173'
+                target: '%front.success_uri%'
                 invalidate_session: true
                 delete_cookies:
                     APP_SESSION: { path: '/' }
