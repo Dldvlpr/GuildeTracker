@@ -31,5 +31,16 @@ services:
         autowire: true
         autoconfigure: true
 
+    App\Service\TokenEncryptionService:
+        arguments:
+             $appSecret: '%env(APP_SECRET)%'
+
+    App\Service\BlizzardService:
+        arguments:
+            $blizzardRegion: '%env(BLIZZARD_REGION)%'
+            $blizzardLocale: '%env(BLIZZARD_LOCALE)%'
+            $blizzardClientId: '%env(OAUTH_BNET_CLIENT_ID)%'
+            $blizzardClientSecret: '%env(OAUTH_BNET_CLIENT_SECRET)%'
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

@@ -3,6 +3,8 @@
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Service\BlizzardService;
+use App\Service\TokenEncryptionService;
 use Doctrine\ORM\EntityManagerInterface;
 use KnpU\OAuth2ClientBundle\Client\ClientRegistry;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -21,6 +23,8 @@ final class BlizzardController extends AbstractController
         private readonly HttpClientInterface $http,
         private readonly EntityManagerInterface $em,
         private readonly ParameterBagInterface $params,
+        private readonly TokenEncryptionService $tokenEncryptionService,
+        private readonly BlizzardService $blizzardService,
     ) {}
 
     #[Route('/api/oauth/blizzard/connect', name: 'connect_blizzard_start', methods: ['GET'])]
@@ -50,7 +54,16 @@ final class BlizzardController extends AbstractController
 
         try {
             $accessToken = $client->getAccessToken();
+            $token = $accessToken->getToken();
+            $refreshToken = $accessToken->getRefreshToken();
+            $expiresAt = $accessToken->getExpires();
+
+            $encryptedToken = $this->tokenEncryptionService->encrypt($token);
+            $encryptedRefresh = $refreshToken ? $this->tokenEncryptionService->encrypt($refreshToken) : null;
+            $expiresDate = new \DateTimeImmutable('@' . $expiresAt);
+
         } catch (\Throwable $e) {
+            error_log("Blizzard token error: {$e->getMessage()}");
             $errorUrl = (string) $this->params->get('front.error_uri');
             $glue = str_contains($errorUrl, '?') ? '&' : '?';
             return new RedirectResponse($errorUrl . $glue . 'reason=bnet_token');
@@ -87,6 +100,10 @@ final class BlizzardController extends AbstractController
             }
 
             $user->setBlizzardId((string) $accountId);
+            $user->setBlizzardAccessToken($encryptedToken);
+            $user->setBlizzardRefreshToken($encryptedRefresh);
+            $user->setBlizzardTokenExpiresAt($expiresDate);
+
             $this->em->persist($user);
             $this->em->flush();
 
@@ -99,6 +116,122 @@ final class BlizzardController extends AbstractController
             $glue = str_contains($errorUrl, '?') ? '&' : '?';
 
             return new RedirectResponse($errorUrl . $glue . 'reason=bnet_profile');
+        }
+    }
+
+    #[Route('/api/blizzard/characters', name: 'blizzard_characters', methods: ['GET'])]
+    public function getBlizzardCharacters(): Response
+    {
+        $this->denyAccessUnlessGranted('ROLE_USER');
+
+        $user = $this->getUser();
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Unauthenticated'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        if (!$user->getBlizzardId()) {
+            return $this->json([
+                'error' => 'Blizzard account not linked',
+                'message' => 'Please link your Battle.net account first'
+            ], Response::HTTP_FORBIDDEN);
+        }
+
+        $accessToken = $this->blizzardService->getValidAccessToken($user);
+
+        if (!$accessToken) {
+            return $this->json([
+                'error' => 'blizzard_token_expired',
+                'message' => 'Your Battle.net session has expired. Please reconnect.',
+                'reconnect_url' => '/api/oauth/blizzard/connect'
+            ], Response::HTTP_UNAUTHORIZED);
+        }
+
+        try {
+            $characters = $this->blizzardService->getWowCharacters($accessToken);
+            return $this->json($characters);
+        } catch (\Throwable $e) {
+            error_log("Failed to fetch WoW characters: {$e->getMessage()}");
+            return $this->json([
+                'error' => 'Failed to fetch characters',
+                'message' => 'An error occurred while retrieving your characters'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[Route('/api/blizzard/characters/{realm}/{characterName}', name: 'blizzard_character_details', methods: ['GET'])]
+    public function getCharacterDetails(string $realm, string $characterName): Response
+    {
+        $this->denyAccessUnlessGranted('ROLE_USER');
+
+        $user = $this->getUser();
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Unauthenticated'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $accessToken = $this->blizzardService->getValidAccessToken($user);
+
+        if (!$accessToken) {
+            return $this->json([
+                'error' => 'blizzard_token_expired',
+                'message' => 'Your Battle.net session has expired. Please reconnect.',
+                'reconnect_url' => '/api/oauth/blizzard/connect'
+            ], Response::HTTP_UNAUTHORIZED);
+        }
+
+        try {
+            $profile = $this->blizzardService->getCharacterProfile($accessToken, $realm, $characterName);
+            return $this->json($profile);
+        } catch (\Throwable $e) {
+            error_log("Failed to fetch character profile: {$e->getMessage()}");
+            return $this->json([
+                'error' => 'Failed to fetch character',
+                'message' => 'An error occurred while retrieving character details'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[Route('/api/blizzard/characters/{realm}/{characterName}/guild', name: 'blizzard_character_guild', methods: ['GET'])]
+    public function getCharacterGuild(string $realm, string $characterName): Response
+    {
+        $this->denyAccessUnlessGranted('ROLE_USER');
+
+        $user = $this->getUser();
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Unauthenticated'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $accessToken = $this->blizzardService->getValidAccessToken($user);
+
+        if (!$accessToken) {
+            return $this->json([
+                'error' => 'blizzard_token_expired',
+                'message' => 'Your Battle.net session has expired. Please reconnect.',
+                'reconnect_url' => '/api/oauth/blizzard/connect'
+            ], Response::HTTP_UNAUTHORIZED);
+        }
+
+        try {
+            $guildData = $this->blizzardService->getCharacterGuild($accessToken, $realm, $characterName);
+
+            if (!$guildData) {
+                return $this->json([
+                    'error' => 'Character has no guild',
+                    'message' => 'This character is not in a guild'
+                ], Response::HTTP_NOT_FOUND);
+            }
+
+            $isGuildMaster = $this->blizzardService->isGuildMaster($accessToken, $realm, $characterName);
+
+            return $this->json([
+                'guild' => $guildData,
+                'isGuildMaster' => $isGuildMaster,
+            ]);
+        } catch (\Throwable $e) {
+            error_log("Failed to fetch character guild: {$e->getMessage()}");
+            return $this->json([
+                'error' => 'Failed to fetch guild',
+                'message' => 'An error occurred while retrieving guild information'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 }

@@ -53,6 +53,15 @@ class User implements UserInterface
     #[ORM\OneToMany(targetEntity: GuildMembership::class, mappedBy: 'user', cascade: ['persist', 'remove'], orphanRemoval: true)]
     private Collection $memberships;
 
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $blizzardAccessToken = null;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $blizzardRefreshToken = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $blizzardTokenExpiresAt = null;
+
     public function __construct()
     {
         $this->gameCharacters = new ArrayCollection();
@@ -200,6 +209,42 @@ class User implements UserInterface
         if ($this->memberships->removeElement($membership)) {
             // Relationship is non-nullable on owning side; rely on orphanRemoval to delete the membership
         }
+
+        return $this;
+    }
+
+    public function getBlizzardAccessToken(): ?string
+    {
+        return $this->blizzardAccessToken;
+    }
+
+    public function setBlizzardAccessToken(?string $blizzardAccessToken): static
+    {
+        $this->blizzardAccessToken = $blizzardAccessToken;
+
+        return $this;
+    }
+
+    public function getBlizzardRefreshToken(): ?string
+    {
+        return $this->blizzardRefreshToken;
+    }
+
+    public function setBlizzardRefreshToken(?string $blizzardRefreshToken): static
+    {
+        $this->blizzardRefreshToken = $blizzardRefreshToken;
+
+        return $this;
+    }
+
+    public function getBlizzardTokenExpiresAt(): ?\DateTimeImmutable
+    {
+        return $this->blizzardTokenExpiresAt;
+    }
+
+    public function setBlizzardTokenExpiresAt(?\DateTimeImmutable $blizzardTokenExpiresAt): static
+    {
+        $this->blizzardTokenExpiresAt = $blizzardTokenExpiresAt;
 
         return $this;
     }
