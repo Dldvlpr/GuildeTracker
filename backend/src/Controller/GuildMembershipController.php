@@ -61,6 +61,10 @@ class GuildMembershipController extends AbstractController
 
         $roleString = $data['role'];
 
+        if ($guildMember->getRole() === GuildRole::GM) {
+            return $this->json(['message' => "You cant modify GM role !"], 400);
+        }
+
         $role = GuildRole::tryFrom($roleString);
         if (!$role) {
             return $this->json(['message' => 'Invalid role. Accepted values: Member, Officer, GM'], 400);

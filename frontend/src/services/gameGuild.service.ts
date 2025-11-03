@@ -196,3 +196,30 @@ export async function createGuild(name: string, faction: 'HORDE' | 'ALLIANCE') {
     throw new Error(e?.message ?? 'Network error')
   }
 }
+
+export async function checkGuildExists(realm: string | null, name: string) {
+  const BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+  if (!BASE) throw new Error('VITE_API_BASE_URL is not set')
+  const url = new URL(`${BASE}/api/guilds/exists`)
+  url.searchParams.set('name', name)
+  if (realm) url.searchParams.set('realm', realm)
+  const res = await fetch(url.toString(), { credentials: 'include' })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json() as Promise<{ exists: boolean; id?: string; name?: string }>
+}
+
+export async function joinGuild(guildId: string, realm: string, characterName: string, wowType?: string) {
+  const BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+  if (!BASE) throw new Error('VITE_API_BASE_URL is not set')
+  const res = await fetch(`${BASE}/api/guilds/${encodeURIComponent(guildId)}/join`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ realm, characterName, wowType })
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data?.message || data?.error || `HTTP ${res.status}`)
+  }
+  return res.json().catch(() => ({}))
+}

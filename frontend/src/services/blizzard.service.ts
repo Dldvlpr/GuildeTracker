@@ -38,9 +38,13 @@ export async function getBlizzardCharacters(opts?: FetchOpts) {
   return await res.json()
 }
 
-export async function getBlizzardCharacterDetails(realm: string, characterName: string, opts?: FetchOpts) {
+export async function getBlizzardCharacterDetails(realm: string, characterName: string, wowType?: string, opts?: FetchOpts) {
   if (!BASE) throw new Error('VITE_API_BASE_URL is not set')
-  const res = await fetch(`${BASE}/api/blizzard/characters/${encodeURIComponent(realm)}/${encodeURIComponent(characterName)}`, {
+  const url = new URL(`${BASE}/api/blizzard/characters/${encodeURIComponent(realm)}/${encodeURIComponent(characterName)}`)
+  if (wowType) {
+    url.searchParams.set('wowType', wowType)
+  }
+  const res = await fetch(url.toString(), {
     method: 'GET',
     credentials: 'include',
     headers: { Accept: 'application/json' },
@@ -64,7 +68,7 @@ export async function getBlizzardCharacterGuild(realm: string, characterName: st
   return await res.json()
 }
 
-export async function claimGuild(realm: string, characterName: string, opts?: FetchOpts) {
+export async function claimGuild(realm: string, characterName: string, wowType?: string, opts?: FetchOpts) {
   if (!BASE) throw new Error('VITE_API_BASE_URL is not set')
   const res = await fetch(`${BASE}/api/guilds/claim`, {
     method: 'POST',
@@ -73,7 +77,7 @@ export async function claimGuild(realm: string, characterName: string, opts?: Fe
       'Accept': 'application/json',
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ realm, characterName }),
+    body: JSON.stringify({ realm, characterName, wowType }),
     signal: opts?.signal,
   })
   await handleBlizzardResponse(res)

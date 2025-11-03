@@ -70,7 +70,9 @@ final class GameGuildController extends AbstractController
         }
 
         try {
-            $membership = new GuildMembership($user, $gameGuild, GuildRole::GM);
+            // A user can create a guild but will be MEMBER by default.
+            // GM/Officer can later claim to elevate their role.
+            $membership = new GuildMembership($user, $gameGuild, GuildRole::MEMBER);
 
             $em->persist($gameGuild);
             $em->persist($membership);
@@ -80,6 +82,22 @@ final class GameGuildController extends AbstractController
         }
 
         return $this->json(['status' => 'ok', 'id' => $gameGuild->getUuidToString()], 201);
+    }
+
+    #[Route('/api/guilds/exists', name: 'api_guild_exists', methods: ['GET'])]
+    public function guildExists(Request $request): JsonResponse
+    {
+        $name = trim((string) $request->query->get('name', ''));
+        $realm = $request->query->get('realm');
+        if ($name === '') {
+            return $this->json(['error' => 'Missing "name"'], 400);
+        }
+        $realmStr = $realm !== null ? (string) $realm : null;
+        $existing = $this->gameGuildRepository->findOneByRealmAndNameInsensitive($realmStr, $name);
+        if (!$existing) {
+            return $this->json(['exists' => false]);
+        }
+        return $this->json(['exists' => true, 'id' => $existing->getUuidToString(), 'name' => $existing->getName()]);
     }
 
     #[Route('/api/guilds/{id}/characters', name: 'api_guild_characters_list', methods: ['GET'])]

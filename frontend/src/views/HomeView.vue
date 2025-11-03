@@ -3,13 +3,21 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/userStore'
 import { redirectToDiscordAuth, redirectToBlizzardAuth } from '@/services/auth'
-import { getMyGuild } from '@/services/gameGuild.service'
+import { getMyGuild, checkGuildExists, joinGuild } from '@/services/gameGuild.service'
+import { getBlizzardCharacters, getBlizzardCharacterDetails, claimGuild as claimGuildApi } from '@/services/blizzard.service'
+import BaseModal from '@/components/ui/BaseModal.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
 const guilds = ref<any[]>([])
 const loadingGuilds = ref(false)
 const shouldAutoRedirect = ref(false)
+const joinOpen = ref(false)
+const joinLoading = ref(false)
+const joinError = ref('')
+const myCharacters = ref<Array<{ name: string; level?: number; realm: string; wowType?: string }>>([])
+const selectedIndex = ref<number | null>(null)
+const selectedGuildCheck = ref<{ exists: boolean; id?: string; name?: string } | null>(null)
 
 const isAuthenticated = computed(() => userStore.isAuthenticated)
 const isUserLoading = computed(() => userStore.isLoading)
@@ -76,6 +84,80 @@ function handleCreateGuild() {
 
 function handleSelectGuild(guildId: string) {
   router.push({ name: 'guildDetails', params: { id: guildId } })
+}
+
+async function openJoinModal() {
+  joinOpen.value = true
+  joinError.value = ''
+  myCharacters.value = []
+  selectedIndex.value = null
+  selectedGuildCheck.value = null
+  try {
+    const res = await getBlizzardCharacters()
+    const chars = Array.isArray(res.characters) ? res.characters : []
+    myCharacters.value = chars
+      .map((c: any) => ({
+        name: c.name,
+        level: c.level,
+        realm: c.realm?.name || c.realm?.slug || '',
+        wowType: c.wow_type || 'Retail'
+      }))
+      .filter(c => c.name && c.realm)
+  } catch (e: any) {
+    joinError.value = e?.message || 'Failed to load characters'
+  }
+}
+
+async function checkAndPrepare(i: number) {
+  selectedIndex.value = i
+  selectedGuildCheck.value = null
+  joinError.value = ''
+  try {
+    const c = myCharacters.value[i]
+    if (!c) return
+    const details = await getBlizzardCharacterDetails(c.realm, c.name, c.wowType)
+    const g = details?.guild
+    if (!g?.name) {
+      joinError.value = 'This character is not in a guild.'
+      return
+    }
+    const exists = await checkGuildExists(c.realm, g.name)
+    selectedGuildCheck.value = exists
+  } catch (e: any) {
+    joinError.value = e?.message || 'Failed to resolve character guild'
+  }
+}
+
+async function proceedJoinOrImport() {
+  if (selectedIndex.value == null) return
+  joinLoading.value = true
+  joinError.value = ''
+  try {
+    const c = myCharacters.value[selectedIndex.value]
+    if (!c) return
+    const details = await getBlizzardCharacterDetails(c.realm, c.name, c.wowType)
+    const g = details?.guild
+    if (!g?.name) {
+      joinError.value = 'This character is not in a guild.'
+      return
+    }
+    if (selectedGuildCheck.value?.exists && selectedGuildCheck.value.id) {
+      await joinGuild(selectedGuildCheck.value.id, c.realm, c.name, c.wowType)
+      joinOpen.value = false
+      await fetchGuilds()
+      return
+    }
+    const res = await claimGuildApi(c.realm, c.name, c.wowType)
+    joinOpen.value = false
+    await fetchGuilds()
+    if (res?.guild?.id) {
+      router.push({ name: 'guildDetails', params: { id: res.guild.id } })
+    }
+  } catch (e: any) {
+    joinError.value = e?.message || 'Operation failed'
+  } finally {
+    joinLoading.value = false
+  }
 }
 </script>
 
@@ -154,7 +236,7 @@ function handleSelectGuild(guildId: string) {
         <div v-else class="space-y-8">
           <div class="text-center space-y-4">
             <h1 class="text-3xl md:text-4xl font-bold">
-              Welcome to GuildTracker, <span class="text-indigo-400">{{ user?.username }}</span>!
+              Welcome to <span class="bg-gradient-to-r from-orange-400 via-yellow-300 to-orange-500 bg-clip-text text-transparent">GuildForge</span>, <span class="text-indigo-400">{{ user?.username }}</span>!
             </h1>
             <p v-if="loadingGuilds" class="text-slate-400">Loading your guilds…</p>
             <p v-else-if="hasGuilds" class="text-slate-400">Select a guild or create a new one</p>
@@ -169,19 +251,44 @@ function handleSelectGuild(guildId: string) {
             <div class="rounded-xl border border-white/10 bg-white/5 p-6 backdrop-blur">
               <div class="flex items-center justify-between mb-4">
                 <h2 class="text-xl font-semibold">Your Guilds</h2>
-                <div class="flex gap-2">
+                <div class="relative group">
                   <button
-                    @click="handleClaimGuild"
                     class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-sm font-medium transition"
                   >
-                    Claim from Blizzard
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Guild
                   </button>
-                  <button
-                    @click="handleCreateGuild"
-                    class="inline-flex items-center gap-2 px-4 py-2 rounded-lg ring-1 ring-inset ring-white/10 hover:bg-white/5 text-sm font-medium transition"
-                  >
-                    Create Manually
-                  </button>
+                  <div class="absolute right-0 top-12 w-72 rounded-xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-2xl ring-1 ring-black/10 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+                    <div class="p-2 space-y-1">
+                      <button
+                        @click="handleClaimGuild"
+                        class="w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left hover:bg-white/5 transition group/item"
+                      >
+                        <svg class="w-5 h-5 text-indigo-400 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M11.93 1.93c-.51-.51-1.35-.51-1.86 0L2.21 9.79c-.59.59-.59 1.54 0 2.12l7.86 7.86c.51.51 1.35.51 1.86 0l7.86-7.86c.59-.59.59-1.54 0-2.12l-7.86-7.86zm.07 3.44l4.68 4.68-4.68 4.68-4.68-4.68L12 5.37z"/>
+                        </svg>
+                        <div class="flex-1">
+                          <div class="text-white group-hover/item:text-indigo-300 transition">Import from Blizzard</div>
+                          <div class="text-xs text-slate-400">Create new guild (any rank)</div>
+                        </div>
+                      </button>
+                      <button
+                        v-if="hasBlizzardLinked"
+                        @click="openJoinModal"
+                        class="w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left hover:bg-white/5 transition group/item"
+                      >
+                        <svg class="w-5 h-5 text-emerald-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <div class="flex-1">
+                          <div class="text-white group-hover/item:text-emerald-300 transition">Find & Join Guild</div>
+                          <div class="text-xs text-slate-400">Join existing guild (any rank)</div>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div class="space-y-3">
@@ -254,27 +361,60 @@ function handleSelectGuild(guildId: string) {
                   2
                 </div>
                 <div class="flex-1">
-                  <h3 class="text-lg font-semibold mb-2">Claim Your Guild</h3>
+                  <h3 class="text-lg font-semibold mb-2">Add Your Guild</h3>
                   <p class="text-sm text-slate-400 mb-4">
-                    Select your Guild Master character to automatically import your guild roster, ranks, and structure.
+                    Choose how you want to add your guild to GuildForge:
                   </p>
-                  <div class="flex flex-col sm:flex-row gap-3">
-                    <button
-                      @click="handleClaimGuild"
-                      :disabled="!hasBlizzardLinked"
-                      class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Claim from Blizzard
-                    </button>
-                    <button
-                      @click="handleCreateGuild"
-                      class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg ring-1 ring-inset ring-white/10 hover:bg-white/5 font-medium transition"
-                    >
-                      Or Create Manually
-                    </button>
+                  <div class="space-y-3">
+                    <!-- Option 1: Import/Create new guild -->
+                    <div class="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3">
+                      <div class="flex items-start gap-3 mb-2">
+                        <svg class="w-5 h-5 text-indigo-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                        </svg>
+                        <div class="flex-1">
+                          <h4 class="text-sm font-semibold text-white">Import New Guild from Blizzard</h4>
+                          <p class="text-xs text-slate-400 mt-1">
+                            Use this if your guild is NOT yet in GuildForge. Works for any rank, and your role will match your in-game rank.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        @click="handleClaimGuild"
+                        :disabled="!hasBlizzardLinked"
+                        class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 font-medium text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M11.93 1.93c-.51-.51-1.35-.51-1.86 0L2.21 9.79c-.59.59-.59 1.54 0 2.12l7.86 7.86c.51.51 1.35.51 1.86 0l7.86-7.86c.59-.59.59-1.54 0-2.12l-7.86-7.86zm.07 3.44l4.68 4.68-4.68 4.68-4.68-4.68L12 5.37z"/>
+                        </svg>
+                        Import from Blizzard
+                      </button>
+                    </div>
+
+                    <!-- Option 2: Join existing guild -->
+                    <div class="rounded-lg border border-white/10 bg-white/5 p-3">
+                      <div class="flex items-start gap-3 mb-2">
+                        <svg class="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                        </svg>
+                        <div class="flex-1">
+                          <h4 class="text-sm font-semibold text-white">Join Existing Guild</h4>
+                          <p class="text-xs text-slate-400 mt-1">
+                            Use this if your guild is ALREADY in GuildForge. Works for any rank.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        v-if="hasBlizzardLinked"
+                        @click="openJoinModal"
+                        class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg ring-1 ring-inset ring-white/10 hover:bg-white/5 font-medium text-sm transition"
+                      >
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        Find & Join Guild
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -327,5 +467,73 @@ function handleSelectGuild(guildId: string) {
         </div>
       </div>
     </section>
+
+  <BaseModal v-model="joinOpen" title="Join a Guild via Your Character" size="lg">
+    <div class="space-y-4">
+      <p class="text-sm text-slate-400">
+        Select one of your characters. We will detect the guild and either join it if it exists or import it if not.
+      </p>
+
+      <div v-if="joinError" class="rounded-xl bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-300">{{ joinError }}</div>
+
+      <div class="max-h-96 overflow-y-auto pr-2 custom-scrollbar">
+        <div class="space-y-2">
+          <div
+            v-for="(c, i) in myCharacters"
+            :key="`${c.realm}-${c.name}-${i}`"
+            class="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2"
+          >
+            <div class="text-sm text-slate-200">{{ c.name }} <span class="text-slate-400">— {{ c.realm }}</span></div>
+            <div class="flex items-center gap-2">
+              <button
+                class="text-xs rounded-lg px-2 py-1 ring-1 ring-inset ring-white/10 hover:bg-white/5"
+                @click="checkAndPrepare(i)"
+              >Check</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="selectedIndex !== null && selectedGuildCheck" class="rounded-lg border border-white/10 bg-white/5 p-3 text-sm">
+        <div v-if="selectedGuildCheck.exists" class="text-slate-300">Guild found in database: <span class="font-semibold text-white">{{ selectedGuildCheck.name }}</span></div>
+        <div v-else class="text-slate-300">Guild not found in database. You can import it.</div>
+      </div>
+    </div>
+
+    <template #footer>
+      <div class="flex items-center justify-end gap-2">
+        <button class="px-4 py-2 text-sm rounded-lg ring-1 ring-inset ring-white/10 hover:ring-white/20" @click="joinOpen = false" :disabled="joinLoading">Close</button>
+        <button class="px-4 py-2 text-sm rounded-lg bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-500/30 hover:bg-indigo-500/30 disabled:opacity-60" :disabled="selectedIndex === null || joinLoading" @click="proceedJoinOrImport">
+          <span v-if="!joinLoading">Proceed</span>
+          <span v-else>Working…</span>
+        </button>
+      </div>
+    </template>
+  </BaseModal>
   </main>
 </template>
+
+<style scoped>
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.3);
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.5);
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.3) transparent;
+}
+</style>

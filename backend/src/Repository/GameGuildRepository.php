@@ -75,4 +75,26 @@ class GameGuildRepository extends ServiceEntityRepository
         return $result instanceof GuildRole ? $result : GuildRole::from((string) $result);
     }
 
+    public function findOneByRealmAndNameInsensitive(?string $realm, string $name): ?GameGuild
+    {
+        $qb = $this->createQueryBuilder('g')
+            ->andWhere('LOWER(g.name) = LOWER(:name)')
+            ->setParameter('name', $name);
+        if ($realm !== null) {
+            $qb->andWhere('LOWER(g.realm) = LOWER(:realm)')->setParameter('realm', $realm);
+        }
+        return $qb->setMaxResults(1)->getQuery()->getOneOrNullResult();
+    }
+
+    public function findOneByRealmAndBlizzardId(?string $realm, string $blizzardId): ?GameGuild
+    {
+        return $this->createQueryBuilder('g')
+            ->andWhere('g.blizzardId = :bid')
+            ->andWhere('g.realm = :realm')
+            ->setParameter('bid', $blizzardId)
+            ->setParameter('realm', $realm)
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
 }

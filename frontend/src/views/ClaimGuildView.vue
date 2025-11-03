@@ -70,7 +70,8 @@ async function handleClaimGuild() {
   try {
     const result = await claimGuildApi(
       selectedCharacter.value.realm.slug,
-      selectedCharacter.value.name
+      selectedCharacter.value.name,
+      selectedCharacter.value.wow_type
     )
 
     step.value = 'success'
@@ -165,14 +166,19 @@ function goBack() {
           <div class="flex gap-3">
             <div class="text-xl">ℹ️</div>
             <div class="text-sm text-slate-300">
-              Select the character you use as <span class="font-semibold text-indigo-400">Guild Master</span> (rank 0).
-              Only Guild Masters can claim guilds.
+              <strong>How it works:</strong> Select any character from your guild. Your role will be automatically assigned based on your rank in-game:
+              <ul class="mt-2 ml-4 space-y-1 text-xs">
+                <li><span class="font-semibold text-indigo-400">Rank 0</span> → Guild Master role</li>
+                <li><span class="font-semibold text-indigo-400">Rank 1</span> → Officer role</li>
+                <li><span class="font-semibold text-indigo-400">Rank 2+</span> → Member role</li>
+              </ul>
+              <p class="mt-2">The full guild roster will be imported from Blizzard, regardless of your rank.</p>
             </div>
           </div>
         </div>
 
         <div class="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6">
-          <h2 class="text-xl font-semibold mb-4">Select Your Guild Master Character</h2>
+          <h2 class="text-xl font-semibold mb-4">Select a Character from Your Guild</h2>
           <p class="text-sm text-slate-400 mb-6">Found {{ characters.length }} characters on your account</p>
 
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
@@ -237,7 +243,7 @@ function goBack() {
           </svg>
         </div>
         <h2 class="text-2xl font-bold mb-3">Claiming Your Guild...</h2>
-        <p class="text-slate-400">Verifying Guild Master status and importing data from Blizzard</p>
+        <p class="text-slate-400">Verifying your rank and importing data from Blizzard</p>
       </div>
 
       <div v-else-if="step === 'success'" class="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 backdrop-blur p-12 text-center">

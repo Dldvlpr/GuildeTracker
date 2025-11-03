@@ -13,6 +13,16 @@
           <p class="text-slate-300">
             Manage roles and permissions for {{ guild?.name }} members
           </p>
+          <!-- Dev Mode: Simulate GM -->
+          <div v-if="isDev" class="mt-2 p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+            <div class="flex items-center gap-2 text-xs text-yellow-300">
+              <span>🔧 DEV MODE:</span>
+              <label class="flex items-center gap-1">
+                <input type="checkbox" v-model="debugSimulateGM" class="rounded">
+                <span>Simulate you are the first GM in the list</span>
+              </label>
+            </div>
+          </div>
         </div>
         <div class="flex items-center gap-3">
           <button
@@ -81,13 +91,17 @@
             <tbody class="divide-y divide-white/10">
               <tr v-for="member in paginatedMembers" :key="member.id" class="hover:bg-white/5">
                 <td class="px-6 py-4 text-white" style="width: 40%">
-                  {{ member.name }}
+                  <div class="flex items-center gap-2">
+                    <span>{{ member.name }}</span>
+                    <span v-if="isCurrentUserGM(member)" class="text-xs px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300">You</span>
+                  </div>
                 </td>
                 <td class="px-6 py-4 text-center" style="width: 30%">
                   <select
                     :value="member.role"
-                    @change="updateRole(member.id, $event.target.value)"
-                    class="bg-white/5 border border-white/10 rounded-lg px-3 py-1 text-white text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    @change="updateRole(member.id, ($event.target as HTMLSelectElement).value)"
+                    :disabled="isCurrentUserGM(member)"
+                    class="bg-white/5 border border-white/10 rounded-lg px-3 py-1 text-white text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <option value="GM">GM</option>
                     <option value="Officer">Officer</option>
@@ -97,7 +111,8 @@
                 <td class="px-6 py-4 text-center" style="width: 30%">
                   <button
                     @click="deleteMember(member.id)"
-                    class="text-red-400 hover:text-red-300 text-sm px-3 py-1 rounded-lg hover:bg-red-500/10 transition"
+                    :disabled="isCurrentUserGM(member)"
+                    class="text-red-400 hover:text-red-300 text-sm px-3 py-1 rounded-lg hover:bg-red-500/10 transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-red-400"
                   >
                     Delete
                   </button>
@@ -208,13 +223,21 @@ import {
 } from '@/services/guildMembership.service.ts'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import { createGuildInvitation } from '@/services/guildInvitation.service'
+import { useUserStore } from '@/stores/userStore'
 
 defineOptions({ name: 'GuildRolesView' })
+
+const userStore = useUserStore()
 
 const route = useRoute()
 const guildId = ref<string | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
+
+// Dev mode: simulate being GM
+const isDev = import.meta.env.DEV
+const debugSimulateGM = ref(false)
+const debugGMMember = ref<GuildMembership | null>(null)
 const guild = ref<GameGuild | null>(null)
 const guildMemberships = ref<GuildMembership[]>([])
 const searchTerm = ref<string>('')
@@ -251,6 +274,24 @@ const paginatedMembers = computed(() => {
   return filteredMembers.value.slice(startIndex, endIndex)
 })
 
+// Check if a member is the current user and is GM
+const isCurrentUserGM = (member: GuildMembership): boolean => {
+  // Dev mode: simulate being the first GM
+  if (isDev && debugSimulateGM.value && debugGMMember.value) {
+    return member.id === debugGMMember.value.id
+  }
+
+  if (!userStore.user) return false
+
+  // Check by userId if available
+  if (member.userId && userStore.user.id) {
+    return member.userId === userStore.user.id && member.role === 'GM'
+  }
+
+  // Fallback: check by username (Discord username)
+  return member.name === userStore.user.username && member.role === 'GM'
+}
+
 const toggleSort = (column: 'name' | 'role') => {
   if (sortColumn.value === column) {
     sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
@@ -264,6 +305,17 @@ const updateRole = async (memberId: string, newRole: string) => {
   try {
     const member = guildMemberships.value.find((m) => m.id === memberId)
     const oldRole = member?.role
+
+    // Prevent GM from changing their own role
+    if (member && isCurrentUserGM(member)) {
+      error.value = 'You cannot modify your own role as GM'
+      setTimeout(() => {
+        if (error.value === 'You cannot modify your own role as GM') {
+          error.value = null
+        }
+      }, 3000)
+      return
+    }
 
     if (member) {
       member.role = newRole
@@ -298,6 +350,18 @@ const deleteMember = async (memberId: string) => {
 
     if (!member) {
       error.value = 'An unexpected error occurred'
+      return
+    }
+
+    // Prevent GM from deleting themselves
+    if (isCurrentUserGM(member)) {
+      error.value = 'You cannot delete yourself as GM'
+      setTimeout(() => {
+        if (error.value === 'You cannot delete yourself as GM') {
+          error.value = null
+        }
+      }, 3000)
+      return
     }
 
     await deleteMemberRole(memberId);
@@ -316,6 +380,11 @@ const load = async () => {
   const res = await getAllMembership(guildId.value)
   if (res.ok) {
     guildMemberships.value = res.data
+
+    // Dev mode: find first GM for simulation
+    if (isDev) {
+      debugGMMember.value = res.data.find(m => m.role === 'GM') || null
+    }
   } else {
     error.value = res.error
   }
