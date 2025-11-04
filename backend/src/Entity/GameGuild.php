@@ -26,15 +26,9 @@ class GameGuild
     #[ORM\Column(length: 255)]
     private ?string $faction = null;
 
-    /**
-     * @var Collection<int, GameCharacter>
-     */
     #[ORM\OneToMany(targetEntity: GameCharacter::class, mappedBy: 'guild')]
     private Collection $gameCharacters;
 
-    /**
-     * @var Collection<int, GuildMembership>
-     */
     #[ORM\OneToMany(targetEntity: GuildMembership::class, mappedBy: 'guild')]
     private Collection $guildMemberships;
 
@@ -47,11 +41,9 @@ class GameGuild
     #[ORM\Column(type: 'string', enumType: RecruitingStatus::class)]
     private ?RecruitingStatus $recruitingStatus = RecruitingStatus::CLOSED;
 
-    #[ORM\Column(length: 255, nullable: true)]
-    private ?string $realm = null;
-
-    #[ORM\Column(length: 255, nullable: true)]
-    private ?string $blizzardId = null;
+    #[ORM\ManyToOne(targetEntity: BlizzardGameRealm::class, inversedBy: 'guilds')]
+    #[ORM\JoinColumn(nullable: true)]
+    private ?BlizzardGameRealm $blizzardRealm = null;
 
     public function __construct()
     {
@@ -198,26 +190,14 @@ class GameGuild
         return $this->hasCharacters();
     }
 
-    public function getRealm(): ?string
+    public function getBlizzardRealm(): ?BlizzardGameRealm
     {
-        return $this->realm;
+        return $this->blizzardRealm;
     }
 
-    public function setRealm(?string $realm): static
+    public function setBlizzardRealm(?BlizzardGameRealm $blizzardRealm): static
     {
-        $this->realm = $realm;
-
-        return $this;
-    }
-
-    public function getBlizzardId(): ?string
-    {
-        return $this->blizzardId;
-    }
-
-    public function setBlizzardId(?string $blizzardId): static
-    {
-        $this->blizzardId = $blizzardId;
+        $this->blizzardRealm = $blizzardRealm;
 
         return $this;
     }

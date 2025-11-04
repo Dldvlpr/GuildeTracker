@@ -2,10 +2,13 @@
 
 namespace App\Controller;
 
+use App\Entity\BlizzardGameRealm;
 use App\Entity\GameGuild;
 use App\Entity\GuildMembership;
 use App\Entity\User;
 use App\Enum\GuildRole;
+use App\Enum\WowGameType;
+use App\Repository\BlizzardGameRealmRepository;
 use App\Repository\GameGuildRepository;
 use App\Service\BlizzardService;
 use App\Service\TokenEncryptionService;
@@ -30,6 +33,7 @@ final class BlizzardController extends AbstractController
         private readonly TokenEncryptionService $tokenEncryptionService,
         private readonly BlizzardService $blizzardService,
         private readonly GameGuildRepository $gameGuildRepository,
+        private readonly BlizzardGameRealmRepository $blizzardGameRealmRepository,
     ) {}
 
     #[Route('/api/oauth/blizzard/connect', name: 'connect_blizzard_start', methods: ['GET'])]
@@ -300,7 +304,6 @@ final class BlizzardController extends AbstractController
         }
 
         try {
-            // Get character profile to check guild membership
             $characterProfile = $this->blizzardService->getCharacterProfile($accessToken, $realm, $characterName, $wowType);
 
             if (!isset($characterProfile['guild'])) {
@@ -310,7 +313,6 @@ final class BlizzardController extends AbstractController
                 ], Response::HTTP_NOT_FOUND);
             }
 
-            // Extract guild info from character profile
             $guildInfo = $characterProfile['guild'];
             $guildName = $guildInfo['name'] ?? null;
             $guildFaction = $characterProfile['faction']['name'] ?? 'Unknown';
@@ -323,12 +325,9 @@ final class BlizzardController extends AbstractController
                 ], Response::HTTP_INTERNAL_SERVER_ERROR);
             }
 
-            // Determine rank and role (allow GM or Officer)
             error_log("Claiming guild - Realm: {$realm}, Character: {$characterName}, WowType: {$wowType}, Guild: {$guildName}");
             $rank = $this->blizzardService->getGuildRank($accessToken, $realm, $characterName, $wowType);
 
-            // For Classic WoW, the guild roster API is not available,
-            // so we'll assign MEMBER role by default
             $isClassic = str_contains($wowType, 'Classic');
 
             if ($rank === null && !$isClassic) {
@@ -340,8 +339,6 @@ final class BlizzardController extends AbstractController
             }
 
             if ($rank === null && $isClassic) {
-                // For Classic, we can't verify rank via API, so default to MEMBER
-                // Guild masters can be promoted manually later
                 error_log("Classic guild detected - assigning MEMBER role by default for {$characterName}");
                 $role = GuildRole::MEMBER;
             } else {
@@ -349,14 +346,37 @@ final class BlizzardController extends AbstractController
                 $role = $rank === 0 ? GuildRole::GM : ($rank === 1 ? GuildRole::OFFICER : GuildRole::MEMBER);
             }
 
-            // Check if guild already exists (possibly created by a member)
+            $blizzardRealm = $this->findOrCreateBlizzardRealm($realm, $wowType);
+
+            if (!$blizzardRealm) {
+                return $this->json([
+                    'error' => 'realm_not_found',
+                    'message' => sprintf(
+                        'Realm "%s" not found for %s. Please contact support or try syncing realms.',
+                        $realm,
+                        $wowType
+                    )
+                ], Response::HTTP_NOT_FOUND);
+            }
+
             $existingGuild = $this->gameGuildRepository->findOneBy([
-                'blizzardId' => (string) $guildId,
-                'realm' => $realm
+                'name' => $guildName,
+                'blizzardRealm' => $blizzardRealm,
             ]);
 
+            if (!$existingGuild) {
+                $existingGuild = $this->gameGuildRepository->findOneBy([
+                    'blizzardId' => (string) $guildId,
+                    'realm' => $realm
+                ]);
+
+                if ($existingGuild) {
+                    $existingGuild->setBlizzardRealm($blizzardRealm);
+                    $this->em->persist($existingGuild);
+                }
+            }
+
             if ($existingGuild) {
-                // Ensure membership for current user with proper role
                 $hasMembership = false;
                 foreach ($existingGuild->getGuildMemberships() as $m) {
                     if ($m->getUser()->getId() === $user->getId()) {
@@ -374,57 +394,39 @@ final class BlizzardController extends AbstractController
 
                 $this->em->flush();
 
-                // Import roster placeholders
                 try { $this->blizzardService->importRosterIntoGuild($accessToken, $realm, $guildName, $existingGuild, $wowType); } catch (\Throwable) {}
 
                 return $this->json([
                     'success' => true,
                     'message' => 'Guild claimed successfully',
-                    'guild' => [
-                        'id' => $existingGuild->getUuidToString(),
-                        'name' => $existingGuild->getName(),
-                        'faction' => $existingGuild->getFaction(),
-                        'realm' => $existingGuild->getRealm(),
-                        'blizzard_id' => $existingGuild->getBlizzardId()
-                    ]
+                    'guild' => $this->formatGuildResponse($existingGuild)
                 ], Response::HTTP_OK);
             }
 
-            // Create new guild
             $gameGuild = new GameGuild();
             $gameGuild->setName($guildName);
             $gameGuild->setFaction($guildFaction);
-            $gameGuild->setRealm($realm);
-            $gameGuild->setBlizzardId((string) $guildId);
+            $gameGuild->setBlizzardRealm($blizzardRealm);
             $gameGuild->setIsPublic(false);
             $gameGuild->setShowDkpPublic(false);
 
-            // Create membership for GM/Officer
             $membership = new GuildMembership($user, $gameGuild, $role);
 
             $this->em->persist($gameGuild);
             $this->em->persist($membership);
             $this->em->flush();
 
-            // Import roster placeholders
             try { $this->blizzardService->importRosterIntoGuild($accessToken, $realm, $guildName, $gameGuild, $wowType); } catch (\Throwable) {}
 
             return $this->json([
                 'success' => true,
                 'message' => 'Guild claimed successfully',
-                'guild' => [
-                    'id' => $gameGuild->getUuidToString(),
-                    'name' => $gameGuild->getName(),
-                    'faction' => $gameGuild->getFaction(),
-                    'realm' => $gameGuild->getRealm(),
-                    'blizzard_id' => $gameGuild->getBlizzardId()
-                ]
+                'guild' => $this->formatGuildResponse($gameGuild)
             ], Response::HTTP_CREATED);
 
         } catch (\Throwable $e) {
             error_log("Failed to claim guild: {$e->getMessage()}");
 
-            // Check if it's a 404 from Blizzard API
             if (str_contains($e->getMessage(), 'Not Found') || str_contains($e->getMessage(), '404')) {
                 return $this->json([
                     'error' => 'character_not_found',
@@ -493,9 +495,11 @@ final class BlizzardController extends AbstractController
         }
 
         try {
-            error_log("joinGuild: realm={$realm}, char={$characterName}, wowType={$wowType}, targetGuildId={$guild->getBlizzardId()}");
+            $blizzardRealmId = $guild->getBlizzardRealm()?->getId() ?? 'unknown';
+            $guildBlizzardId = $guild->getBlizzardId() ?? 'unknown';
 
-            // Get character profile to verify guild membership
+            error_log("joinGuild: realm={$realm}, char={$characterName}, wowType={$wowType}, targetGuildId={$guildBlizzardId}, blizzardRealmId={$blizzardRealmId}");
+
             $characterProfile = $this->blizzardService->getCharacterProfile($accessToken, $realm, $characterName, $wowType);
 
             if (!isset($characterProfile['guild'])) {
@@ -506,20 +510,18 @@ final class BlizzardController extends AbstractController
                 ], Response::HTTP_BAD_REQUEST);
             }
 
-            $charGuildId = (string)($characterProfile['guild']['id'] ?? '');
             $charGuildName = $characterProfile['guild']['name'] ?? '';
 
-            error_log("joinGuild: Character's guild: id={$charGuildId}, name={$charGuildName}");
+            error_log("joinGuild: Character's guild name={$charGuildName}");
 
-            if ($guild->getBlizzardId() !== $charGuildId || strcasecmp($guild->getName() ?? '', $charGuildName) !== 0) {
-                error_log("joinGuild: Guild mismatch - expected {$guild->getBlizzardId()}/{$guild->getName()}, got {$charGuildId}/{$charGuildName}");
+            if (strcasecmp($guild->getName() ?? '', $charGuildName) !== 0) {
+                error_log("joinGuild: Guild name mismatch - expected {$guild->getName()}, got {$charGuildName}");
                 return $this->json([
                     'error' => 'guild_mismatch',
                     'message' => 'This character does not belong to the target guild.'
                 ], Response::HTTP_FORBIDDEN);
             }
 
-            // If already a member, nothing to do
             foreach ($guild->getGuildMemberships() as $m) {
                 if ($m->getUser()->getId() === $user->getId()) {
                     error_log("joinGuild: User already a member");
@@ -539,5 +541,57 @@ final class BlizzardController extends AbstractController
                 'message' => 'An error occurred while joining the guild: ' . $e->getMessage()
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
+    }
+
+    /**
+     * Find or create BlizzardGameRealm based on realm slug and WoW type
+     */
+    private function findOrCreateBlizzardRealm(string $realmSlug, string $wowType): ?BlizzardGameRealm
+    {
+        $region = (string) $this->params->get('blizzard.region');
+
+        $slug = strtolower(str_replace(' ', '-', $realmSlug));
+
+        $gameType = WowGameType::fromString($wowType);
+
+        $realm = $this->blizzardGameRealmRepository->findOneBy([
+            'slug' => $slug,
+            'gameType' => $gameType,
+            'region' => $region,
+        ]);
+
+        if ($realm) {
+            return $realm;
+        }
+
+        error_log(sprintf(
+            'BlizzardGameRealm not found for slug=%s, gameType=%s, region=%s. Run app:sync-blizzard-realms',
+            $slug,
+            $gameType->value,
+            $region
+        ));
+
+        return null;
+    }
+
+    private function formatGuildResponse(GameGuild $guild): array
+    {
+        $realm = $guild->getBlizzardRealm();
+
+        return [
+            'id' => $guild->getUuidToString(),
+            'name' => $guild->getName(),
+            'faction' => $guild->getFaction(),
+            'realm' => $realm ? [
+                'id' => $realm->getId(),
+                'name' => $realm->getName(),
+                'slug' => $realm->getSlug(),
+                'game_type' => $realm->getGameType()->value,
+                'game_type_label' => $realm->getGameType()->getLabel(),
+                'region' => $realm->getRegion(),
+            ] : null,
+            'realm_name' => $realm?->getName(),
+            'game_type' => $realm?->getGameType()->getLabel(),
+        ];
     }
 }

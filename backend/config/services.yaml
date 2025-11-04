@@ -42,5 +42,10 @@ services:
             $blizzardClientId: '%env(OAUTH_BNET_CLIENT_ID)%'
             $blizzardClientSecret: '%env(OAUTH_BNET_CLIENT_SECRET)%'
 
+    App\Command\GetBlizzardRealmCommand:
+        arguments:
+            $blizzardClientId: '%env(OAUTH_BNET_CLIENT_ID)%'
+            $blizzardClientSecret: '%env(OAUTH_BNET_CLIENT_SECRET)%'
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
