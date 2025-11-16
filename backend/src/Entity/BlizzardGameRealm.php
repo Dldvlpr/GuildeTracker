@@ -173,9 +173,7 @@ class BlizzardGameRealm
         return $this;
     }
 
-    /**
-     * @return Collection<int, GameGuild>
-     */
+    
     public function getGuilds(): Collection
     {
         return $this->guilds;
@@ -211,25 +209,19 @@ class BlizzardGameRealm
         return $this;
     }
 
-    /**
-     * Helper: Get the profile namespace for API calls
-     */
+    
     public function getProfileNamespace(): string
     {
         return $this->gameType->getProfileNamespace($this->region);
     }
 
-    /**
-     * Helper: Get the dynamic namespace for API calls
-     */
+    
     public function getDynamicNamespace(): string
     {
         return $this->gameType->getDynamicNamespace($this->region);
     }
 
-    /**
-     * Helper: Get the static namespace for API calls
-     */
+    
     public function getStaticNamespace(): string
     {
         return $this->gameType->getStaticNamespace($this->region);

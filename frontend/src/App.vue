@@ -4,6 +4,7 @@
   >
     <Topbar />
 
+    <AppToaster :items="toasts" />
     <main class="flex-1 overflow-auto">
       <div class="pointer-events-none -z-10 h-0">
         <div class="relative" aria-hidden="true">
@@ -57,16 +58,22 @@
 
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
-import { RouterView } from 'vue-router'
+import { RouterView, useRouter } from 'vue-router'
 import Topbar from '@/components/layout/Topbar.vue'
 import { useUserStore } from '@/stores/userStore'
+import { invalidateBlizzardCharactersCache } from '@/services/blizzard.service'
 import { checkAuthStatus } from '@/services/auth'
+import AppToaster from '@/components/Toaster.vue'
 
 const userStore = useUserStore()
+const router = useRouter()
 const currentYear = computed(() => new Date().getFullYear())
 
 type Banner = { visible: boolean; type: 'success' | 'error'; message: string }
 const banner = ref<Banner>({ visible: false, type: 'success', message: '' })
+type ToastType = 'success' | 'error' | 'warning' | 'info'
+type Toast = { id: string; message: string; type: ToastType }
+const toasts = ref<Toast[]>([])
 
 function showBanner(type: 'success' | 'error', message: string) {
   banner.value = { visible: true, type, message }
@@ -84,6 +91,8 @@ function checkOAuthParams() {
 
     if (linked === 'blizzard') {
       showBanner('success', 'Votre compte Blizzard a été lié avec succès.')
+      try { localStorage.setItem('justLinkedBlizzard', '1') } catch {}
+      try { invalidateBlizzardCharactersCache() } catch {}
     }
     if (reason) {
       const map: Record<string, string> = {
@@ -113,5 +122,31 @@ onMounted(async () => {
     userStore.logout()
   }
   checkOAuthParams()
+
+  if (userStore.isAuthenticated) {
+    try {
+      const redirect = localStorage.getItem('postLoginRedirect')
+      if (redirect) {
+        localStorage.removeItem('postLoginRedirect')
+        if (location.pathname + location.search !== redirect) {
+          router.replace(redirect)
+        }
+      }
+    } catch {}
+  }
+
+  window.addEventListener('app:toast', (e: Event) => {
+    const ev = e as CustomEvent<{ type?: ToastType; message: string; timeout?: number }>
+    const t: Toast = {
+      id: Math.random().toString(36).slice(2),
+      message: ev.detail?.message || '',
+      type: ev.detail?.type || 'info',
+    }
+    toasts.value.push(t)
+    const ttl = ev.detail?.timeout ?? 3000
+    window.setTimeout(() => {
+      toasts.value = toasts.value.filter(x => x.id !== t.id)
+    }, ttl)
+  })
 })
 </script>

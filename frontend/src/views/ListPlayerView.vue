@@ -5,9 +5,15 @@
       <div class="flex items-center gap-2">
         <button
           @click="showCharacterForm = true"
-          class="text-sm rounded-lg px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition"
+          class="text-sm rounded-lg px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition cursor-pointer"
         >
           + Add a character
+        </button>
+        <button
+          @click="handleSync"
+          :disabled="syncing"
+          class="text-sm rounded-lg px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-800 disabled:cursor-not-allowed text-white font-medium transition cursor-pointer">
+          {{ syncing ? 'Syncing...' : 'Sync' }}
         </button>
         <RouterLink
           :to="`/guild/${route.params.id}`"
@@ -58,6 +64,13 @@
         @bulkImport="handleBulkImport"
       />
     </BaseModal>
+
+    <CharacterEditModal
+      :character="editingCharacter"
+      :show="showEditModal"
+      @close="closeEditModal"
+      @save="handleCharacterUpdate"
+    />
   </section>
 </template>
 
@@ -69,8 +82,9 @@ import PlayersHeaderStats from '@/components/PlayersHeaderStats.vue'
 import PlayersFilters from '@/components/PlayersFilters.vue'
 import CharacterCard from '@/components/CharacterCard.vue'
 import CharacterForm from '@/components/CharacterForm.vue'
+import CharacterEditModal from '@/components/CharacterEditModal.vue'
 import Toaster from '@/components/Toaster.vue'
-import { getCharactersByGuildId, createCharacter, deleteCharacter as deleteCharacterService } from '@/services/character.service'
+import { getCharactersByGuildId, createCharacter, deleteCharacter as deleteCharacterService, syncGuildRoster, updateCharacter } from '@/services/character.service'
 import { getRoleByClassAndSpec } from '@/data/gameData'
 import { Role } from '@/interfaces/game.interface'
 import type { Character, FormSubmitEvent } from '@/interfaces/game.interface'
@@ -86,7 +100,10 @@ const route = useRoute()
 const characters = ref<Character[]>([])
 const notifications = ref<Notification[]>([])
 const loading = ref(false)
+const syncing = ref(false)
 const showCharacterForm = ref(false)
+const showEditModal = ref(false)
+const editingCharacter = ref<Character | null>(null)
 
 const filters = ref<{ class: string; role: string }>({ class: '', role: '' })
 
@@ -148,8 +165,41 @@ const pushToast = (message: string, type: ToastType = 'info') => {
   }, 3000)
 }
 
-const editCharacter = () => {
-  pushToast('Edit feature to be implemented.', 'info')
+const editCharacter = (character: Character) => {
+  editingCharacter.value = character
+  showEditModal.value = true
+}
+
+const closeEditModal = () => {
+  showEditModal.value = false
+  editingCharacter.value = null
+}
+
+const handleCharacterUpdate = async (updates: { role?: string; spec?: string }) => {
+  const guildId = route.params.id as string
+  const character = editingCharacter.value
+
+  if (!character || !guildId) {
+    pushToast('Invalid character or guild', 'error')
+    return
+  }
+
+  loading.value = true
+  try {
+    const result = await updateCharacter(guildId, character.id, updates)
+
+    if (result.ok) {
+      pushToast('Character updated successfully', 'success')
+      closeEditModal()
+      await getAllCharactersByGuild()
+    } else {
+      pushToast(result.error, 'error')
+    }
+  } catch (error: any) {
+    pushToast(error?.message ?? 'Failed to update character', 'error')
+  } finally {
+    loading.value = false
+  }
 }
 
 const deleteCharacter = async (id: string) => {
@@ -258,6 +308,37 @@ const handleBulkImport = async (charactersToImport: Omit<Character, 'id' | 'crea
 
   showCharacterForm.value = false
   await getAllCharactersByGuild()
+}
+
+const handleSync = async () => {
+  const guildId = route.params.id as string
+  if (!guildId) {
+    pushToast('Guild ID not found', 'error')
+    return
+  }
+
+  syncing.value = true
+  try {
+    const result = await syncGuildRoster(guildId)
+
+    if (result.ok) {
+      pushToast(
+        `Sync completed! ${result.created} added, ${result.updated} updated`,
+        'success'
+      )
+      await getAllCharactersByGuild()
+    } else {
+      if (result.error.includes('blizzard_token_expired')) {
+        pushToast('Your Battle.net session expired. Please reconnect.', 'error')
+      } else {
+        pushToast(result.error, 'error')
+      }
+    }
+  } catch (error: any) {
+    pushToast(error?.message ?? 'Failed to sync roster', 'error')
+  } finally {
+    syncing.value = false
+  }
 }
 
 onMounted(() => {

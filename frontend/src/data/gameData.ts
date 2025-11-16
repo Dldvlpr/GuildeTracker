@@ -89,9 +89,7 @@ export const GAME_CLASSES = [
 ] as const satisfies readonly GameClass[];
 
 export function getClassByName(name: string): GameClass | undefined {
-  return GAME_CLASSES.find((gameClass): gameClass is GameClass =>
-    gameClass.name === name
-  );
+  return GAME_CLASSES.find((gameClass) => gameClass.name === name) as GameClass | undefined;
 }
 
 export function getSpecsByClass(className: string): readonly GameSpec[] {
@@ -116,9 +114,9 @@ export function getRoleByClassAndSpec(
 }
 
 export function getClassesByRole(role: Role): readonly GameClass[] {
-  return GAME_CLASSES.filter((gameClass): gameClass is GameClass =>
+  return GAME_CLASSES.filter((gameClass) =>
     gameClass.specs.some((spec): boolean => spec.role === role)
-  );
+  ) as readonly GameClass[];
 }
 
 export function isValidClassName(className: string): boolean {

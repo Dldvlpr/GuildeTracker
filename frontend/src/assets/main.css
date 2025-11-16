@@ -2,11 +2,11 @@
 
 @layer base {
   :root {
-    --color-primary:     226 232 240; /* slate-200 */
-    --color-secondary:   148 163 184; /* slate-400 */
-    --color-accent:       99 102 241; /* indigo-500 */
-    --color-background:   15  23  42; /* slate-900 */
-    --color-text:        226 232 240; /* slate-200 */
+    --color-primary:     226 232 240; 
+    --color-secondary:   148 163 184; 
+    --color-accent:       99 102 241; 
+    --color-background:   15  23  42; 
+    --color-text:        226 232 240; 
   }
 }
 

@@ -29,7 +29,7 @@ class CharacterVoter extends Voter
             return false;
         }
 
-        /** @var GameGuild $guild */
+        
         $membership = $this->getUserMembership($guild, $user);
 
         if ($membership === null) {

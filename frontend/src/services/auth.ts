@@ -28,7 +28,7 @@ export async function checkAuthStatus(): Promise<UserResult> {
     } else {
       return { isAuthenticated: false, user: null };
     }
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   } catch (error) {
     return { isAuthenticated: false, user: null };
   }
@@ -42,7 +42,7 @@ export async function logoutUser() {
     })
 
     return { success: true, isStillAuthenticated: false };
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   } catch (error) {
     return { success: false, isStillAuthenticated: true };
   }

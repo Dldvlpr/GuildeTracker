@@ -45,6 +45,12 @@ class GameGuild
     #[ORM\JoinColumn(nullable: true)]
     private ?BlizzardGameRealm $blizzardRealm = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $blizzardId = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $realm = null;
+
     public function __construct()
     {
         $this->gameCharacters = new ArrayCollection();
@@ -85,9 +91,7 @@ class GameGuild
         return $this;
     }
 
-    /**
-     * @return Collection<int, GameCharacter>
-     */
+    
     public function getGameCharacters(): Collection
     {
         return $this->gameCharacters;
@@ -114,9 +118,7 @@ class GameGuild
         return $this;
     }
 
-    /**
-     * @return Collection<int, GuildMembership>
-     */
+    
     public function getGuildMemberships(): Collection
     {
         return $this->guildMemberships;
@@ -136,8 +138,8 @@ class GameGuild
     {
         if ($this->guildMemberships->removeElement($guildMembership)) {
             if ($guildMembership->getGuild() === $this) {
-                // Relationship is non-nullable on owning side; rely on orphanRemoval if enabled
-                // Do not set to null to avoid violating non-nullable constraint
+
+
             }
         }
 
@@ -198,6 +200,30 @@ class GameGuild
     public function setBlizzardRealm(?BlizzardGameRealm $blizzardRealm): static
     {
         $this->blizzardRealm = $blizzardRealm;
+
+        return $this;
+    }
+
+    public function getBlizzardId(): ?string
+    {
+        return $this->blizzardId;
+    }
+
+    public function setBlizzardId(?string $blizzardId): static
+    {
+        $this->blizzardId = $blizzardId;
+
+        return $this;
+    }
+
+    public function getRealm(): ?string
+    {
+        return $this->realm;
+    }
+
+    public function setRealm(?string $realm): static
+    {
+        $this->realm = $realm;
 
         return $this;
     }

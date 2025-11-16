@@ -16,6 +16,7 @@ readonly class BlizzardService
         private string $blizzardLocale,
         private string $blizzardClientId,
         private string $blizzardClientSecret,
+        private WowClassMapper $classMapper,
     ) {}
 
     public function getWowCharacters(string $accessToken): array
@@ -115,7 +116,6 @@ readonly class BlizzardService
     {
         $base = sprintf('https://%s.api.blizzard.com', $this->blizzardRegion);
 
-        // Determine namespace based on WoW type
         $namespace = match (true) {
             str_contains($wowType, 'Classic Anniversary') => sprintf('profile-classic1x-%s', $this->blizzardRegion),
             str_contains($wowType, 'Classic Era') => sprintf('profile-classic-%s', $this->blizzardRegion),
@@ -141,6 +141,90 @@ readonly class BlizzardService
         return $response->toArray();
     }
 
+    
+    public function getCharacterSpecialization(string $accessToken, string $realm, string $characterName, string $wowType = 'Retail'): ?array
+    {
+        try {
+            $base = sprintf('https://%s.api.blizzard.com', $this->blizzardRegion);
+
+            $namespace = match (true) {
+                str_contains($wowType, 'Classic Anniversary') => sprintf('profile-classic1x-%s', $this->blizzardRegion),
+                str_contains($wowType, 'Classic Era') => sprintf('profile-classic-%s', $this->blizzardRegion),
+                str_contains($wowType, 'Season of Discovery') => sprintf('profile-classic1x-%s', $this->blizzardRegion),
+                str_contains($wowType, 'Hardcore') => sprintf('profile-classic1x-%s', $this->blizzardRegion),
+                str_contains($wowType, 'Classic') => sprintf('profile-classic1x-%s', $this->blizzardRegion),
+                default => sprintf('profile-%s', $this->blizzardRegion), // Retail by default
+            };
+
+            $realmSlug = strtolower(str_replace(' ', '-', $realm));
+            $charNameLower = strtolower($characterName);
+
+            $url = sprintf('%s/profile/wow/character/%s/%s/specializations?namespace=%s&locale=%s',
+                $base, $realmSlug, $charNameLower, $namespace, $this->blizzardLocale
+            );
+
+            $response = $this->httpClient->request('GET', $url, [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $accessToken,
+                ],
+            ]);
+
+            $data = $response->toArray();
+
+            $activeSpec = null;
+
+            if (isset($data['active_specialization']['name'])) {
+                $activeSpec = $data['active_specialization']['name'];
+            }
+
+            elseif (isset($data['specialization_groups'])) {
+                foreach ($data['specialization_groups'] as $group) {
+                    if (isset($group['is_active']) && $group['is_active'] && isset($group['specializations'])) {
+
+                        $maxPoints = 0;
+                        $mainSpec = null;
+
+                        foreach ($group['specializations'] as $spec) {
+                            $points = $spec['spent_points'] ?? 0;
+                            if ($points > $maxPoints) {
+                                $maxPoints = $points;
+                                $mainSpec = $spec['specialization_name'] ?? null;
+                            }
+                        }
+
+                        if ($mainSpec) {
+                            $activeSpec = $mainSpec;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            elseif (isset($data['specializations'])) {
+                foreach ($data['specializations'] as $spec) {
+                    if (isset($spec['specialization']['name'])) {
+                        $activeSpec = $spec['specialization']['name'];
+                        break;
+                    }
+                }
+            }
+
+            if (!$activeSpec) {
+                return null;
+            }
+
+            $role = $this->classMapper->getRoleFromSpec($activeSpec);
+
+            return [
+                'spec' => $activeSpec,
+                'role' => $role,
+            ];
+        } catch (\Throwable $e) {
+
+            return null;
+        }
+    }
+
     public function getCharacterGuild(string $accessToken, string $realm, string $characterName, string $wowType = 'Retail'): ?array
     {
         $profile = $this->getCharacterProfile($accessToken, $realm, $characterName, $wowType);
@@ -158,8 +242,7 @@ readonly class BlizzardService
         $realmSlug = strtolower(str_replace(' ', '-', $realm));
         $guildNameLower = strtolower($guildName);
 
-        // For Classic, use profile namespace instead of dynamic
-        // The roster endpoint structure is different
+
         $isClassic = str_contains($wowType, 'Classic');
 
         if ($isClassic) {
@@ -171,12 +254,11 @@ readonly class BlizzardService
                 default => sprintf('profile-classic1x-%s', $this->blizzardRegion),
             };
 
-            // Classic uses profile/wow/guild endpoint
             $url = sprintf('%s/data/wow/guild/%s/%s/roster?namespace=%s&locale=%s',
                 $base, $realmSlug, $guildNameLower, $namespace, $this->blizzardLocale
             );
         } else {
-            // Retail uses dynamic namespace
+
             $namespace = sprintf('dynamic-%s', $this->blizzardRegion);
             $url = sprintf('%s/data/wow/guild/%s/%s/roster?namespace=%s&locale=%s',
                 $base, $realmSlug, $guildNameLower, $namespace, $this->blizzardLocale
@@ -192,10 +274,7 @@ readonly class BlizzardService
         return $response->toArray();
     }
 
-    /**
-     * Returns the rank (0 = GM, 1..n officers/members) for a character in the guild roster.
-     * Returns null if not found.
-     */
+    
     public function getGuildRank(string $accessToken, string $realm, string $characterName, string $wowType = 'Retail'): ?int
     {
         $logFile = '/Users/dldvlpr/Dev/GuildeTracker/backend/var/debug.log';
@@ -239,7 +318,6 @@ readonly class BlizzardService
             }
             file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] ERROR: Character {$characterName} not found in guild roster (searched for: {$target})\n", FILE_APPEND);
 
-            // Log first 5 member names for debugging
             $memberNames = array_slice(array_map(fn($m) => strtolower($m['character']['name'] ?? 'unknown'), $guild['members']), 0, 5);
             file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] First 5 members: " . implode(', ', $memberNames) . "\n", FILE_APPEND);
 
@@ -250,11 +328,106 @@ readonly class BlizzardService
         return null;
     }
 
-    /**
-     * Import minimal roster information as GameCharacter placeholders.
-     * This does not link users; it creates character rows for visibility.
-     */
-    public function importRosterIntoGuild(string $accessToken, string $realm, string $guildName, \App\Entity\GameGuild $gameGuild, string $wowType = 'Retail'): int
+    
+    public function syncGuildRoster(string $accessToken, string $realm, string $guildName, \App\Entity\GameGuild $gameGuild, string $wowType = 'Retail', bool $fetchSpecs = true, bool $preserveManualRoles = true): array
+    {
+        $logFile = '/Users/dldvlpr/Dev/GuildeTracker/backend/var/debug.log';
+
+        try {
+            $data = $this->getGuildDetails($accessToken, $realm, $guildName, $wowType);
+            file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] syncRoster: got guild data with " . count($data['members'] ?? []) . " members\n", FILE_APPEND);
+        } catch (\Throwable $e) {
+            file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] syncRoster: failed to get guild data: " . $e->getMessage() . "\n", FILE_APPEND);
+            return ['created' => 0, 'updated' => 0, 'removed' => 0];
+        }
+
+        if (!isset($data['members']) || !is_array($data['members'])) {
+            return ['created' => 0, 'updated' => 0, 'removed' => 0];
+        }
+
+        $existingCharacters = [];
+        foreach ($gameGuild->getGameCharacters() as $ch) {
+            $existingCharacters[strtolower($ch->getName() ?? '')] = $ch;
+        }
+
+        $currentRosterNames = [];
+        $created = 0;
+        $updated = 0;
+
+        foreach ($data['members'] as $member) {
+            $name = $member['character']['name'] ?? null;
+            if (!$name) { continue; }
+
+            $key = strtolower($name);
+            $currentRosterNames[] = $key;
+
+            $classId = $member['character']['playable_class']['id']
+                ?? $member['character']['character_class']['id']
+                ?? $member['character']['class']['id']
+                ?? null;
+
+            $className = $classId ? $this->classMapper->getClassName($classId) : 'Unknown';
+
+            $raceId = $member['character']['playable_race']['id']
+                ?? $member['character']['race']['id']
+                ?? null;
+
+            $raceName = $raceId ? $this->classMapper->getRaceName($raceId) : 'Unknown';
+
+            $spec = 'Unknown';
+            $role = 'Unknown';
+
+            if ($fetchSpecs) {
+                $specData = $this->getCharacterSpecialization($accessToken, $realm, $name, $wowType);
+                if ($specData) {
+                    $spec = $specData['spec'];
+                    $role = $specData['role'];
+                }
+            }
+
+            if (isset($existingCharacters[$key])) {
+                $character = $existingCharacters[$key];
+
+                $character->setClass($className);
+                $character->setClassSpec($spec);
+
+                if (!$preserveManualRoles || $character->getRole() === 'Unknown') {
+                    $character->setRole($role);
+                }
+
+                $this->em->persist($character);
+                $updated++;
+            } else {
+
+                $character = new \App\Entity\GameCharacter();
+                $character->setName($name);
+                $character->setClass($className);
+                $character->setClassSpec($spec);
+                $character->setRole($role);
+                $character->setGuild($gameGuild);
+
+                $this->em->persist($character);
+                $created++;
+            }
+        }
+
+        $removed = 0;
+
+
+
+        $this->em->flush();
+
+        file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] syncRoster: created {$created}, updated {$updated}\n", FILE_APPEND);
+
+        return [
+            'created' => $created,
+            'updated' => $updated,
+            'removed' => $removed,
+        ];
+    }
+
+    
+    public function importRosterIntoGuild(string $accessToken, string $realm, string $guildName, \App\Entity\GameGuild $gameGuild, string $wowType = 'Retail', bool $fetchSpecs = true): int
     {
         $logFile = '/Users/dldvlpr/Dev/GuildeTracker/backend/var/debug.log';
 
@@ -283,21 +456,40 @@ readonly class BlizzardService
             $key = strtolower($name);
             if (isset($existing[$key])) { continue; }
 
-            // Try multiple paths for class name
-            $className = $member['character']['playable_class']['name']
-                ?? $member['character']['character_class']['name']
-                ?? $member['character']['class']['name']
-                ?? 'Unknown';
+            $classId = $member['character']['playable_class']['id']
+                ?? $member['character']['character_class']['id']
+                ?? $member['character']['class']['id']
+                ?? null;
+
+            $className = $classId ? $this->classMapper->getClassName($classId) : 'Unknown';
+
+            $raceId = $member['character']['playable_race']['id']
+                ?? $member['character']['race']['id']
+                ?? null;
+
+            $raceName = $raceId ? $this->classMapper->getRaceName($raceId) : 'Unknown';
+
+            $spec = 'Unknown';
+            $role = 'Unknown';
+
+            if ($fetchSpecs) {
+                $specData = $this->getCharacterSpecialization($accessToken, $realm, $name, $wowType);
+                if ($specData) {
+                    $spec = $specData['spec'];
+                    $role = $specData['role'];
+                }
+            }
 
             if ($created < 3) {
                 file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] importRoster: member structure: " . json_encode($member['character']) . "\n", FILE_APPEND);
+                file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] importRoster: mapped class ID {$classId} to '{$className}', race ID {$raceId} to '{$raceName}', spec: '{$spec}', role: '{$role}'\n", FILE_APPEND);
             }
 
             $gc = new \App\Entity\GameCharacter();
             $gc->setName($name);
-            $gc->setClass($className ?: 'Unknown');
-            $gc->setClassSpec('Unknown');
-            $gc->setRole('Unknown');
+            $gc->setClass($className);
+            $gc->setClassSpec($spec);
+            $gc->setRole($role);
             $gc->setGuild($gameGuild);
 
             $this->em->persist($gc);

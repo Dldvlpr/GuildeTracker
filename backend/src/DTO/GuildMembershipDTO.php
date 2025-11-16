@@ -22,10 +22,7 @@ readonly class GuildMembershipDTO
         );
     }
 
-    /**
-     * @param iterable $guildMembership
-     * @return self[]
-     */
+    
     public static function fromEntities(iterable $guildMembership): array
     {
         $out = [];

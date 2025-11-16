@@ -1,0 +1,169 @@
+<template>
+  <BaseModal
+    :modelValue="show"
+    @update:modelValue="(val) => !val && $emit('close')"
+    :title="`Edit ${character?.name}`"
+    size="md"
+    @close="$emit('close')"
+  >
+    <form @submit.prevent="handleSubmit" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-200 mb-2">
+          Role
+        </label>
+        <select
+          v-model="formData.role"
+          class="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-white placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition"
+        >
+          <option value="Tank">🛡️ Tank</option>
+          <option value="Healer">💚 Healer</option>
+          <option value="DPS">⚔️ DPS</option>
+          <option value="Unknown">❓ Unknown (Auto-detect)</option>
+        </select>
+        <p class="mt-1 text-xs text-slate-400">
+          Set to "Unknown" to let sync auto-detect the role
+        </p>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-slate-200 mb-2">
+          Specialization
+        </label>
+        <select
+          v-model="formData.spec"
+          class="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-white placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition"
+          :disabled="!availableSpecs.length"
+        >
+          <option value="">Select a spec...</option>
+          <option value="Unknown">Unknown (Auto-detect)</option>
+          <option
+            v-for="spec in availableSpecs"
+            :key="spec.value"
+            :value="spec.value"
+          >
+            {{ spec.label }}
+          </option>
+        </select>
+        <p class="mt-1 text-xs text-slate-400">
+          Available specs for {{ character?.class || 'this class' }}
+        </p>
+      </div>
+
+      <div v-if="error" class="rounded-lg bg-rose-500/10 border border-rose-500/20 px-4 py-3 text-sm text-rose-200">
+        {{ error }}
+      </div>
+    </form>
+
+    <template #footer>
+      <div class="flex justify-end gap-3">
+        <button
+          type="button"
+          @click="$emit('close')"
+          class="rounded-lg px-4 py-2 text-sm font-medium text-slate-300 hover:text-white transition"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          @click="handleSubmit"
+          :disabled="saving"
+          class="rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-800 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white transition"
+        >
+          {{ saving ? 'Saving...' : 'Save Changes' }}
+        </button>
+      </div>
+    </template>
+  </BaseModal>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, watch } from 'vue'
+import BaseModal from './ui/BaseModal.vue'
+import { getSpecOptions } from '@/data/gameData'
+import type { Character } from '@/interfaces/game.interface'
+
+const props = defineProps<{
+  character: Character | null
+  show: boolean
+}>()
+
+const emit = defineEmits<{
+  (e: 'close'): void
+  (e: 'save', updates: { role?: string; spec?: string }): void
+}>()
+
+const formData = ref({
+  role: '',
+  spec: ''
+})
+
+const saving = ref(false)
+const error = ref('')
+
+const availableSpecs = computed(() => {
+  if (!props.character?.class) return []
+  return getSpecOptions(props.character.class)
+})
+
+const toBackendRole = (role: string | undefined): string => {
+  if (!role) return 'Unknown'
+
+  const roleMap: Record<string, string> = {
+    'Tanks': 'Tank',
+    'Healers': 'Healer',
+    'Melee': 'DPS',
+    'Ranged': 'DPS'
+  }
+
+  return roleMap[role] || role
+}
+
+const toFrontendRole = (role: string | undefined): string => {
+  if (!role) return 'Unknown'
+
+  const roleMap: Record<string, string> = {
+    'Tank': 'Tank',
+    'Healer': 'Healer',
+    'DPS': 'DPS',
+    'Unknown': 'Unknown'
+  }
+
+  return roleMap[role] || role
+}
+
+watch(() => props.character, (newChar) => {
+  if (newChar) {
+    formData.value = {
+      role: toFrontendRole(newChar.role),
+      spec: newChar.spec || ''
+    }
+  }
+  error.value = ''
+}, { immediate: true })
+
+const handleSubmit = async () => {
+  if (!props.character) return
+
+  error.value = ''
+
+  const updates: { role?: string; spec?: string } = {}
+
+  const currentBackendRole = toBackendRole(props.character.role)
+  const newBackendRole = formData.value.role
+
+  if (newBackendRole !== currentBackendRole) {
+    updates.role = newBackendRole
+  }
+
+  if (formData.value.spec !== props.character.spec) {
+    updates.spec = formData.value.spec || 'Unknown'
+  }
+
+  if (Object.keys(updates).length === 0) {
+    error.value = 'No changes detected'
+    return
+  }
+
+  emit('save', updates)
+}
+</script>

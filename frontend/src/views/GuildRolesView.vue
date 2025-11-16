@@ -13,7 +13,7 @@
           <p class="text-slate-300">
             Manage roles and permissions for {{ guild?.name }} members
           </p>
-          <!-- Dev Mode: Simulate GM -->
+          
           <div v-if="isDev" class="mt-2 p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
             <div class="flex items-center gap-2 text-xs text-yellow-300">
               <span>🔧 DEV MODE:</span>
@@ -234,7 +234,6 @@ const guildId = ref<string | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 
-// Dev mode: simulate being GM
 const isDev = import.meta.env.DEV
 const debugSimulateGM = ref(false)
 const debugGMMember = ref<GuildMembership | null>(null)
@@ -255,10 +254,12 @@ const filteredMembers = computed(() => {
     result = result.sort((a, b) => {
       const aValue = a[sortColumn.value as keyof GuildMembership]
       const bValue = b[sortColumn.value as keyof GuildMembership]
+      const av = String(aValue ?? '')
+      const bv = String(bValue ?? '')
       if (sortDirection.value === 'asc') {
-        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0
+        return av < bv ? -1 : av > bv ? 1 : 0
       } else {
-        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0
+        return av > bv ? -1 : av < bv ? 1 : 0
       }
     })
   }
@@ -274,21 +275,18 @@ const paginatedMembers = computed(() => {
   return filteredMembers.value.slice(startIndex, endIndex)
 })
 
-// Check if a member is the current user and is GM
 const isCurrentUserGM = (member: GuildMembership): boolean => {
-  // Dev mode: simulate being the first GM
+
   if (isDev && debugSimulateGM.value && debugGMMember.value) {
     return member.id === debugGMMember.value.id
   }
 
   if (!userStore.user) return false
 
-  // Check by userId if available
   if (member.userId && userStore.user.id) {
     return member.userId === userStore.user.id && member.role === 'GM'
   }
 
-  // Fallback: check by username (Discord username)
   return member.name === userStore.user.username && member.role === 'GM'
 }
 
@@ -306,7 +304,6 @@ const updateRole = async (memberId: string, newRole: string) => {
     const member = guildMemberships.value.find((m) => m.id === memberId)
     const oldRole = member?.role
 
-    // Prevent GM from changing their own role
     if (member && isCurrentUserGM(member)) {
       error.value = 'You cannot modify your own role as GM'
       setTimeout(() => {
@@ -353,7 +350,6 @@ const deleteMember = async (memberId: string) => {
       return
     }
 
-    // Prevent GM from deleting themselves
     if (isCurrentUserGM(member)) {
       error.value = 'You cannot delete yourself as GM'
       setTimeout(() => {
@@ -381,7 +377,6 @@ const load = async () => {
   if (res.ok) {
     guildMemberships.value = res.data
 
-    // Dev mode: find first GM for simulation
     if (isDev) {
       debugGMMember.value = res.data.find(m => m.role === 'GM') || null
     }

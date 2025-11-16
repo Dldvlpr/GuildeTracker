@@ -29,7 +29,7 @@ class GuildVoter extends Voter
             return false;
         }
 
-        /** @var GameGuild $guild */
+        
         $membership = $this->getUserMembership($guild, $user);
 
         if ($membership === null) {
@@ -72,7 +72,7 @@ class GuildVoter extends Voter
 
     private function canUseFeatures(GuildMembership $membership, GameGuild $guild): bool
     {
-        // Member must be in the guild AND the guild must have at least one character
+
         return $guild->isValid();
     }
 }

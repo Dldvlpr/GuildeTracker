@@ -16,14 +16,18 @@ async function handleBlizzardResponse(res: Response) {
       const body = text ? JSON.parse(text) : null
       if (body?.error === 'blizzard_token_expired') {
         relinkBlizzard()
-        // Throw to stop caller logic
+
         throw new Error('blizzard_token_expired')
       }
     } catch (e) {
-      // If parsing fails, propagate original 401
+
     }
   }
 }
+
+type CharactersCache = { ts: number; payload: any }
+
+const CHAR_CACHE_KEY = 'blizzardCharactersCache'
 
 export async function getBlizzardCharacters(opts?: FetchOpts) {
   if (!BASE) throw new Error('VITE_API_BASE_URL is not set')
@@ -55,9 +59,11 @@ export async function getBlizzardCharacterDetails(realm: string, characterName: 
   return await res.json()
 }
 
-export async function getBlizzardCharacterGuild(realm: string, characterName: string, opts?: FetchOpts) {
+export async function getBlizzardCharacterGuild(realm: string, characterName: string, wowType?: string, opts?: FetchOpts) {
   if (!BASE) throw new Error('VITE_API_BASE_URL is not set')
-  const res = await fetch(`${BASE}/api/blizzard/characters/${encodeURIComponent(realm)}/${encodeURIComponent(characterName)}/guild`, {
+  const url = new URL(`${BASE}/api/blizzard/characters/${encodeURIComponent(realm)}/${encodeURIComponent(characterName)}/guild`)
+  if (wowType) url.searchParams.set('wowType', wowType)
+  const res = await fetch(url.toString(), {
     method: 'GET',
     credentials: 'include',
     headers: { Accept: 'application/json' },
@@ -88,3 +94,27 @@ export async function claimGuild(realm: string, characterName: string, wowType?:
   return await res.json()
 }
 
+export async function getBlizzardCharactersCached(opts?: FetchOpts & { ttlMs?: number, force?: boolean }) {
+  const ttl = opts?.ttlMs ?? 10 * 60 * 1000
+  if (!opts?.force) {
+    try {
+      const raw = localStorage.getItem(CHAR_CACHE_KEY)
+      if (raw) {
+        const cache: CharactersCache = JSON.parse(raw)
+        if (cache?.ts && Date.now() - cache.ts < ttl) {
+          return cache.payload
+        }
+      }
+    } catch {}
+  }
+  const payload = await getBlizzardCharacters(opts)
+  try {
+    const toSave: CharactersCache = { ts: Date.now(), payload }
+    localStorage.setItem(CHAR_CACHE_KEY, JSON.stringify(toSave))
+  } catch {}
+  return payload
+}
+
+export function invalidateBlizzardCharactersCache() {
+  try { localStorage.removeItem(CHAR_CACHE_KEY) } catch {}
+}

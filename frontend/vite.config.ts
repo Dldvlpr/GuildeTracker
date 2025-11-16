@@ -6,7 +6,6 @@ import tailwindcss from '@tailwindcss/vite'
 import fs from 'node:fs'
 import path from 'node:path'
 
-// ESM-safe __dirname
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
@@ -15,8 +14,8 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   server: {
-    // Prefer mkcert-generated localhost certs if available, otherwise fallback
-    // to existing certs. This avoids browser warnings by ensuring SANs.
+
+
     https: (() => {
       const certDir = path.resolve(__dirname, 'certs')
       const localhostCert = path.join(certDir, 'localhost.pem')
@@ -28,7 +27,7 @@ export default defineConfig({
       const useLegacy = fs.existsSync(legacyCert) && fs.existsSync(legacyKey)
 
       if (!useLocalhost && !useLegacy) {
-        // No certs found; fall back to HTTP
+
         return undefined
       }
 

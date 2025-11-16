@@ -40,10 +40,7 @@ readonly class GameGuildDTO
             );
     }
 
-    /**
-     * @param iterable<GameGuild> $guilds
-     * @return self[]
-     */
+    
     public static function fromEntities(iterable $guilds): array
     {
         $out = [];

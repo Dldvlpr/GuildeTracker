@@ -8,9 +8,7 @@ use App\Enum\GuildRole;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
-/**
- * @extends ServiceEntityRepository<GameGuild>
- */
+
 class GameGuildRepository extends ServiceEntityRepository
 {
 
@@ -19,34 +17,28 @@ class GameGuildRepository extends ServiceEntityRepository
         parent::__construct($registry, GameGuild::class);
     }
 
-    //    /**
-    //     * @return Guild[] Returns an array of Guild objects
-    //     */
-    //    public function findByExampleField($value): array
-    //    {
-    //        return $this->createQueryBuilder('g')
-    //            ->andWhere('g.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->orderBy('g.id', 'ASC')
-    //            ->setMaxResults(10)
-    //            ->getQuery()
-    //            ->getResult()
-    //        ;
-    //    }
 
-    //    public function findOneBySomeField($value): ?Guild
-    //    {
-    //        return $this->createQueryBuilder('g')
-    //            ->andWhere('g.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->getQuery()
-    //            ->getOneOrNullResult()
-    //        ;
-    //    }
 
-    /**
-     * @return GameGuild[]
-     */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
     public function findByUserId(string $userId): array
     {
         return $this->createQueryBuilder('g')

@@ -10,6 +10,7 @@ use App\Enum\GuildRole;
 use App\Enum\WowGameType;
 use App\Repository\BlizzardGameRealmRepository;
 use App\Repository\GameGuildRepository;
+use App\Repository\GameCharacterRepository;
 use App\Service\BlizzardService;
 use App\Service\TokenEncryptionService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -33,6 +34,7 @@ final class BlizzardController extends AbstractController
         private readonly TokenEncryptionService $tokenEncryptionService,
         private readonly BlizzardService $blizzardService,
         private readonly GameGuildRepository $gameGuildRepository,
+        private readonly GameCharacterRepository $gameCharacterRepository,
         private readonly BlizzardGameRealmRepository $blizzardGameRealmRepository,
     ) {}
 
@@ -214,7 +216,7 @@ final class BlizzardController extends AbstractController
     }
 
     #[Route('/api/blizzard/characters/{realm}/{characterName}/guild', name: 'blizzard_character_guild', methods: ['GET'])]
-    public function getCharacterGuild(string $realm, string $characterName): Response
+    public function getCharacterGuild(string $realm, string $characterName, Request $request): Response
     {
         $this->denyAccessUnlessGranted('ROLE_USER');
 
@@ -234,7 +236,8 @@ final class BlizzardController extends AbstractController
         }
 
         try {
-            $guildData = $this->blizzardService->getCharacterGuild($accessToken, $realm, $characterName);
+            $wowType = $request->query->get('wowType', 'Retail');
+            $guildData = $this->blizzardService->getCharacterGuild($accessToken, $realm, $characterName, $wowType);
 
             if (!$guildData) {
                 return $this->json([
@@ -243,11 +246,13 @@ final class BlizzardController extends AbstractController
                 ], Response::HTTP_NOT_FOUND);
             }
 
-            $isGuildMaster = $this->blizzardService->isGuildMaster($accessToken, $realm, $characterName);
+            $isGuildMaster = $this->blizzardService->isGuildMaster($accessToken, $realm, $characterName, $wowType);
+            $rank = $this->blizzardService->getGuildRank($accessToken, $realm, $characterName, $wowType);
 
             return $this->json([
                 'guild' => $guildData,
                 'isGuildMaster' => $isGuildMaster,
+                'rank' => $rank,
             ]);
         } catch (\Throwable $e) {
             error_log("Failed to fetch character guild: {$e->getMessage()}");
@@ -392,9 +397,21 @@ final class BlizzardController extends AbstractController
                     $this->em->persist(new GuildMembership($user, $existingGuild, $role));
                 }
 
+                try {
+                    $characterEntity = $this->gameCharacterRepository->findOneBy([
+                        'guild' => $existingGuild,
+                        'name' => $characterName,
+                    ]);
+                    if ($characterEntity) {
+                        $characterEntity->setUserPlayer($user);
+                        $this->em->persist($characterEntity);
+                    }
+                } catch (\Throwable) {  }
+
                 $this->em->flush();
 
                 try { $this->blizzardService->importRosterIntoGuild($accessToken, $realm, $guildName, $existingGuild, $wowType); } catch (\Throwable) {}
+                try { $this->linkUserCharactersToGuild($user, $existingGuild, $accessToken); } catch (\Throwable) {}
 
                 return $this->json([
                     'success' => true,
@@ -407,6 +424,8 @@ final class BlizzardController extends AbstractController
             $gameGuild->setName($guildName);
             $gameGuild->setFaction($guildFaction);
             $gameGuild->setBlizzardRealm($blizzardRealm);
+            $gameGuild->setBlizzardId((string) $guildId);
+            $gameGuild->setRealm($realm);
             $gameGuild->setIsPublic(false);
             $gameGuild->setShowDkpPublic(false);
 
@@ -416,7 +435,20 @@ final class BlizzardController extends AbstractController
             $this->em->persist($membership);
             $this->em->flush();
 
+            try {
+                $characterEntity = $this->gameCharacterRepository->findOneBy([
+                    'guild' => $gameGuild,
+                    'name' => $characterName,
+                ]);
+                if ($characterEntity) {
+                    $characterEntity->setUserPlayer($user);
+                    $this->em->persist($characterEntity);
+                    $this->em->flush();
+                }
+            } catch (\Throwable) {  }
+
             try { $this->blizzardService->importRosterIntoGuild($accessToken, $realm, $guildName, $gameGuild, $wowType); } catch (\Throwable) {}
+            try { $this->linkUserCharactersToGuild($user, $gameGuild, $accessToken); } catch (\Throwable) {}
 
             return $this->json([
                 'success' => true,
@@ -529,10 +561,34 @@ final class BlizzardController extends AbstractController
                 }
             }
 
-            $this->em->persist(new GuildMembership($user, $guild, GuildRole::MEMBER));
+            $rank = $this->blizzardService->getGuildRank($accessToken, $realm, $characterName, $wowType);
+            if ($rank === 0) {
+                $role = GuildRole::GM;
+            } elseif ($rank === 1) {
+                $role = GuildRole::OFFICER;
+            } else {
+
+                $role = GuildRole::MEMBER;
+            }
+
+            $this->em->persist(new GuildMembership($user, $guild, $role));
+
+            try {
+                $characterEntity = $this->gameCharacterRepository->findOneBy([
+                    'guild' => $guild,
+                    'name' => $characterName,
+                ]);
+                if ($characterEntity) {
+                    $characterEntity->setUserPlayer($user);
+                    $this->em->persist($characterEntity);
+                }
+            } catch (\Throwable) {  }
             $this->em->flush();
 
+            try { $this->blizzardService->importRosterIntoGuild($accessToken, $realm, $charGuildName, $guild, $wowType); } catch (\Throwable) {}
+
             error_log("joinGuild: Successfully joined guild");
+            try { $this->linkUserCharactersToGuild($user, $guild, $accessToken); } catch (\Throwable) {}
             return $this->json(['message' => 'Joined guild successfully'], Response::HTTP_OK);
         } catch (\Throwable $e) {
             error_log("joinGuild exception: " . $e->getMessage());
@@ -543,9 +599,7 @@ final class BlizzardController extends AbstractController
         }
     }
 
-    /**
-     * Find or create BlizzardGameRealm based on realm slug and WoW type
-     */
+    
     private function findOrCreateBlizzardRealm(string $realmSlug, string $wowType): ?BlizzardGameRealm
     {
         $region = (string) $this->params->get('blizzard.region');
@@ -593,5 +647,35 @@ final class BlizzardController extends AbstractController
             'realm_name' => $realm?->getName(),
             'game_type' => $realm?->getGameType()->getLabel(),
         ];
+    }
+
+    
+    private function linkUserCharactersToGuild(User $user, GameGuild $guild, string $accessToken): void
+    {
+        try {
+            $list = $this->blizzardService->getWowCharacters($accessToken);
+            $chars = is_array($list['characters'] ?? null) ? $list['characters'] : [];
+            $names = [];
+            foreach ($chars as $c) {
+                $n = $c['name'] ?? null;
+                if ($n) { $names[strtolower($n)] = true; }
+            }
+
+            $linked = 0;
+            foreach ($guild->getGameCharacters() as $gc) {
+                $n = strtolower($gc->getName() ?? '');
+                if ($n !== '' && isset($names[$n])) {
+                    $gc->setUserPlayer($user);
+                    $this->em->persist($gc);
+                    $linked++;
+                }
+            }
+
+            if ($linked > 0) {
+                $this->em->flush();
+            }
+        } catch (\Throwable) {
+
+        }
     }
 }

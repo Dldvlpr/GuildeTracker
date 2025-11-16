@@ -28,9 +28,7 @@ class User implements UserInterface
     #[ORM\Column(length: 180)]
     private ?string $email = null;
 
-    /**
-     * @var list<string> The user roles
-     */
+    
     #[ORM\Column]
     private array $roles = [];
 
@@ -43,13 +41,11 @@ class User implements UserInterface
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $blizzardId = null;
 
-    /**
-     * @var Collection<int, GameCharacter>
-     */
+    
     #[ORM\OneToMany(targetEntity: GameCharacter::class, mappedBy: 'userPlayer')]
     private Collection $gameCharacters;
 
-    /** @var Collection<int, GuildMembership> */
+    
     #[ORM\OneToMany(targetEntity: GuildMembership::class, mappedBy: 'user', cascade: ['persist', 'remove'], orphanRemoval: true)]
     private Collection $memberships;
 
@@ -89,19 +85,13 @@ class User implements UserInterface
         return $this;
     }
 
-    /**
-     * A visual identifier that represents this user.
-     *
-     * @see UserInterface
-     */
+    
     public function getUserIdentifier(): string
     {
         return (string)$this->discordId;
     }
 
-    /**
-     * @see UserInterface
-     */
+    
     public function getRoles(): array
     {
         $roles = $this->roles;
@@ -110,18 +100,14 @@ class User implements UserInterface
         return array_unique($roles);
     }
 
-    /**
-     * @param list<string> $roles
-     */
+    
     public function setRoles(array $roles): static
     {
         $this->roles = $roles;
         return $this;
     }
 
-    /**
-     * @see UserInterface
-     */
+    
     public function eraseCredentials(): void
     {
     }
@@ -159,9 +145,7 @@ class User implements UserInterface
         return $this;
     }
 
-    /**
-     * @return Collection<int, GameCharacter>
-     */
+    
     public function getGameCharacters(): Collection
     {
         return $this->gameCharacters;
@@ -188,7 +172,7 @@ class User implements UserInterface
         return $this;
     }
 
-    /** @return Collection<int, GuildMembership> */
+    
     public function getMemberships(): Collection
     {
         return $this->memberships;
@@ -207,7 +191,7 @@ class User implements UserInterface
     public function removeMembership(GuildMembership $membership): static
     {
         if ($this->memberships->removeElement($membership)) {
-            // Relationship is non-nullable on owning side; rely on orphanRemoval to delete the membership
+
         }
 
         return $this;

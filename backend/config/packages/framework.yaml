@@ -1,8 +1,7 @@
-# see https://symfony.com/doc/current/reference/configuration/framework.html
+
 framework:
     secret: '%env(APP_SECRET)%'
 
-    # Secure session configuration
     session:
         name: APP_SESSION
         handler_id: null
@@ -12,8 +11,7 @@ framework:
         cookie_lifetime: 3600  # 1 hour
         gc_maxlifetime: 3600
 
-    #esi: true
-    #fragments: true
+
 
 when@test:
     framework:

@@ -23,9 +23,7 @@ enum WowGameType: string
         };
     }
 
-    /**
-     * Returns the Blizzard API profile namespace for this game type
-     */
+    
     public function getProfileNamespace(string $region): string
     {
         return match($this) {
@@ -38,9 +36,7 @@ enum WowGameType: string
         };
     }
 
-    /**
-     * Returns the Blizzard API dynamic namespace for this game type
-     */
+    
     public function getDynamicNamespace(string $region): string
     {
         return match($this) {
@@ -53,9 +49,7 @@ enum WowGameType: string
         };
     }
 
-    /**
-     * Returns the Blizzard API static namespace for this game type
-     */
+    
     public function getStaticNamespace(string $region): string
     {
         return match($this) {
@@ -68,9 +62,7 @@ enum WowGameType: string
         };
     }
 
-    /**
-     * Detects game type from a string (for backward compatibility)
-     */
+    
     public static function fromString(string $wowType): self
     {
         return match(true) {

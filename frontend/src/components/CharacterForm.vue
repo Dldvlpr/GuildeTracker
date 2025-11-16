@@ -19,7 +19,7 @@
           </button>
         </div>
 
-        <!-- Character Name -->
+        
         <div class="space-y-2">
           <label for="character-name" class="block text-sm font-semibold text-slate-200">
             Player name <span class="text-red-400">*</span>
@@ -48,7 +48,7 @@
           <p v-else class="text-xs text-slate-500" id="character-name-hint">50 characters maximum</p>
         </div>
 
-        <!-- Class Select -->
+        
         <div class="space-y-2">
           <label for="class-select" class="block text-sm font-semibold text-slate-200">
             Class <span class="text-red-400">*</span>
@@ -78,7 +78,7 @@
           </p>
         </div>
 
-        <!-- Spec Select -->
+        
         <div
           v-if="canSelectSpec"
           class="space-y-2"
@@ -113,7 +113,7 @@
           </p>
         </div>
 
-        <!-- General Errors -->
+        
         <div v-if="hasGeneralErrors" class="rounded-xl bg-red-500/10 border border-red-500/20 p-4" role="alert" aria-live="assertive">
           <div class="space-y-1">
             <p v-for="error in generalErrors" :key="error" class="text-sm text-red-300">
@@ -122,7 +122,7 @@
           </div>
         </div>
 
-        <!-- Form Actions -->
+        
         <div class="flex flex-col sm:flex-row gap-3 pt-4 border-t border-white/10">
           <button
             type="button"
@@ -142,7 +142,7 @@
         </div>
       </form>
 
-    <!-- Import Modal -->
+    
     <BaseModal
       v-model="showImport"
       title="Import from Raid-Helper JSON"

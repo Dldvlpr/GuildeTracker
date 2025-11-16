@@ -11,6 +11,7 @@ use App\Form\GameGuildType;
 use App\Repository\GameCharacterRepository;
 use App\Repository\GameGuildRepository;
 use App\Repository\UserRepository;
+use App\Service\WowClassMapper;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -25,6 +26,8 @@ final class GameGuildController extends AbstractController
         private readonly GameGuildRepository $gameGuildRepository,
         private readonly UserRepository $usersRepository,
         private readonly GameCharacterRepository $gameCharacterRepository,
+        private readonly WowClassMapper $classMapper,
+        private readonly \App\Service\BlizzardService $blizzardService,
     ) {}
 
     #[Route('/api/guilds', name: 'api_guild_create', methods: ['POST'])]
@@ -70,8 +73,8 @@ final class GameGuildController extends AbstractController
         }
 
         try {
-            // A user can create a guild but will be MEMBER by default.
-            // GM/Officer can later claim to elevate their role.
+
+
             $membership = new GuildMembership($user, $gameGuild, GuildRole::MEMBER);
 
             $em->persist($gameGuild);
@@ -110,7 +113,7 @@ final class GameGuildController extends AbstractController
 
         $this->denyAccessUnlessGranted('GUILD_VIEW', $guild);
 
-        return $this->json(CharacterDTO::fromEntities($guild->getGameCharacters()));
+        return $this->json(CharacterDTO::fromEntities($guild->getGameCharacters(), $this->classMapper));
     }
 
     #[Route('/api/guilds/{id}', name: 'api_guild_show', methods: ['GET'])]
@@ -124,5 +127,207 @@ final class GameGuildController extends AbstractController
         $this->denyAccessUnlessGranted('GUILD_VIEW', $guild);
 
         return $this->json(GameGuildDTO::fromEntity($guild));
+    }
+
+    #[Route('/api/guilds/{id}/sync', name: 'api_guild_sync', methods: ['POST'])]
+    #[IsGranted('IS_AUTHENTICATED_FULLY')]
+    public function syncGuild(string $id): JsonResponse
+    {
+        $guild = $this->gameGuildRepository->find($id);
+        if (!$guild) {
+            return $this->json(['error' => 'Guild not found'], 404);
+        }
+
+        $this->denyAccessUnlessGranted('GUILD_MANAGE', $guild);
+
+        $securityUser = $this->getUser();
+        if (!$securityUser) {
+            return $this->json(['error' => 'Unauthenticated'], 401);
+        }
+
+        $user = $this->usersRepository->findOneBy(['discordId' => $securityUser->getDiscordId()]);
+        if (!$user) {
+            return $this->json(['error' => 'User not found'], 404);
+        }
+
+        $accessToken = $this->blizzardService->getValidAccessToken($user);
+        if (!$accessToken) {
+            return $this->json([
+                'error' => 'blizzard_token_expired',
+                'message' => 'Your Battle.net session has expired. Please reconnect.',
+                'reconnect_url' => '/api/oauth/blizzard/connect'
+            ], 401);
+        }
+
+        $realm = $guild->getRealm() ?? $guild->getBlizzardRealm()?->getSlug();
+        $guildName = $guild->getName();
+
+        if (!$realm || !$guildName) {
+            return $this->json(['error' => 'Guild missing realm or name'], 400);
+        }
+
+        $wowType = 'Retail';
+        if ($blizzardRealm = $guild->getBlizzardRealm()) {
+            $wowType = match ($blizzardRealm->getGameType()?->value) {
+                'classic-anniversary' => 'Classic Anniversary',
+                'classic-era' => 'Classic Era',
+                'classic-progression' => 'Classic Progression',
+                'season-of-discovery' => 'Season of Discovery',
+                'hardcore' => 'Hardcore',
+                default => 'Retail',
+            };
+        }
+
+        try {
+            $result = $this->blizzardService->syncGuildRoster(
+                $accessToken,
+                $realm,
+                $guildName,
+                $guild,
+                $wowType,
+                fetchSpecs: true,
+                preserveManualRoles: true
+            );
+
+            return $this->json([
+                'success' => true,
+                'message' => 'Guild roster synchronized',
+                'created' => $result['created'],
+                'updated' => $result['updated'],
+                'removed' => $result['removed'],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->json([
+                'error' => 'sync_failed',
+                'message' => 'Failed to sync guild roster: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    #[Route('/api/guilds/{guildId}/characters/{characterId}/role', name: 'api_guild_character_update_role', methods: ['PATCH'])]
+    #[IsGranted('IS_AUTHENTICATED_FULLY')]
+    public function updateCharacterRole(string $guildId, string $characterId, Request $request): JsonResponse
+    {
+        $guild = $this->gameGuildRepository->find($guildId);
+        if (!$guild) {
+            return $this->json(['error' => 'Guild not found'], 404);
+        }
+
+        $this->denyAccessUnlessGranted('GUILD_MANAGE', $guild);
+
+        $character = $this->gameCharacterRepository->find($characterId);
+        if (!$character || $character->getGuild()?->getId()->toString() !== $guildId) {
+            return $this->json(['error' => 'Character not found in this guild'], 404);
+        }
+
+        try {
+            $payload = $request->toArray();
+        } catch (\Throwable) {
+            return $this->json(['error' => 'Invalid JSON payload'], 400);
+        }
+
+        if (isset($payload['role'])) {
+            $newRole = $payload['role'];
+            if (!in_array($newRole, ['Tank', 'Healer', 'DPS', 'Unknown'])) {
+                return $this->json(['error' => 'Invalid role. Must be: Tank, Healer, DPS, or Unknown'], 400);
+            }
+            $character->setRole($newRole);
+        }
+
+        if (isset($payload['spec'])) {
+            $newSpec = trim($payload['spec']);
+            if (empty($newSpec)) {
+                $newSpec = 'Unknown';
+            }
+            $character->setClassSpec($newSpec);
+        }
+
+        if (!isset($payload['role']) && !isset($payload['spec'])) {
+            return $this->json(['error' => 'At least one field (role or spec) must be provided'], 400);
+        }
+
+        $this->em->persist($character);
+        $this->em->flush();
+
+        return $this->json([
+            'success' => true,
+            'message' => 'Character updated successfully',
+            'character' => CharacterDTO::fromEntity($character, $this->classMapper)
+        ]);
+    }
+
+    #[Route('/api/guilds/{id}/relink-my-characters', name: 'api_guild_relink_my_characters', methods: ['POST'])]
+    #[IsGranted('IS_AUTHENTICATED_FULLY')]
+    public function relinkMyCharacters(string $id): JsonResponse
+    {
+        $guild = $this->gameGuildRepository->find($id);
+        if (!$guild) {
+            return $this->json(['error' => 'Guild not found'], 404);
+        }
+
+        $this->denyAccessUnlessGranted('GUILD_VIEW', $guild);
+
+        $securityUser = $this->getUser();
+        if (!$securityUser) {
+            return $this->json(['error' => 'Unauthenticated'], 401);
+        }
+
+        $user = $this->usersRepository->findOneBy(['discordId' => $securityUser->getDiscordId()]);
+        if (!$user) {
+            return $this->json(['error' => 'User not found'], 404);
+        }
+
+        if (!$user->getBlizzardId()) {
+            return $this->json([
+                'error' => 'blizzard_not_linked',
+                'message' => 'Please link your Battle.net account first',
+                'link_url' => '/api/oauth/blizzard/connect'
+            ], 403);
+        }
+
+        $accessToken = $this->blizzardService->getValidAccessToken($user);
+        if (!$accessToken) {
+            return $this->json([
+                'error' => 'blizzard_token_expired',
+                'message' => 'Your Battle.net session has expired. Please reconnect.',
+                'reconnect_url' => '/api/oauth/blizzard/connect'
+            ], 401);
+        }
+
+        try {
+            $list = $this->blizzardService->getWowCharacters($accessToken);
+            $chars = is_array($list['characters'] ?? null) ? $list['characters'] : [];
+            $names = [];
+            foreach ($chars as $c) {
+                $n = $c['name'] ?? null;
+                if ($n) { $names[strtolower($n)] = true; }
+            }
+
+            $linked = 0;
+            foreach ($guild->getGameCharacters() as $gc) {
+                $n = strtolower($gc->getName() ?? '');
+                if ($n !== '' && isset($names[$n])) {
+                    if ($gc->getUserPlayer()?->getId() !== $user->getId()) {
+                        $gc->setUserPlayer($user);
+                        $this->em->persist($gc);
+                        $linked++;
+                    }
+                }
+            }
+            if ($linked > 0) {
+                $this->em->flush();
+            }
+
+            return $this->json([
+                'success' => true,
+                'message' => $linked > 0 ? 'Characters relinked' : 'No characters to relink',
+                'linked' => $linked,
+            ]);
+        } catch (\Throwable $e) {
+            return $this->json([
+                'error' => 'relink_failed',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 }

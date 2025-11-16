@@ -190,9 +190,7 @@ export function useGameData(): UseGameDataReturn {
     selectedRole.value = '';
   };
 
-  /**
-   * Validate current selection
-   */
+  
   const validateSelection = (): ValidationResult => {
     return validationResult.value;
   };

@@ -35,7 +35,6 @@ final class GuildCharacterController extends AbstractController
             return new JsonResponse(['error' => 'Non authentifié'], Response::HTTP_UNAUTHORIZED);
         }
 
-        // $this->denyAccessUnlessGranted('CHARACTER_VIEW', $character);
 
         return $this->json(CharacterDTO::fromEntity($character));
     }

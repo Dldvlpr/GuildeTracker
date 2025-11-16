@@ -9,14 +9,14 @@
       leave-to-class="opacity-0"
     >
       <div v-if="modelValue" class="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-        <!-- Backdrop with blur -->
+        
         <div
           class="fixed inset-0 bg-black/50 backdrop-blur-sm"
           @click="onBackdrop"
           aria-hidden="true"
         />
 
-        <!-- Modal Dialog -->
+        
         <transition
           enter-active-class="transition duration-200 ease-out"
           enter-from-class="opacity-0 scale-95"
@@ -35,7 +35,7 @@
             @keydown.esc.prevent="onEsc"
             @keydown.tab.prevent="trapFocus"
           >
-            <!-- Header -->
+            
             <div class="flex items-center justify-between px-6 pt-6 pb-4">
               <h2 v-if="title" :id="dialogTitleId" class="text-xl font-bold">{{ title }}</h2>
               <button
@@ -51,12 +51,12 @@
               </button>
             </div>
 
-            <!-- Body -->
-            <div class="px-6 py-2">
+            
+            <div class="px-6 py-2 max-h-[60vh] overflow-y-auto">
               <slot />
             </div>
 
-            <!-- Footer -->
+            
             <div v-if="$slots.footer" class="px-6 pb-6 pt-4 border-t border-white/10">
               <slot name="footer" />
             </div>

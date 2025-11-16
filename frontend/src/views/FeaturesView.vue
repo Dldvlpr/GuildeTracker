@@ -46,9 +46,6 @@
 
       <div class="mb-12">
         <div class="flex items-center gap-3 mb-6">
-          <div class="flex items-center justify-center w-8 h-8 rounded-full bg-red-500/20 text-red-400">
-            P1
-          </div>
           <h2 class="text-xl font-semibold text-white">Guild Organization</h2>
         </div>
 
@@ -74,19 +71,16 @@
 
       <div class="mb-12">
         <div class="flex items-center gap-3 mb-6">
-          <div class="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400">
-            P2
-          </div>
           <h2 class="text-xl font-semibold text-white">Raids & Events</h2>
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <FeatureCard
-            title="Event Import"
-            description="Import events from JSON files"
-            icon="IMPORT"
+            title="Raid Assignments"
+            description="Create your own spreadsheet"
+            icon="ASSIGN"
             :available="!!guild?.isValid"
-            :route="`/guild/${guild?.id}/import-events`"
+            :route="`/guild/${guild?.id}/raid-assignments`"
             priority="medium"
           />
           <FeatureCard
@@ -110,9 +104,6 @@
 
       <div class="mb-8">
         <div class="flex items-center gap-3 mb-6">
-          <div class="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400">
-            P3
-          </div>
           <h2 class="text-xl font-semibold text-white">Statistics & Tracking</h2>
         </div>
 

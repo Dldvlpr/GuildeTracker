@@ -9,10 +9,7 @@ use Symfony\Component\HttpKernel\KernelEvents;
 
 class CookieSameSiteSubscriber implements EventSubscriberInterface
 {
-    /**
-     * Rewrites the Symfony security cookie created during auth to SameSite=None; Secure
-     * to avoid cross-site rejection warnings in modern browsers.
-     */
+    
     public function onKernelResponse(ResponseEvent $event): void
     {
         if (!$event->isMainRequest()) {
@@ -24,14 +21,13 @@ class CookieSameSiteSubscriber implements EventSubscriberInterface
 
         foreach ($cookies as $cookie) {
             if ($cookie->getName() === 'main_deauth_profile_token') {
-                // Remove the original cookie header
+
                 $response->headers->removeCookie(
                     $cookie->getName(),
                     $cookie->getPath(),
                     $cookie->getDomain()
                 );
 
-                // Re-add with SameSite=None and Secure=true
                 $response->headers->setCookie(new Cookie(
                     name: $cookie->getName(),
                     value: $cookie->getValue(),

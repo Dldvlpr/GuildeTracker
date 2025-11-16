@@ -1,0 +1,98 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import type { Character, Role } from '@/interfaces/game.interface'
+import { getClassColor } from '@/utils/classColors'
+
+const props = defineProps<{ characters: Character[]; loading?: boolean; error?: string | null }>()
+const emit = defineEmits<{ (e: 'quick-assign', character: Character): void }>()
+
+const search = ref('')
+const roleFilter = ref<Role | 'ALL'>('ALL')
+
+const roles: { key: Role | 'ALL'; label: string }[] = [
+  { key: 'ALL', label: 'All' },
+  { key: 'Tanks' as Role, label: 'Tanks' },
+  { key: 'Healers' as Role, label: 'Healers' },
+  { key: 'Melee' as Role, label: 'Melee' },
+  { key: 'Ranged' as Role, label: 'Ranged' },
+]
+
+const filtered = computed(() => {
+  const term = search.value.trim().toLowerCase()
+  return props.characters.filter((c) => {
+    const matchesRole = roleFilter.value === 'ALL' || c.role === roleFilter.value
+    const matchesText = !term || c.name.toLowerCase().includes(term) || c.class.toLowerCase().includes(term) || (c.spec?.toLowerCase().includes(term) ?? false)
+    return matchesRole && matchesText
+  })
+})
+
+function onDragStart(e: DragEvent, c: Character) {
+  if (!e.dataTransfer) return
+  e.dataTransfer.setData('text/plain', c.id)
+  e.dataTransfer.effectAllowed = 'copyMove'
+}
+
+function quickAssign(c: Character) {
+  emit('quick-assign', c)
+}
+
+function setRoleFilter(r: Role | 'ALL') {
+  roleFilter.value = r
+}
+
+defineExpose({ setRoleFilter })
+</script>
+
+<template>
+  <div class="flex flex-col gap-3 text-sm">
+    <div class="flex items-center gap-2">
+      <input
+        v-model="search"
+        type="text"
+        placeholder="Search name/class/spec"
+        class="flex-1 bg-slate-900/80 border border-slate-700 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+      />
+    </div>
+
+    <div class="flex gap-1 text-xs">
+      <button
+        v-for="r in roles"
+        :key="r.key as string"
+        class="px-2 py-1 rounded border text-slate-300"
+        :class="roleFilter === r.key ? 'bg-emerald-600 border-emerald-500 text-slate-950' : 'border-slate-700 hover:bg-slate-800'"
+        @click="roleFilter = r.key"
+      >
+        {{ r.label }}
+      </button>
+    </div>
+
+    <div v-if="loading" class="text-slate-400 text-xs">Loading characters...</div>
+    <div v-else-if="error" class="text-red-400 text-xs">{{ error }}</div>
+
+    <div class="space-y-1" v-else>
+      <div
+        v-for="c in filtered"
+        :key="c.id"
+        class="flex items-center justify-between rounded-md border border-slate-700 bg-slate-900/70 px-2 py-1"
+        draggable="true"
+        @dragstart="onDragStart($event, c)"
+        title="Drag to assign — double‑click to quick assign to selected block"
+        @dblclick="quickAssign(c)"
+        :style="{ borderLeft: '4px solid ' + getClassColor(c.class) }"
+      >
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="h-6 w-6 rounded grid place-items-center text-[11px] text-slate-900"
+               :style="{ backgroundColor: getClassColor(c.class) }">
+            {{ (c.name[0] ?? '?').toUpperCase() }}
+          </div>
+          <div class="leading-tight min-w-0">
+            <div class="text-slate-100 truncate">{{ c.name }}</div>
+            <div class="text-[11px] text-slate-400 truncate">{{ c.class }}<span v-if="c.spec"> • {{ c.spec }}</span></div>
+          </div>
+        </div>
+        <span class="text-[11px] text-slate-400 ml-2 shrink-0">{{ c.role ?? '—' }}</span>
+      </div>
+      <div v-if="!filtered.length" class="text-xs text-slate-500 italic py-2 text-center">No characters</div>
+    </div>
+  </div>
+</template>
