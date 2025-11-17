@@ -33,6 +33,19 @@
           <option value="Ranged">🏹 Ranged</option>
         </select>
       </div>
+
+      <div class="flex min-w-[200px] flex-1 flex-col gap-1.5">
+        <label for="filter-spec" class="text-xs font-semibold text-slate-300">Specialization</label>
+        <select
+          id="filter-spec"
+          class="rounded-xl bg-slate-900/60 px-3 py-2 text-sm text-slate-100 ring-1 ring-inset ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+          :value="modelValue.spec"
+          @change="onSpec(($event.target as HTMLSelectElement).value)"
+        >
+          <option value="">All specializations</option>
+          <option v-for="sp in specs" :key="sp" :value="sp">{{ sp }}</option>
+        </select>
+      </div>
     </div>
 
     <div class="flex justify-start md:justify-end">
@@ -50,10 +63,11 @@
 <script setup lang="ts">
 const props = defineProps<{
   classes: string[]
-  modelValue: { class: string; role: string }
+  specs: string[]
+  modelValue: { class: string; role: string; spec: string }
 }>()
 const emit = defineEmits<{
-  (e: 'update:modelValue', v: { class: string; role: string }): void
+  (e: 'update:modelValue', v: { class: string; role: string; spec: string }): void
   (e: 'clear'): void
 }>()
 
@@ -62,6 +76,9 @@ function onClass(v: string) {
 }
 function onRole(v: string) {
   emit('update:modelValue', { ...props.modelValue, role: v })
+}
+function onSpec(v: string) {
+  emit('update:modelValue', { ...props.modelValue, spec: v })
 }
 </script>
 <style scoped>

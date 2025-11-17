@@ -51,6 +51,9 @@ class GameCharacterType extends AbstractType
                     ]),
                 ],
             ])
+            ->add('classSpecSecondary', TextType::class, [
+                'required' => false,
+            ])
             ->add('role', TextType::class, [
                 'required' => true,
                 'constraints' => [

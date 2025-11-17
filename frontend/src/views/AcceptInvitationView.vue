@@ -26,8 +26,9 @@
       <h2 class="text-emerald-300 font-semibold mb-1">You joined the guild</h2>
       <p class="text-emerald-100/80 text-sm">Welcome to <span class="font-semibold text-emerald-200">{{ result?.guild.name }}</span> with role <span class="font-semibold text-emerald-200">{{ result?.role }}</span>.</p>
       <p class="mt-3 text-emerald-200/80 text-sm">Auto-redirect in {{ countdown }}s…</p>
-      <div class="mt-4">
-        <RouterLink :to="`/guild/${result?.guild.id}`" class="inline-block text-sm px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white">Go to guild →</RouterLink>
+      <div class="mt-4 flex items-center justify-center gap-2">
+        <RouterLink :to="`/guild/${result?.guild.id}/dashboard?onboarding=1`" class="inline-block text-sm px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white">Open dashboard →</RouterLink>
+        <RouterLink :to="`/guild/${result?.guild.id}`" class="inline-block text-sm px-4 py-2 rounded-lg ring-1 ring-inset ring-white/10 hover:ring-white/20 text-slate-200 hover:text-white">Guild hub</RouterLink>
       </div>
     </div>
   </section>
@@ -72,7 +73,7 @@ async function run() {
     countdown.value -= 1
     if (countdown.value <= 0) {
       if (timer) window.clearInterval(timer)
-      router.push(`/guild/${result.value?.guild.id}`)
+      router.push(`/guild/${result.value?.guild.id}/dashboard?onboarding=1`)
     }
   }, 1000)
 }

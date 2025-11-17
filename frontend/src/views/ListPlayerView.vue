@@ -31,7 +31,7 @@
       :dps="getDpsCount()"
     />
 
-    <PlayersFilters :classes="availableClasses" v-model="filters" @clear="clearFilters" />
+    <PlayersFilters :classes="availableClasses" :specs="availableSpecs" v-model="filters" @clear="clearFilters" />
 
     <div v-if="filteredCharacters.length === 0" class="flex items-center justify-center min-h-[280px] p-8" role="status" aria-live="polite">
       <div class="max-w-md text-center">
@@ -105,10 +105,19 @@ const showCharacterForm = ref(false)
 const showEditModal = ref(false)
 const editingCharacter = ref<Character | null>(null)
 
-const filters = ref<{ class: string; role: string }>({ class: '', role: '' })
+const filters = ref<{ class: string; role: string; spec: string }>({ class: '', role: '', spec: '' })
 
 const availableClasses = computed<string[]>(() => {
   const s = new Set(charactersWithCalculatedRoles.value.map((c) => c.class).filter(Boolean))
+  return Array.from(s).sort()
+})
+
+const availableSpecs = computed<string[]>(() => {
+  const s = new Set(
+    charactersWithCalculatedRoles.value
+      .map((c) => c.spec)
+      .filter((x): x is string => !!x)
+  )
   return Array.from(s).sort()
 })
 
@@ -147,6 +156,7 @@ const filteredCharacters = computed<Character[]>(() => {
   let out = [...charactersWithCalculatedRoles.value]
   if (filters.value.class) out = out.filter((c) => c.class === filters.value.class)
   if (filters.value.role) out = out.filter((c) => c.role === filters.value.role)
+  if (filters.value.spec) out = out.filter((c) => c.spec === filters.value.spec)
   return out.sort((a, b) => a.name.localeCompare(b.name))
 })
 
@@ -236,7 +246,7 @@ const deleteCharacter = async (id: string) => {
 }
 
 const clearFilters = () => {
-  filters.value = { class: '', role: '' }
+  filters.value = { class: '', role: '', spec: '' }
 }
 
 const getAllCharactersByGuild = async () => {

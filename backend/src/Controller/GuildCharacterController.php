@@ -74,6 +74,7 @@ final class GuildCharacterController extends AbstractController
             'name' => $payload['name'] ?? null,
             'class' => $payload['class'] ?? null,
             'classSpec' => $payload['classSpec'] ?? null,
+            'classSpecSecondary' => $payload['classSpecSecondary'] ?? null,
             'role' => $payload['role'] ?? null,
         ];
 

@@ -12,6 +12,7 @@ import type { RaidPlanBlock, BlockType } from '@/interfaces/raidPlan.interface.t
 import type { Character } from '@/interfaces/game.interface';
 import { Role } from '@/interfaces/game.interface';
 import { getCharactersByGuildId } from '@/services/character.service';
+import { getRoleByClassAndSpec } from '@/data/gameData';
 import { createRaidPlan, updateRaidPlan, generateShareLink, revokeShareLink, getRaidPlansByGuild, type RaidPlanDTO } from '@/services/raidPlan.service'
 import type { RaidBoss } from '@/data/raidData';
 
@@ -35,14 +36,14 @@ const showTemplates = ref(false);
 const saving = ref(false);
 const lastSavedAt = ref<number | null>(null);
 const canvasRef = ref<any>(null);
-const exportMenuOpen = ref(false);
+  const exportMenuOpen = ref(false);
 const showHelp = ref(false);
 const showSaveTemplate = ref(false);
 const templateName = ref('');
 const showBossLibrary = ref(false);
-const shareOpen = ref(false)
-const shareUrl = ref('')
-const planId = ref<number | null>(null)
+  const shareOpen = ref(false)
+  const shareUrl = ref('')
+  const planId = ref<number | null>(null)
 
 function planIdKey(gid: string) {
   return `raidPlan:planId:${gid}`
@@ -85,6 +86,7 @@ function handleCreateNew() {
 const preset = ref<'classic40' | 'mythic20' | 'custom'>('custom');
 const expected = ref<{ tanks: number; healers: number; dps: number }>({ tanks: 0, healers: 0, dps: 0 });
 const summary = ref<{ tanks: number; healers: number; melee: number; ranged: number; missingText: string | null }>({ tanks: 0, healers: 0, melee: 0, ranged: 0, missingText: null });
+const showDetails = ref(false);
 
 function makeKeys(id: string) {
   draftKey.value = `raidPlan:draft:${id}`;
@@ -160,6 +162,20 @@ async function openShare() {
     shareOpen.value = true
   } catch (e: any) {
     window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: e?.message || 'Failed to generate share link' } }))
+  }
+}
+
+async function previewPublic() {
+  try {
+    if (!guildId.value) return
+    if (planId.value == null) {
+      await saveToDatabase()
+    }
+    if (planId.value == null) return
+    const { shareUrl: url } = await generateShareLink(planId.value)
+    window.open(url, '_blank')
+  } catch (e: any) {
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: e?.message || 'Failed to open preview' } }))
   }
 }
 
@@ -580,16 +596,106 @@ function getAllAssignedIds(): Set<string> {
   return ids;
 }
 
+const benchedIds = computed<Set<string>>(() => {
+  const set = new Set<string>();
+  for (const b of blocks.value) {
+    if (b.type === 'BENCH_ROSTER') {
+      for (const id of ((b.data as any)?.bench ?? []) as string[]) set.add(String(id));
+    }
+  }
+  return set;
+});
+
+const sidebarCharacters = computed(() => {
+  const benched = benchedIds.value;
+  return characters.value.filter(c => !benched.has(c.id));
+});
+
+const specBreakdown = computed(() => {
+  const byClass: Record<string, Record<string, number>> = {};
+
+  // If a block is selected, compute counts only for members of that block and apply its spec overrides.
+  const selectedId: string | null = (canvasRef.value?.selectedBlockId as string | null) || null;
+  const activeBlock = selectedId ? blocks.value.find(b => b.id === selectedId) : null;
+  const members = new Set<string>();
+  const specOverrides: Record<string, string> = (activeBlock?.data?.specOverrides as Record<string, string>) || {};
+
+  if (activeBlock) {
+    if (activeBlock.type === 'ROLE_MATRIX') {
+      const ra = (activeBlock.data?.roleAssignments ?? {}) as Record<Role, string[]>;
+      (['Tanks','Healers','Melee','Ranged'] as Role[]).forEach((rr) => (ra?.[rr] ?? []).forEach((id) => members.add(String(id))));
+    }
+    if (activeBlock.type === 'GROUPS_GRID') {
+      for (const g of ((activeBlock.data?.groups ?? []) as any[])) (g.members ?? []).forEach((id: string) => members.add(String(id)));
+    }
+  } else {
+    // fallback: all assigned across the plan (no specific overrides applied)
+    getAllAssignedIds().forEach((id) => members.add(id));
+  }
+
+  for (const c of characters.value) {
+    if (!members.has(c.id)) continue;
+    const cls = c.class || 'Unknown';
+    const sp = specOverrides[c.id] || c.spec || 'Unknown';
+    if (!byClass[cls]) byClass[cls] = {};
+    byClass[cls][sp] = (byClass[cls][sp] || 0) + 1;
+  }
+
+  const rows: { cls: string; spec: string; count: number; role?: string }[] = [];
+  for (const cls of Object.keys(byClass).sort()) {
+    for (const sp of Object.keys(byClass[cls]).sort()) {
+      let role: string | undefined;
+      try { role = getRoleByClassAndSpec(cls, sp) || undefined } catch {}
+      rows.push({ cls, spec: sp, count: byClass[cls][sp], role });
+    }
+  }
+  return rows;
+});
+
 function computeSummary() {
   let t = 0, h = 0, m = 0, r = 0;
-  const assigned = getAllAssignedIds();
-  for (const c of characters.value) {
-    if (!assigned.has(c.id)) continue;
-    if (c.role === 'Tanks') t++;
-    else if (c.role === 'Healers') h++;
-    else if (c.role === 'Melee') m++;
-    else if (c.role === 'Ranged') r++;
+
+  // Map charId -> Role (prefer ROLE_MATRIX assignment, then derived from override in GROUPS_GRID)
+  const roleByChar = new Map<string, Role>();
+
+  for (const b of blocks.value) {
+    if (b.type === 'ROLE_MATRIX') {
+      const ra = (b.data?.roleAssignments ?? {}) as Record<Role, string[]>;
+      (['Tanks','Healers','Melee','Ranged'] as Role[]).forEach((rr) => {
+        for (const id of (ra?.[rr] ?? [])) {
+          roleByChar.set(String(id), rr);
+        }
+      });
+    }
   }
+
+  for (const b of blocks.value) {
+    if (b.type === 'GROUPS_GRID') {
+      const groups = (b.data?.groups ?? []) as { id: string; title: string; members: string[] }[];
+      for (const g of groups) {
+        for (const id of g.members || []) {
+          const key = String(id);
+          if (roleByChar.has(key)) continue; // keep ROLE_MATRIX priority
+          const c = characters.value.find((cc) => cc.id === key);
+          if (!c) continue;
+          const ov = (b.data?.specOverrides as Record<string, string> | undefined)?.[key];
+          const sp = ov || c.spec;
+          let derived: Role | undefined;
+          try { if (sp && c.class) derived = getRoleByClassAndSpec(c.class, sp) as Role | undefined } catch {}
+          const finalRole = derived || (c.role as Role | undefined);
+          if (finalRole) roleByChar.set(key, finalRole);
+        }
+      }
+    }
+  }
+
+  for (const [, role] of roleByChar) {
+    if (role === 'Tanks') t++;
+    else if (role === 'Healers') h++;
+    else if (role === 'Melee') m++;
+    else if (role === 'Ranged') r++;
+  }
+
   summary.value = { tanks: t, healers: h, melee: m, ranged: r, missingText: buildMissingText(t, h, m + r) };
 }
 
@@ -1050,6 +1156,13 @@ function applyBossData(boss: RaidBoss) {
           >
             📸 Snapshot
           </button>
+          <button
+            class="px-3 py-1.5 rounded-md border border-emerald-700/50 bg-emerald-900/20 text-emerald-300 hover:bg-emerald-900/40 text-xs font-medium transition-colors"
+            @click="previewPublic"
+            title="Open read-only public view in a new tab"
+          >
+            🔗 Preview public
+          </button>
         </div>
 
         <!-- Droite: Presets rapides -->
@@ -1125,6 +1238,20 @@ function applyBossData(boss: RaidBoss) {
       </div>
     </div>
 
+    <!-- Spec Breakdown (assigned) -->
+    <div class="px-4 py-2 border-b border-slate-800 bg-slate-950/40">
+      <div class="flex items-center justify-between">
+        <span class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Details</span>
+        <button class="text-xs px-2 py-0.5 rounded border border-slate-700 hover:bg-slate-800 text-slate-300" @click="showDetails = !showDetails">{{ showDetails ? 'Hide' : 'Show' }}</button>
+      </div>
+      <div v-if="showDetails" class="mt-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
+        <div v-for="row in specBreakdown" :key="row.cls + ':' + row.spec" class="flex items-center justify-between rounded border border-slate-800 bg-slate-900/40 px-2 py-1">
+          <div class="text-slate-300 truncate">{{ row.cls }} • {{ row.spec }}</div>
+          <div class="text-slate-400">x{{ row.count }}<span v-if="row.role"> — {{ row.role }}</span></div>
+        </div>
+      </div>
+    </div>
+
     
     <div class="flex flex-1 overflow-hidden">
       
@@ -1174,7 +1301,7 @@ function applyBossData(boss: RaidBoss) {
       <aside class="w-80 border-l border-slate-800 bg-slate-950/60 p-3 overflow-y-auto">
         <CharacterSidebar
           ref="sidebarRef"
-          :characters="characters"
+          :characters="sidebarCharacters"
           :loading="loadingChars"
           :error="charsError"
           @quick-assign="(c) => canvasRef?.assignToSelected?.(c.id)"

@@ -4,6 +4,7 @@ import Draggable from 'vuedraggable';
 import type { RaidPlanBlock } from '@/interfaces/raidPlan.interface.ts';
 import type { Character } from '@/interfaces/game.interface';
 import { Role, ROLE_COLORS } from '@/interfaces/game.interface';
+import { getSpecOptions, getRoleByClassAndSpec } from '@/data/gameData';
 import { getClassColor } from '@/utils/classColors';
 
 const props = defineProps<{
@@ -255,8 +256,18 @@ function ensureCells(block: RaidPlanBlock): CellMap {
 function getCell(block: RaidPlanBlock, rowId: string, colId: string): string[] {
   const cells = ensureCells(block)
   const row = cells[rowId] ?? (cells[rowId] = {})
+  const cur = row[colId]
+  if (cur && typeof cur === 'object' && !Array.isArray(cur)) {
+    // Convert pair -> list ([from, to]) for simple mode
+    const from = (cur as any).from || null
+    const to = (cur as any).to || null
+    const arr = [from, to].filter(Boolean) as string[]
+    row[colId] = arr
+    updateBlockData(block, { cells })
+    return arr
+  }
   const arr = row[colId] ?? (row[colId] = [])
-  return arr
+  return arr as string[]
 }
 
 function dropToCell(block: RaidPlanBlock, rowId: string, colId: string, e: DragEvent) {
@@ -344,8 +355,18 @@ function ensurePairCells(block: RaidPlanBlock): PairCellMap {
 function getPairCell(block: RaidPlanBlock, rowId: string, colId: string): PairCell {
   const cells = ensurePairCells(block)
   const row = cells[rowId] ?? (cells[rowId] = {})
-  const cur = row[colId] ?? (row[colId] = { from: null, to: null })
-  return cur
+  const cur = row[colId]
+  if (Array.isArray(cur)) {
+    // Convert list -> pair ({from,to}) when switching to pair mode
+    const from = cur[0] || null
+    const to = cur[1] || null
+    const pair = { from, to }
+    row[colId] = pair as any
+    updateBlockData(block, { cells })
+    return pair
+  }
+  const val = row[colId] ?? (row[colId] = { from: null, to: null })
+  return val as PairCell
 }
 
 function isPriest(charId: string | null): boolean {
@@ -361,8 +382,8 @@ function dropToPairCell(block: RaidPlanBlock, rowId: string, colId: string, slot
   const rowCfg = rows.find((r: any) => r.id === rowId)
   const pair = getPairCell(block, rowId, colId)
   if (slot === 'from') {
-    // Enforce Priest for PI rows when required (default true)
-    const requirePriest = rowCfg?.requirePriest !== false
+    // UX: by default, do not restrict to Priest unless explicitly enabled on the row
+    const requirePriest = rowCfg?.requirePriest === true
     if (requirePriest && !isPriest(charId)) return
     pair.from = charId
   } else {
@@ -452,13 +473,99 @@ function charColorById(id: string): string {
   return getClassColor(c?.class);
 }
 
-function roleCountInGroup(memberIds: string[], role: Role): number {
+function getCharacterClassById(id: string): string | undefined {
+  const c = getCharacterById(id);
+  return c?.class;
+}
+
+function displaySpecFor(block: RaidPlanBlock, charId: string): string | undefined {
+  const ov = (block.data?.specOverrides as Record<string, string> | undefined)?.[charId];
+  return ov || getCharacterById(charId)?.spec;
+}
+
+function specOptionsFor(charId: string): string[] {
+  const cls = getCharacterClassById(charId);
+  if (!cls) return [];
+  const options = getSpecOptions(cls).map(o => o.value as string);
+  const c = getCharacterById(charId);
+  const pri = c?.spec || '';
+  const sec = (c as any)?.specSecondary as string | undefined;
+  const order: string[] = [];
+  if (sec && options.includes(sec)) order.push(sec);
+  if (pri && pri !== sec && options.includes(pri)) order.push(pri);
+  const rest = options.filter(v => !order.includes(v));
+  return [...order, ...rest];
+}
+
+function applySpecOverride(block: RaidPlanBlock, charId: string, spec: string) {
+  const overrides = { ...(block.data?.specOverrides || {}) } as Record<string, string>;
+  if (spec) overrides[charId] = spec; else delete overrides[charId];
+
+  if (block.type === 'ROLE_MATRIX') {
+    const cls = getCharacterClassById(charId);
+    const role = cls ? getRoleByClassAndSpec(cls, spec) : undefined;
+    if (role) {
+      const assignments = (block.data?.roleAssignments ?? {}) as Record<Role, string[]>;
+      const newAssignments: Record<Role, string[]> = {
+        Tanks: [...(assignments.Tanks ?? [])],
+        Healers: [...(assignments.Healers ?? [])],
+        Melee: [...(assignments.Melee ?? [])],
+        Ranged: [...(assignments.Ranged ?? [])],
+      } as any;
+      for (const r of Object.keys(newAssignments) as (keyof typeof newAssignments)[]) {
+        newAssignments[r] = newAssignments[r].filter((id) => id !== charId);
+      }
+      if (!newAssignments[role].includes(charId)) newAssignments[role].push(charId);
+      updateBlockData(block, { roleAssignments: newAssignments, specOverrides: overrides });
+      return;
+    }
+  }
+
+  updateBlockData(block, { specOverrides: overrides });
+}
+
+function hasSpecOverride(block: RaidPlanBlock, charId: string): boolean {
+  const overrides = (block.data?.specOverrides as Record<string, string> | undefined) || {};
+  return !!overrides[charId];
+}
+
+function isSpecCompatibleWithRole(cls: string | undefined, spec: string | undefined, role: Role): boolean {
+  if (!cls || !spec) return false;
+  try { return (getRoleByClassAndSpec(cls, spec) as Role) === role } catch { return false }
+}
+
+function pickSpecForRole(charId: string, role: Role): string | undefined {
+  const c = getCharacterById(charId);
+  if (!c) return undefined;
+  const cls = c.class;
+  const options = getSpecOptions(cls || '').map(o => o.value as string);
+  const pri = c.spec;
+  const sec = (c as any)?.specSecondary as string | undefined;
+  if (sec && isSpecCompatibleWithRole(cls, sec, role)) return sec;
+  if (pri && isSpecCompatibleWithRole(cls, pri, role)) return pri;
+  const first = options.find(sp => isSpecCompatibleWithRole(cls, sp, role));
+  return first || pri || options[0];
+}
+
+function roleCountInGroup(block: RaidPlanBlock, memberIds: string[], role: Role): number {
   let n = 0;
   for (const id of memberIds) {
     const c = getCharacterById(id);
-    if (c?.role === role) n++;
+    if (!c) continue;
+    const sp = displaySpecFor(block, id) || c.spec;
+    const derived = (sp && c.class) ? (getRoleByClassAndSpec(c.class, sp) as Role | undefined) : undefined;
+    const finalRole = derived || (c.role as Role | undefined);
+    if (finalRole === role) n++;
   }
   return n;
+}
+
+function derivedRoleFor(block: RaidPlanBlock, charId: string): Role | undefined {
+  const c = getCharacterById(charId);
+  if (!c) return undefined;
+  const sp = displaySpecFor(block, charId) || c.spec;
+  const derived = (sp && c.class) ? (getRoleByClassAndSpec(c.class, sp) as Role | undefined) : undefined;
+  return derived || (c.role as Role | undefined);
 }
 
 function roleLabel(role: Role): string {
@@ -481,6 +588,13 @@ function onDropToRole(block: RaidPlanBlock, role: Role, e: DragEvent) {
   if (!newAssignments[role].includes(charId)) newAssignments[role].push(charId);
   updateBlockData(block, { roleAssignments: newAssignments });
   hoveredRoleKey.value = null;
+
+  // Ensure a compatible spec is selected by default for this role
+  const chosen = pickSpecForRole(charId, role);
+  if (chosen) applySpecOverride(block, charId, chosen);
+
+  // If character was benched, unbench automatically for UX
+  removeFromAllBenches(charId);
 }
 
 function removeFromRole(block: RaidPlanBlock, role: Role, charId: string) {
@@ -508,14 +622,76 @@ function onDropToGroup(block: RaidPlanBlock, groupId: string, e: DragEvent) {
   if (target && !target.members.includes(charId) && target.members.length < max) {
     target.members.push(charId);
   }
-  updateBlockData(block, { groups: cloned });
+  const overrides = { ...(block.data?.specOverrides || {}) } as Record<string, string>;
+  const currentSpec = getCharacterById(charId)?.spec;
+  if (currentSpec && !overrides[charId]) overrides[charId] = currentSpec;
+  updateBlockData(block, { groups: cloned, specOverrides: overrides });
   hoveredGroupKey.value = null;
+
+  removeFromAllBenches(charId);
 }
 
 function removeFromGroup(block: RaidPlanBlock, groupId: string, charId: string) {
   const groups = (block.data?.groups ?? []) as { id: string; title: string; members: string[] }[];
   const cloned = groups.map((g) => ({ ...g, members: g.members.filter((id) => id !== charId) }));
   updateBlockData(block, { groups: cloned });
+}
+
+function stripCharacterFromBlock(b: RaidPlanBlock, charId: string): RaidPlanBlock | null {
+  let changed = false;
+  const next = { ...b, data: { ...(b.data || {}) } } as RaidPlanBlock;
+  if (b.type === 'ROLE_MATRIX') {
+    const ra = (b.data?.roleAssignments ?? {}) as Record<Role, string[]>;
+    const cloned: Record<Role, string[]> = {
+      Tanks: [...(ra.Tanks ?? [])],
+      Healers: [...(ra.Healers ?? [])],
+      Melee: [...(ra.Melee ?? [])],
+      Ranged: [...(ra.Ranged ?? [])],
+    } as any;
+    (Object.keys(cloned) as (keyof typeof cloned)[]).forEach((r) => {
+      const before = cloned[r].length; cloned[r] = cloned[r].filter((id) => id !== charId); if (cloned[r].length !== before) changed = true;
+    });
+    if (changed) (next.data as any).roleAssignments = cloned;
+  }
+  if (b.type === 'GROUPS_GRID') {
+    const groups = (b.data?.groups ?? []) as { id: string; title: string; members: string[] }[];
+    const cloned = groups.map((g) => ({ ...g, members: g.members.filter((id) => id !== charId) }));
+    if (JSON.stringify(groups) !== JSON.stringify(cloned)) { (next.data as any).groups = cloned; changed = true; }
+  }
+  if (b.type === 'BOSS_GRID') {
+    const assigns = (b.data?.assignments ?? {}) as Record<string, string[]>;
+    const cloned: Record<string, string[]> = {};
+    for (const k of Object.keys(assigns)) { const arr = (assigns[k] ?? []).filter(id => id !== charId); if (arr.length !== (assigns[k] ?? []).length) changed = true; cloned[k] = arr; }
+    if (changed) (next.data as any).assignments = cloned;
+  }
+  if (b.type === 'COOLDOWN_ROTATION' || b.type === 'INTERRUPT_ROTATION') {
+    const rows = ((b.data?.rows ?? []) as any[]).map((r) => ({ ...r, cells: { ...(r.cells || {}) } }));
+    let local = false;
+    for (const r of rows) {
+      for (const key of Object.keys(r.cells || {})) {
+        if (r.cells[key] === charId) { r.cells[key] = null; local = true; }
+      }
+    }
+    if (local) { (next.data as any).rows = rows; changed = true; }
+  }
+  return changed ? next : null;
+}
+
+function removeCharacterFromAllAssignments(charId: string) {
+  for (const b of innerBlocks.value) {
+    const stripped = stripCharacterFromBlock(b, charId);
+    if (stripped) emit('update-block', stripped);
+  }
+}
+
+function removeFromAllBenches(charId: string) {
+  for (const b of innerBlocks.value) {
+    if (b.type !== 'BENCH_ROSTER') continue;
+    const bench = new Set<string>(((b.data?.bench ?? []) as string[]));
+    if (bench.delete(charId)) {
+      emit('update-block', { ...b, data: { ...(b.data || {}), bench: Array.from(bench) } });
+    }
+  }
 }
 
 function updateGroupsConfig(block: RaidPlanBlock, groupCount: number, playersPerGroup: number) {
@@ -538,15 +714,9 @@ function updateGroupsConfig(block: RaidPlanBlock, groupCount: number, playersPer
   updateBlockData(block, { groups, groupCount: count, playersPerGroup: size });
 }
 
-function canDropToPosition(block: RaidPlanBlock, positionId: string, charId: string | null): boolean {
-  if (!charId) return false;
-  const c = getCharacterById(charId);
-  if (!c) return false;
-  const positions = (block.data?.positions ?? []) as { id: string; label: string; accepts?: Role[] | 'ANY' }[];
-  const pos = positions.find((p) => p.id === positionId);
-  if (!pos) return false;
-  if (!pos.accepts || pos.accepts === 'ANY') return true;
-  return pos.accepts.includes((c.role as Role) ?? ('Melee' as Role));
+function canDropToPosition(_block: RaidPlanBlock, _positionId: string, charId: string | null): boolean {
+  // UX request: positions accept everything (no restrictions for now)
+  return !!charId;
 }
 
 function onDropToPosition(block: RaidPlanBlock, positionId: string, e: DragEvent) {
@@ -565,6 +735,8 @@ function onDropToPosition(block: RaidPlanBlock, positionId: string, e: DragEvent
   assignments[positionId] = list;
   updateBlockData(block, { assignments });
   hoveredPositionId.value = null;
+
+  removeFromAllBenches(charId);
 }
 
 function removeFromPosition(block: RaidPlanBlock, positionId: string, charId: string) {
@@ -589,7 +761,33 @@ function removePosition(block: RaidPlanBlock, positionId: string) {
   const positions = ((block.data?.positions ?? []) as any[]).filter((p) => p.id !== positionId);
   const assignments = { ...(block.data?.assignments ?? {}) } as Record<string, string[]>;
   delete assignments[positionId];
-  updateBlockData(block, { positions, assignments });
+  const notes = { ...(block.data?.positionNotes ?? {}) } as Record<string, string[]>;
+  delete notes[positionId];
+  updateBlockData(block, { positions, assignments, positionNotes: notes });
+}
+
+function addPositionNote(block: RaidPlanBlock, positionId: string) {
+  const notes = { ...(block.data?.positionNotes ?? {}) } as Record<string, string[]>;
+  const list = notes[positionId] ? [...notes[positionId]] : [];
+  list.push('Note');
+  notes[positionId] = list;
+  updateBlockData(block, { positionNotes: notes });
+}
+
+function updatePositionNote(block: RaidPlanBlock, positionId: string, index: number, text: string) {
+  const notes = { ...(block.data?.positionNotes ?? {}) } as Record<string, string[]>;
+  const list = notes[positionId] ? [...notes[positionId]] : [];
+  list[index] = text;
+  notes[positionId] = list;
+  updateBlockData(block, { positionNotes: notes });
+}
+
+function removePositionNote(block: RaidPlanBlock, positionId: string, index: number) {
+  const notes = { ...(block.data?.positionNotes ?? {}) } as Record<string, string[]>;
+  const list = (notes[positionId] ?? []).slice();
+  list.splice(index, 1);
+  notes[positionId] = list;
+  updateBlockData(block, { positionNotes: notes });
 }
 
 function assignToSelected(characterId: string) {
@@ -602,13 +800,23 @@ function assignToSelected(characterId: string) {
     let target = groups.slice().sort((a,b) => a.members.length - b.members.length).find(g => g.members.length < max);
     if (!target) return false;
     onDropToGroup(block, target.id, { dataTransfer: { getData: () => characterId } } as any as DragEvent);
+    // Ensure default override set to character's spec for clarity
+    const spec = getCharacterById(characterId)?.spec;
+    if (spec) {
+      const overrides = { ...(block.data?.specOverrides || {}) } as Record<string, string>;
+      overrides[characterId] = overrides[characterId] || spec;
+      updateBlockData(block, { specOverrides: overrides });
+    }
     return true;
   }
 
   if (block.type === 'ROLE_MATRIX') {
-    const c = getCharacterById(characterId);
-    if (!c || !c.role) return false;
-    onDropToRole(block, c.role as Role, { dataTransfer: { getData: () => characterId } } as any as DragEvent);
+    const r = derivedRoleFor(block, characterId);
+    if (!r) return false;
+    onDropToRole(block, r, { dataTransfer: { getData: () => characterId } } as any as DragEvent);
+    // pick a compatible spec for that role
+    const chosen = pickSpecForRole(characterId, r);
+    if (chosen) applySpecOverride(block, characterId, chosen);
     return true;
   }
 
@@ -652,6 +860,8 @@ function assignToSelected(characterId: string) {
     const bench = new Set<string>((block.data?.bench ?? []) as string[]);
     bench.add(characterId);
     updateBlockData(block, { bench: Array.from(bench) });
+    // When benching a character, remove them from any other assignments across the plan
+    removeCharacterFromAllAssignments(characterId);
     return true;
   }
   return false;
@@ -780,6 +990,14 @@ defineExpose({ assignToSelected, selectedBlockId });
                 <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 flex-shrink-0">{{ block.type }}</span>
               </div>
               <div class="flex items-center gap-1">
+                <button
+                  v-if="selectedBlockId === block.id"
+                  class="rounded p-1 text-[10px] text-amber-300 hover:bg-amber-900/30 border border-amber-700/50"
+                  title="Reset overrides for this block"
+                  @click.stop="updateBlockData(block, { specOverrides: {} })"
+                >
+                  ⟲ Reset overrides
+                </button>
                 
                 <button
                   class="drag-handle rounded p-1 text-xs text-slate-400 hover:bg-slate-800 cursor-grab"
@@ -956,6 +1174,15 @@ defineExpose({ assignToSelected, selectedBlockId });
 
               
               <div v-else-if="block.type === 'ROLE_MATRIX'" class="space-y-2">
+                <div v-if="selectedBlockId === block.id" class="text-[11px] text-slate-400 px-1">
+                  Choisissez la spécialisation par joueur pour ce boss. Le rôle s'ajuste automatiquement.
+                </div>
+                <div class="flex items-center gap-2 text-[10px] text-slate-400">
+                  <span class="px-1.5 py-0.5 rounded border" :style="{ borderColor: (ROLE_COLORS as any)['Tanks'] + '66', backgroundColor: (ROLE_COLORS as any)['Tanks'] + '22' }">🛡️ T</span>
+                  <span class="px-1.5 py-0.5 rounded border" :style="{ borderColor: (ROLE_COLORS as any)['Healers'] + '66', backgroundColor: (ROLE_COLORS as any)['Healers'] + '22' }">✚ H</span>
+                  <span class="px-1.5 py-0.5 rounded border" :style="{ borderColor: (ROLE_COLORS as any)['Melee'] + '66', backgroundColor: (ROLE_COLORS as any)['Melee'] + '22' }">⚔️ M</span>
+                  <span class="px-1.5 py-0.5 rounded border" :style="{ borderColor: (ROLE_COLORS as any)['Ranged'] + '66', backgroundColor: (ROLE_COLORS as any)['Ranged'] + '22' }">🏹 R</span>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
                   <div
                     v-for="role in ['Tanks','Healers','Melee','Ranged'] as Role[]"
@@ -983,8 +1210,21 @@ defineExpose({ assignToSelected, selectedBlockId });
                           border: '1px solid ' + charColorById(cid) + '55'
                         }"
                       >
-                        <div class="truncate font-medium" :style="{ color: charColorById(cid) }">{{ getCharacterById(cid)?.name ?? 'Unknown' }}</div>
-                        <button class="text-red-400 hover:text-red-300" @click.stop="removeFromRole(block, role, cid)" title="Remove">✕</button>
+                        <div class="truncate font-medium" :style="{ color: charColorById(cid) }">
+                          <span class="truncate">{{ getCharacterById(cid)?.name ?? 'Unknown' }}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <select
+                            class="text-[10px] bg-slate-900/60 border border-slate-700 rounded px-1 py-0.5 text-slate-300"
+                            :value="displaySpecFor(block, cid) || ''"
+                            @change="applySpecOverride(block, cid, ($event.target as HTMLSelectElement).value)"
+                            title="Spécialisation"
+                          >
+                            <option value="">—</option>
+                            <option v-for="sp in specOptionsFor(cid)" :key="sp" :value="sp">{{ sp }}</option>
+                          </select>
+                          <button class="text-red-400 hover:text-red-300" @click.stop="removeFromRole(block, role, cid)" title="Remove">✕</button>
+                        </div>
                       </div>
                       <div v-if="!(block.data?.roleAssignments?.[role]?.length)" class="text-[11px] text-slate-500 text-center py-1">
                         Drag characters here
@@ -996,6 +1236,15 @@ defineExpose({ assignToSelected, selectedBlockId });
 
               
               <div v-else-if="block.type === 'GROUPS_GRID'" class="space-y-2">
+                <div v-if="selectedBlockId === block.id" class="text-[11px] text-slate-400 px-1">
+                  Choisissez la spécialisation affichée pour chaque joueur. Le rôle se met à jour.
+                </div>
+                <div class="flex items-center gap-2 text-[10px] text-slate-400">
+                  <span class="px-1.5 py-0.5 rounded border" :style="{ borderColor: (ROLE_COLORS as any)['Tanks'] + '66', backgroundColor: (ROLE_COLORS as any)['Tanks'] + '22' }">🛡️ T</span>
+                  <span class="px-1.5 py-0.5 rounded border" :style="{ borderColor: (ROLE_COLORS as any)['Healers'] + '66', backgroundColor: (ROLE_COLORS as any)['Healers'] + '22' }">✚ H</span>
+                  <span class="px-1.5 py-0.5 rounded border" :style="{ borderColor: (ROLE_COLORS as any)['Melee'] + '66', backgroundColor: (ROLE_COLORS as any)['Melee'] + '22' }">⚔️ M</span>
+                  <span class="px-1.5 py-0.5 rounded border" :style="{ borderColor: (ROLE_COLORS as any)['Ranged'] + '66', backgroundColor: (ROLE_COLORS as any)['Ranged'] + '22' }">🏹 R</span>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
                   <div
                     v-for="g in (block.data?.groups ?? [])"
@@ -1016,7 +1265,7 @@ defineExpose({ assignToSelected, selectedBlockId });
                       <span v-for="role in (['Tanks','Healers','Melee','Ranged'] as Role[])" :key="role"
                             class="px-1.5 py-0.5 rounded border"
                             :style="{ borderColor: (ROLE_COLORS as any)[role] + '66', backgroundColor: (ROLE_COLORS as any)[role] + '22' }">
-                        {{ roleLabel(role) }} {{ roleCountInGroup(g.members, role) }}
+                        {{ roleLabel(role) }} {{ roleCountInGroup(block, g.members, role) }}
                       </span>
                     </div>
                     <div
@@ -1036,8 +1285,21 @@ defineExpose({ assignToSelected, selectedBlockId });
                           border: '1px solid ' + charColorById(cid) + '55'
                         }"
                       >
-                        <div class="truncate font-medium" :style="{ color: charColorById(cid) }">{{ getCharacterById(cid)?.name ?? 'Unknown' }}</div>
-                        <button class="text-red-400 hover:text-red-300" @click.stop="removeFromGroup(block, g.id, cid)" title="Remove">✕</button>
+                        <div class="truncate font-medium" :style="{ color: charColorById(cid) }">
+                          <span class="truncate">{{ getCharacterById(cid)?.name ?? 'Unknown' }}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <select
+                            class="text-[10px] bg-slate-900/60 border border-slate-700 rounded px-1 py-0.5 text-slate-300"
+                            :value="displaySpecFor(block, cid) || ''"
+                            @change="applySpecOverride(block, cid, ($event.target as HTMLSelectElement).value)"
+                            title="Spécialisation"
+                          >
+                            <option value="">—</option>
+                            <option v-for="sp in specOptionsFor(cid)" :key="sp" :value="sp">{{ sp }}</option>
+                          </select>
+                          <button class="text-red-400 hover:text-red-300" @click.stop="removeFromGroup(block, g.id, cid)" title="Remove">✕</button>
+                        </div>
                       </div>
                       <div v-if="!g.members.length" class="text-[11px] text-slate-500 text-center py-1">Drag characters here</div>
                     </div>
@@ -1410,8 +1672,16 @@ defineExpose({ assignToSelected, selectedBlockId });
                         Drag characters here
                       </div>
                     </div>
-                    <div class="mt-1 text-[10px] text-slate-500">
-                      Accepts: {{ Array.isArray(pos.accepts) ? pos.accepts.join(', ') : 'Any' }}
+                    <div class="mt-2 space-y-1">
+                      <div class="flex items-center justify-between text-[11px] text-slate-400">
+                        <span>Notes</span>
+                        <button class="px-1.5 py-0.5 rounded border border-slate-700 hover:bg-slate-800" @click.stop="addPositionNote(block, pos.id)">+ Add</button>
+                      </div>
+                      <div v-for="(note, ni) in ((block.data?.positionNotes?.[pos.id] ?? []) as any[])" :key="pos.id + ':' + ni" class="flex items-center gap-1">
+                        <input class="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-[11px] text-slate-200" :value="note" @input="updatePositionNote(block, pos.id, ni, ($event.target as HTMLInputElement).value)"/>
+                        <button class="text-red-400 hover:text-red-300" title="Remove note" @click.stop="removePositionNote(block, pos.id, ni)">✕</button>
+                      </div>
+                      <div v-if="!((block.data?.positionNotes?.[pos.id] ?? []) as any[]).length" class="text-[10px] text-slate-500">—</div>
                     </div>
                   </div>
                 </div>

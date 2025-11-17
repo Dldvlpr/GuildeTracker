@@ -27,6 +27,7 @@ export interface Character {
   readonly name: string;
   readonly class: string;
   readonly spec?: string;
+  readonly specSecondary?: string;
   readonly role?: Role;
   readonly status: CharacterStatus;
   readonly level?: number;

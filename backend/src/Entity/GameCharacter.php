@@ -26,6 +26,9 @@ class GameCharacter
     #[ORM\Column(length: 255)]
     private ?string $classSpec = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $classSpecSecondary = null;
+
     #[ORM\Column(length: 255)]
     private ?string $role = null;
 
@@ -77,6 +80,17 @@ class GameCharacter
     public function setClassSpec(string $classSpec): static
     {
         $this->classSpec = $classSpec;
+        return $this;
+    }
+
+    public function getClassSpecSecondary(): ?string
+    {
+        return $this->classSpecSecondary;
+    }
+
+    public function setClassSpecSecondary(?string $classSpecSecondary): static
+    {
+        $this->classSpecSecondary = $classSpecSecondary;
         return $this;
     }
 

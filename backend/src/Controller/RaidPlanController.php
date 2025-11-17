@@ -8,6 +8,7 @@ use App\Repository\RaidPlanRepository;
 use App\Repository\GameCharacterRepository;
 use App\Repository\GameGuildRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use App\Service\WowClassMapper;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -22,6 +23,7 @@ class RaidPlanController extends AbstractController
         private RaidPlanRepository $raidPlanRepository,
         private GameGuildRepository $guildRepository,
         private GameCharacterRepository $gameCharacterRepository,
+        private WowClassMapper $classMapper,
     ) {}
 
     
@@ -251,8 +253,23 @@ class RaidPlanController extends AbstractController
         $blocks = $plan->getBlocks();
 
         $nameById = [];
+        $roster = [];
         foreach ($plan->getGuild()->getGameCharacters() as $gc) {
-            $nameById[$gc->getUuidToString()] = $gc->getName();
+            $id = $gc->getUuidToString();
+            $name = $gc->getName();
+            $nameById[$id] = $name;
+            $class = $gc->getClass();
+            $color = null;
+            if ($class && $class !== 'Unknown') {
+                $cid = $this->classMapper->getClassIdByName($class);
+                if ($cid) $color = $this->classMapper->getClassColor($cid);
+            }
+            $roster[$name] = [
+                'class' => $class,
+                'spec' => $gc->getClassSpec(),
+                'role' => $gc->getRole(),
+                'color' => $color,
+            ];
         }
 
         $transform = function (array $block) use (&$transform, $nameById) {
@@ -287,27 +304,65 @@ class RaidPlanController extends AbstractController
             }
 
             if (in_array($type, ['COOLDOWN_ROTATION', 'INTERRUPT_ROTATION'], true)) {
+                // Prefer top-level cells if present (editor stores here). Otherwise reconstruct from rows[].cells
                 if (isset($data['cells']) && is_array($data['cells'])) {
+                    // Map existing top-level cells (IDs -> names)
                     foreach ($data['cells'] as $rowId => $cols) {
                         if (!is_array($cols)) continue;
                         foreach ($cols as $colId => $cell) {
-                            if (!is_array($cell)) continue;
-                            // Distinguish list vs associative pair
-                            $isList = array_keys($cell) === range(0, count($cell) - 1);
-                            if ($isList) {
-                                $cols[$colId] = array_map(fn($id) => $nameById[$id] ?? $id, $cell);
+                            if (is_array($cell)) {
+                                $isList = array_keys($cell) === range(0, count($cell) - 1);
+                                if ($isList) {
+                                    $cols[$colId] = array_map(fn($id) => $nameById[$id] ?? $id, $cell);
+                                } else {
+                                    $from = $cell['from'] ?? null;
+                                    $to = $cell['to'] ?? null;
+                                    $cols[$colId] = [
+                                        'from' => $from ? ($nameById[$from] ?? $from) : null,
+                                        'to' => $to ? ($nameById[$to] ?? $to) : null,
+                                    ];
+                                }
                             } else {
-                                $from = $cell['from'] ?? null;
-                                $to = $cell['to'] ?? null;
-                                $cols[$colId] = [
-                                    'from' => $from ? ($nameById[$from] ?? $from) : null,
-                                    'to' => $to ? ($nameById[$to] ?? $to) : null,
-                                ];
+                                $cols[$colId] = $cell ? ($nameById[$cell] ?? $cell) : null;
                             }
                         }
                         $data['cells'][$rowId] = $cols;
                     }
+                } elseif (isset($data['rows']) && is_array($data['rows'])) {
+                    // Reconstruct from rows[].cells (legacy)
+                    $cells = [];
+                    foreach ($data['rows'] as $row) {
+                        $rowId = $row['id'] ?? null;
+                        if (!$rowId) continue;
+                        $rowCells = $row['cells'] ?? [];
+                        if (!is_array($rowCells)) $rowCells = [];
+                        $mapped = [];
+                        foreach ($rowCells as $colId => $cell) {
+                            if (is_array($cell)) {
+                                $isList = array_keys($cell) === range(0, count($cell) - 1);
+                                if ($isList) {
+                                    $mapped[$colId] = array_map(fn($id) => $nameById[$id] ?? $id, $cell);
+                                } else {
+                                    $from = $cell['from'] ?? null;
+                                    $to = $cell['to'] ?? null;
+                                    $mapped[$colId] = [
+                                        'from' => $from ? ($nameById[$from] ?? $from) : null,
+                                        'to' => $to ? ($nameById[$to] ?? $to) : null,
+                                    ];
+                                }
+                            } else {
+                                // single value cell
+                                $mapped[$colId] = $cell ? ($nameById[$cell] ?? $cell) : null;
+                            }
+                        }
+                        $cells[$rowId] = $mapped;
+                    }
+                    $data['cells'] = $cells;
                 }
+            }
+
+            if ($type === 'BENCH_ROSTER' && isset($data['bench']) && is_array($data['bench'])) {
+                $data['bench'] = array_map(fn($id) => $nameById[$id] ?? $id, $data['bench']);
             }
 
             $block['data'] = $data;
@@ -332,6 +387,7 @@ class RaidPlanController extends AbstractController
             'raidName' => $plan->getRaidName(),
             'createdAt' => $plan->getCreatedAt()->format('c'),
             'updatedAt' => $plan->getUpdatedAt()->format('c'),
+            'roster' => $roster,
         ];
     }
 }

@@ -233,7 +233,7 @@ function makeInitials(name: string) {
   return ((p[0]?.[0] || 'G') + (p[1]?.[0] || '')).toUpperCase()
 }
 
-const guildRoute = (g: { id: string }) => `/guild/${encodeURIComponent(g.id)}`
+const guildRoute = (g: { id: string }) => `/guild/${encodeURIComponent(g.id)}/dashboard`
 
 function closeGuildMenu() {
   showGuildMenu.value = false

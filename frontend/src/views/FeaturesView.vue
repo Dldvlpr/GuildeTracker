@@ -51,6 +51,14 @@
 
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <FeatureCard
+            title="Dashboard"
+            description="Quick access to sync and overview"
+            icon="DASHBOARD"
+            :available="true"
+            :route="`/guild/${guild?.id}/dashboard`"
+            priority="high"
+          />
+          <FeatureCard
             title="Member Management"
             description="Manage members and their roles (GM, Officer, Member)"
             icon="MEMBERS"

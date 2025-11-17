@@ -9,19 +9,18 @@
     <form @submit.prevent="handleSubmit" class="space-y-4">
       <div>
         <label class="block text-sm font-medium text-slate-200 mb-2">
-          Role
+          Rôle (calculé)
         </label>
-        <select
-          v-model="formData.role"
-          class="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-white placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition"
+        <div
+          class="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-white flex items-center justify-between"
         >
-          <option value="Tank">🛡️ Tank</option>
-          <option value="Healer">💚 Healer</option>
-          <option value="DPS">⚔️ DPS</option>
-          <option value="Unknown">❓ Unknown (Auto-detect)</option>
-        </select>
+          <span class="text-sm text-slate-200">
+            {{ derivedFrontendRoleLabel || 'Unknown' }}
+          </span>
+          <span class="text-xs text-slate-400">d'après la spécialisation</span>
+        </div>
         <p class="mt-1 text-xs text-slate-400">
-          Set to "Unknown" to let sync auto-detect the role
+          Le rôle est déduit de la spécialisation sélectionnée. Choisissez "Unknown" pour laisser la synchronisation auto-détecter.
         </p>
       </div>
 
@@ -46,6 +45,29 @@
         </select>
         <p class="mt-1 text-xs text-slate-400">
           Available specs for {{ character?.class || 'this class' }}
+        </p>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-slate-200 mb-2">
+          Secondary specialization (optional)
+        </label>
+        <select
+          v-model="formData.specSecondary"
+          class="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-white placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition"
+          :disabled="!availableSpecs.length"
+        >
+          <option value="">— None —</option>
+          <option
+            v-for="spec in availableSpecs"
+            :key="spec.value + ':secondary'"
+            :value="spec.value"
+          >
+            {{ spec.label }}
+          </option>
+        </select>
+        <p class="mt-1 text-xs text-slate-400">
+          Used to suggest preferred spec in assignments.
         </p>
       </div>
 
@@ -80,7 +102,7 @@
 import { ref, computed, watch } from 'vue'
 import BaseModal from './ui/BaseModal.vue'
 import { getSpecOptions } from '@/data/gameData'
-import type { Character } from '@/interfaces/game.interface'
+import type { Character, Role } from '@/interfaces/game.interface'
 
 const props = defineProps<{
   character: Character | null
@@ -94,7 +116,8 @@ const emit = defineEmits<{
 
 const formData = ref({
   role: '',
-  spec: ''
+  spec: '',
+  specSecondary: ''
 })
 
 const saving = ref(false)
@@ -104,6 +127,14 @@ const availableSpecs = computed(() => {
   if (!props.character?.class) return []
   return getSpecOptions(props.character.class)
 })
+
+const selectedSpecRole = computed<Role | undefined>(() => {
+  if (!formData.value.spec) return undefined
+  const spec = availableSpecs.value.find(s => s.value === formData.value.spec)
+  return spec?.role
+})
+
+const derivedFrontendRoleLabel = computed(() => selectedSpecRole.value ?? '')
 
 const toBackendRole = (role: string | undefined): string => {
   if (!role) return 'Unknown'
@@ -135,7 +166,8 @@ watch(() => props.character, (newChar) => {
   if (newChar) {
     formData.value = {
       role: toFrontendRole(newChar.role),
-      spec: newChar.spec || ''
+      spec: newChar.spec || '',
+      specSecondary: newChar.specSecondary || ''
     }
   }
   error.value = ''
@@ -146,17 +178,23 @@ const handleSubmit = async () => {
 
   error.value = ''
 
-  const updates: { role?: string; spec?: string } = {}
+  const updates: { role?: string; spec?: string; specSecondary?: string } = {}
 
-  const currentBackendRole = toBackendRole(props.character.role)
-  const newBackendRole = formData.value.role
-
-  if (newBackendRole !== currentBackendRole) {
-    updates.role = newBackendRole
+  const newSpec = formData.value.spec || 'Unknown'
+  if (newSpec !== (props.character.spec || '')) {
+    updates.spec = newSpec
   }
 
-  if (formData.value.spec !== props.character.spec) {
-    updates.spec = formData.value.spec || 'Unknown'
+  const newSpec2 = formData.value.specSecondary || ''
+  if (newSpec2 !== (props.character.specSecondary || '')) {
+    updates.specSecondary = newSpec2 || undefined
+  }
+
+  const derivedFrontendRole = selectedSpecRole.value as unknown as string | undefined
+  const derivedBackendRole = toBackendRole(derivedFrontendRole)
+  const currentBackendRole = toBackendRole(props.character.role)
+  if (derivedBackendRole !== currentBackendRole) {
+    updates.role = derivedBackendRole
   }
 
   if (Object.keys(updates).length === 0) {

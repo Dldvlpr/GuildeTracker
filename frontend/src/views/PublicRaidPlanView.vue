@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
+import { Role, ROLE_COLORS } from '@/interfaces/game.interface';
 import { useRoute } from 'vue-router';
 import type { RaidPlanBlock } from '@/interfaces/raidPlan.interface';
 
@@ -15,6 +16,7 @@ const createdAt = ref('');
 const updatedAt = ref('');
 const highlight = ref('');
 const hoveredCol: Record<number, number | null> = {};
+const roster = ref<Record<string, { class?: string; spec?: string; role?: string; color?: string }>>({});
 
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 
@@ -35,6 +37,7 @@ async function loadPlan() {
     blocks.value = data.blocks;
     createdAt.value = new Date(data.createdAt).toLocaleDateString();
     updatedAt.value = new Date(data.updatedAt).toLocaleDateString();
+    roster.value = data.roster || {};
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -81,7 +84,43 @@ function matchName(name: string): boolean {
 }
 
 function isPairRow(row: any): boolean {
-  return (row?.mode === 'pair');
+  const mode = (row?.mode as string) || ''
+  if (mode === 'pair') return true
+  const t = (row?.type as string) || ''
+  const lbl = ((row?.label as string) || '').toLowerCase()
+  return t === 'pair' || lbl.includes('infusion') || lbl === 'pi'
+}
+
+function pairCell(block: any, rowId: string, colId: string): { from: string | null, to: string | null } {
+  const v = (block?.data?.cells?.[rowId]?.[colId])
+  if (v && typeof v === 'object' && !Array.isArray(v)) return { from: v.from || null, to: v.to || null }
+  // Fallback to rows[].cells for older plans
+  const rows = Array.isArray(block?.data?.rows) ? (block.data.rows as any[]) : []
+  const r = rows.find((x: any) => x?.id === rowId)
+  const rv = r?.cells?.[colId]
+  if (rv && typeof rv === 'object' && !Array.isArray(rv)) return { from: rv.from || null, to: rv.to || null }
+  return { from: null, to: null }
+}
+
+function cellList(block: any, rowId: string, colId: string): string[] {
+  const v = (block?.data?.cells?.[rowId]?.[colId]);
+  if (Array.isArray(v)) return v as string[];
+  if (typeof v === 'string' && v) return [v as string];
+  // Fallback: some older plans store cells under rows[].cells
+  const rows = Array.isArray(block?.data?.rows) ? (block.data.rows as any[]) : [];
+  const r = rows.find((x: any) => x?.id === rowId);
+  const rv = r?.cells?.[colId];
+  if (Array.isArray(rv)) return rv as string[];
+  if (typeof rv === 'string' && rv) return [rv as string];
+  return [];
+}
+
+function rowsList(block: any): Array<{ id: string; label: string; fromLabel?: string; toLabel?: string; mode?: string; type?: string }>{
+  const rows = Array.isArray(block?.data?.rows) ? (block.data.rows as any[]) : []
+  if (rows.length) return rows
+  const cells = block?.data?.cells || {}
+  const ids = Object.keys(cells)
+  return ids.map((id: string) => ({ id, label: id }))
 }
 
 function copyLink() {
@@ -257,10 +296,17 @@ function copyLink() {
             
             
             <div v-else-if="block.type === 'ROLE_MATRIX'" class="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div v-for="role in ['Tanks','Healers','Melee','Ranged']" :key="role" class="rounded border border-slate-800 bg-slate-900/60 p-2">
-                <div class="text-[11px] font-semibold text-slate-300 mb-1">{{ role }}</div>
+              <div v-for="role in ['Tanks','Healers','Melee','Ranged']" :key="role" class="rounded border p-2"
+                   :style="{ borderColor: (ROLE_COLORS as any)[role as Role] + '55', backgroundColor: (ROLE_COLORS as any)[role as Role] + '15' }">
+                <div class="text-[11px] font-semibold mb-1"
+                     :style="{ color: (ROLE_COLORS as any)[role as Role] }">{{ role }}</div>
                 <ul class="space-y-1">
-                  <li v-for="name in (block.data?.roleAssignments?.[role] || [])" :key="name" class="rounded bg-slate-800/70 px-2 py-1" :class="matchName(name) ? 'ring-2 ring-emerald-500/70' : ''">{{ name }}</li>
+                  <li v-for="name in (block.data?.roleAssignments?.[role] || [])" :key="name"
+                      class="rounded px-2 py-1"
+                      :style="roster[name]?.color ? { backgroundColor: roster[name].color + '22', border: '1px solid ' + roster[name].color + '55', color: roster[name].color } : {}"
+                      :class="[!roster[name]?.color ? 'bg-slate-800/70' : '', matchName(name) ? 'ring-2 ring-emerald-500/70' : '']">
+                    {{ name }}
+                  </li>
                   <li v-if="!(block.data?.roleAssignments?.[role]?.length)" class="text-slate-500 italic">No assignments</li>
                 </ul>
               </div>
@@ -274,7 +320,12 @@ function copyLink() {
                   <span class="text-slate-500">{{ (g.members || []).length }}/{{ block.data?.playersPerGroup ?? 5 }}</span>
                 </div>
                 <ul class="space-y-1">
-                  <li v-for="name in (g.members || [])" :key="name" class="rounded bg-slate-800/70 px-2 py-1" :class="matchName(name) ? 'ring-2 ring-emerald-500/70' : ''">{{ name }}</li>
+                  <li v-for="name in (g.members || [])" :key="name"
+                      class="rounded px-2 py-1"
+                      :style="roster[name]?.color ? { backgroundColor: roster[name].color + '22', border: '1px solid ' + roster[name].color + '55', color: roster[name].color } : {}"
+                      :class="[!roster[name]?.color ? 'bg-slate-800/70' : '', matchName(name) ? 'ring-2 ring-emerald-500/70' : '']">
+                    {{ name }}
+                  </li>
                   <li v-if="!(g.members?.length)" class="text-slate-500 italic">Empty</li>
                 </ul>
               </div>
@@ -285,9 +336,20 @@ function copyLink() {
               <div v-for="pos in (block.data?.positions || [])" :key="pos.id" class="rounded border border-slate-800 bg-slate-900/60 p-2">
                 <div class="text-[11px] font-semibold text-slate-300 mb-1">{{ pos.label }}</div>
                 <ul class="space-y-1">
-                  <li v-for="name in (block.data?.assignments?.[pos.id] || [])" :key="name" class="rounded bg-slate-800/70 px-2 py-1" :class="matchName(name) ? 'ring-2 ring-emerald-500/70' : ''">{{ name }}</li>
+                  <li v-for="name in (block.data?.assignments?.[pos.id] || [])" :key="name"
+                      class="rounded px-2 py-1"
+                      :style="roster[name]?.color ? { backgroundColor: roster[name].color + '22', border: '1px solid ' + roster[name].color + '55', color: roster[name].color } : {}"
+                      :class="[!roster[name]?.color ? 'bg-slate-800/70' : '', matchName(name) ? 'ring-2 ring-emerald-500/70' : '']">
+                    {{ name }}
+                  </li>
                   <li v-if="!(block.data?.assignments?.[pos.id]?.length)" class="text-slate-500 italic">Unassigned</li>
                 </ul>
+                <div v-if="(block.data?.positionNotes?.[pos.id]?.length)" class="mt-1">
+                  <div class="text-[10px] text-slate-500">Notes:</div>
+                  <ul class="mt-0.5 space-y-0.5">
+                    <li v-for="(note, ni) in (block.data?.positionNotes?.[pos.id] || [])" :key="pos.id + ':' + ni" class="text-[11px] text-slate-300">- {{ note }}</li>
+                  </ul>
+                </div>
               </div>
             </div>
 
@@ -303,7 +365,7 @@ function copyLink() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="row in (block.data?.rows || [])" :key="row.id" class="odd:bg-slate-900/40">
+                  <tr v-for="row in rowsList(block)" :key="row.id" class="odd:bg-slate-900/40">
                     <td class="border-t border-slate-800 p-1">
                       <span v-if="chip(row)" class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-semibold ring-1 ring-inset mr-1" :class="chip(row)!.cls">{{ chip(row)!.text }}</span>
                       {{ row.label }}
@@ -311,19 +373,52 @@ function copyLink() {
                     <td v-for="(col, ci) in (block.data?.columns || [])" :key="col.id" class="border-t border-l border-slate-800 p-1" @mouseenter="hoveredCol[blocks.indexOf(block)] = ci" @mouseleave="hoveredCol[blocks.indexOf(block)] = null" :class="hoveredCol[blocks.indexOf(block)] === ci ? 'bg-slate-800/30' : ''">
                       <div class="space-y-1">
                         <template v-if="!isPairRow(row)">
-                          <div v-for="name in ((block.data?.cells?.[row.id]?.[col.id]) || [])" :key="name" class="rounded bg-slate-800/70 px-2 py-1" :class="matchName(name) ? 'ring-2 ring-emerald-500/70' : ''">{{ name }}</div>
+                          <div v-for="name in cellList(block, row.id, col.id)" :key="name"
+                               class="rounded px-2 py-1"
+                               :style="roster[name]?.color ? { backgroundColor: roster[name].color + '22', border: '1px solid ' + roster[name].color + '55', color: roster[name].color } : {}"
+                               :class="[!roster[name]?.color ? 'bg-slate-800/70' : '', matchName(name) ? 'ring-2 ring-emerald-500/70' : '']">
+                            {{ name }}
+                          </div>
                         </template>
                         <template v-else>
                           <div class="grid grid-cols-2 gap-1">
                             <div class="rounded bg-slate-900/40 p-1 min-h-6">
                               <div class="text-[10px] text-slate-500 mb-0.5">{{ row.fromLabel || 'Priest' }}</div>
-                              <div v-if="(block.data?.cells?.[row.id]?.[col.id]?.from)" class="rounded bg-slate-800/70 px-2 py-1" :class="matchName(block.data?.cells?.[row.id]?.[col.id]?.from) ? 'ring-2 ring-emerald-500/70' : ''">{{ block.data?.cells?.[row.id]?.[col.id]?.from }}</div>
-                              <div v-else class="text-slate-500 text-[11px]">—</div>
+                              <div v-if="pairCell(block, row.id, col.id).from"
+                                   class="rounded px-2 py-1"
+                                   :style="roster[pairCell(block, row.id, col.id).from!]?.color ? { backgroundColor: roster[pairCell(block, row.id, col.id).from!].color + '22', border: '1px solid ' + roster[pairCell(block, row.id, col.id).from!].color + '55', color: roster[pairCell(block, row.id, col.id).from!].color } : {}"
+                                   :class="[!roster[pairCell(block, row.id, col.id).from!]?.color ? 'bg-slate-800/70' : '', matchName(pairCell(block, row.id, col.id).from!) ? 'ring-2 ring-emerald-500/70' : '']">
+                                {{ pairCell(block, row.id, col.id).from }}
+                              </div>
+                              <div v-else>
+                                <template v-if="cellList(block, row.id, col.id).length">
+                                  <div class="rounded px-2 py-1"
+                                       :style="roster[cellList(block, row.id, col.id)[0]]?.color ? { backgroundColor: roster[cellList(block, row.id, col.id)[0]].color + '22', border: '1px solid ' + roster[cellList(block, row.id, col.id)[0]].color + '55', color: roster[cellList(block, row.id, col.id)[0]].color } : {}"
+                                       :class="[!roster[cellList(block, row.id, col.id)[0]]?.color ? 'bg-slate-800/70' : '', matchName(cellList(block, row.id, col.id)[0]) ? 'ring-2 ring-emerald-500/70' : '']">
+                                    {{ cellList(block, row.id, col.id)[0] }}
+                                  </div>
+                                </template>
+                                <div v-else class="text-slate-500 text-[11px]">—</div>
+                              </div>
                             </div>
                             <div class="rounded bg-slate-900/40 p-1 min-h-6">
                               <div class="text-[10px] text-slate-500 mb-0.5">{{ row.toLabel || 'Target' }}</div>
-                              <div v-if="(block.data?.cells?.[row.id]?.[col.id]?.to)" class="rounded bg-slate-800/70 px-2 py-1" :class="matchName(block.data?.cells?.[row.id]?.[col.id]?.to) ? 'ring-2 ring-emerald-500/70' : ''">{{ block.data?.cells?.[row.id]?.[col.id]?.to }}</div>
-                              <div v-else class="text-slate-500 text-[11px]">—</div>
+                              <div v-if="pairCell(block, row.id, col.id).to"
+                                   class="rounded px-2 py-1"
+                                   :style="roster[pairCell(block, row.id, col.id).to!]?.color ? { backgroundColor: roster[pairCell(block, row.id, col.id).to!].color + '22', border: '1px solid ' + roster[pairCell(block, row.id, col.id).to!].color + '55', color: roster[pairCell(block, row.id, col.id).to!].color } : {}"
+                                   :class="[!roster[pairCell(block, row.id, col.id).to!]?.color ? 'bg-slate-800/70' : '', matchName(pairCell(block, row.id, col.id).to!) ? 'ring-2 ring-emerald-500/70' : '']">
+                                {{ pairCell(block, row.id, col.id).to }}
+                              </div>
+                              <div v-else>
+                                <template v-if="cellList(block, row.id, col.id).length > 1">
+                                  <div class="rounded px-2 py-1"
+                                       :style="roster[cellList(block, row.id, col.id)[1]]?.color ? { backgroundColor: roster[cellList(block, row.id, col.id)[1]].color + '22', border: '1px solid ' + roster[cellList(block, row.id, col.id)[1]].color + '55', color: roster[cellList(block, row.id, col.id)[1]].color } : {}"
+                                       :class="[!roster[cellList(block, row.id, col.id)[1]]?.color ? 'bg-slate-800/70' : '', matchName(cellList(block, row.id, col.id)[1]) ? 'ring-2 ring-emerald-500/70' : '']">
+                                    {{ cellList(block, row.id, col.id)[1] }}
+                                  </div>
+                                </template>
+                                <div v-else class="text-slate-500 text-[11px]">—</div>
+                              </div>
                             </div>
                           </div>
                         </template>
@@ -332,6 +427,22 @@ function copyLink() {
                   </tr>
                 </tbody>
               </table>
+            </div>
+
+            
+            <div v-else-if="block.type === 'CHECKLIST'" class="space-y-2">
+              <div class="text-[11px] text-slate-400">Checklist</div>
+              <ul class="space-y-1">
+                <li v-for="it in (block.data?.checklistItems || [])" :key="it.id"
+                    class="flex items-center gap-2 rounded border border-slate-800 bg-slate-900/60 px-2 py-1">
+                  <span class="inline-flex h-4 w-4 items-center justify-center rounded border"
+                        :class="it.done ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-300' : 'border-slate-600 text-slate-500'">
+                    {{ it.done ? '✓' : '' }}
+                  </span>
+                  <span :class="it.done ? 'line-through text-slate-400' : 'text-slate-200'">{{ it.label }}</span>
+                </li>
+                <li v-if="!(block.data?.checklistItems?.length)" class="text-slate-500 italic">No items</li>
+              </ul>
             </div>
 
             
@@ -344,11 +455,16 @@ function copyLink() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="row in (block.data?.rows || [])" :key="row.id" class="odd:bg-slate-900/40">
+                  <tr v-for="row in rowsList(block)" :key="row.id" class="odd:bg-slate-900/40">
                     <td class="border-t border-slate-800 p-1">{{ row.label }}</td>
                     <td v-for="(col, ci) in (block.data?.columns || [])" :key="col.id" class="border-t border-l border-slate-800 p-1" @mouseenter="hoveredCol[blocks.indexOf(block)] = ci" @mouseleave="hoveredCol[blocks.indexOf(block)] = null" :class="hoveredCol[blocks.indexOf(block)] === ci ? 'bg-slate-800/30' : ''">
                       <div class="space-y-1">
-                        <div v-for="name in ((block.data?.cells?.[row.id]?.[col.id]) || [])" :key="name" class="rounded bg-slate-800/70 px-2 py-1" :class="matchName(name) ? 'ring-2 ring-emerald-500/70' : ''">{{ name }}</div>
+                        <div v-for="name in cellList(block, row.id, col.id)" :key="name"
+                             class="rounded px-2 py-1"
+                             :style="roster[name]?.color ? { backgroundColor: roster[name].color + '22', border: '1px solid ' + roster[name].color + '55', color: roster[name].color } : {}"
+                             :class="[!roster[name]?.color ? 'bg-slate-800/70' : '', matchName(name) ? 'ring-2 ring-emerald-500/70' : '']">
+                          {{ name }}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -360,7 +476,12 @@ function copyLink() {
             <div v-else-if="block.type === 'BENCH_ROSTER'">
               <div class="text-[11px] text-slate-400 mb-1">Benched players</div>
               <ul class="space-y-1">
-                <li v-for="name in (block.data?.bench || [])" :key="name" class="rounded bg-slate-800/70 px-2 py-1">{{ name }}</li>
+                <li v-for="name in (block.data?.bench || [])" :key="name"
+                    class="rounded px-2 py-1"
+                    :style="roster[name]?.color ? { backgroundColor: roster[name].color + '22', border: '1px solid ' + roster[name].color + '55', color: roster[name].color } : {}"
+                    :class="[!roster[name]?.color ? 'bg-slate-800/70' : '']">
+                  {{ name }}
+                </li>
                 <li v-if="!(block.data?.bench?.length)" class="text-slate-500 italic">No bench</li>
               </ul>
             </div>

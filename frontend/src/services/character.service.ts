@@ -83,6 +83,7 @@ export async function createCharacter(
     name: character.name,
     class: character.class,
     classSpec: character.spec,
+    classSpecSecondary: character.specSecondary,
     role: character.role,
   };
 
@@ -223,7 +224,7 @@ export async function syncGuildRoster(
 export async function updateCharacter(
   guildId: string,
   characterId: string,
-  updates: { role?: string; spec?: string },
+  updates: { role?: string; spec?: string; specSecondary?: string },
   opts?: { signal?: AbortSignal }
 ): Promise<UpdateCharacterResult> {
   if (!BASE) {

@@ -242,7 +242,13 @@ final class GameGuildController extends AbstractController
             $character->setClassSpec($newSpec);
         }
 
-        if (!isset($payload['role']) && !isset($payload['spec'])) {
+        if (isset($payload['specSecondary'])) {
+            $newSpec2 = trim((string)$payload['specSecondary']);
+            if ($newSpec2 === '') { $newSpec2 = null; }
+            $character->setClassSpecSecondary($newSpec2);
+        }
+
+        if (!isset($payload['role']) && !isset($payload['spec']) && !isset($payload['specSecondary'])) {
             return $this->json(['error' => 'At least one field (role or spec) must be provided'], 400);
         }
 
