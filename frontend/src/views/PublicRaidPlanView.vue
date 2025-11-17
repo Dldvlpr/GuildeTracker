@@ -80,6 +80,10 @@ function matchName(name: string): boolean {
   return !!q && name.toLowerCase().includes(q);
 }
 
+function isPairRow(row: any): boolean {
+  return (row?.mode === 'pair');
+}
+
 function copyLink() {
   navigator.clipboard.writeText(window.location.href);
 
@@ -292,7 +296,7 @@ function copyLink() {
               <table class="min-w-full text-[11px] border border-slate-800 rota-table">
                 <thead>
                   <tr class="bg-slate-900/70 sticky top-0">
-                    <th class="border-b border-slate-800 p-1 text-left w-40">Cooldown</th>
+                    <th class="border-b border-slate-800 p-1 text-left w-40">{{ block.data?.rowHeaderLabel || 'Cooldown' }}</th>
                     <th v-for="(col, ci) in (block.data?.columns || [])" :key="col.id" class="border-b border-l border-slate-800 p-1" @mouseenter="hoveredCol[blocks.indexOf(block)] = ci" @mouseleave="hoveredCol[blocks.indexOf(block)] = null" :class="hoveredCol[blocks.indexOf(block)] === ci ? 'bg-slate-800/60' : ''">
                       <div>{{ col.label }}<span v-if="col.sublabel" class="text-slate-500"> — {{ col.sublabel }}</span></div>
                     </th>
@@ -306,7 +310,23 @@ function copyLink() {
                     </td>
                     <td v-for="(col, ci) in (block.data?.columns || [])" :key="col.id" class="border-t border-l border-slate-800 p-1" @mouseenter="hoveredCol[blocks.indexOf(block)] = ci" @mouseleave="hoveredCol[blocks.indexOf(block)] = null" :class="hoveredCol[blocks.indexOf(block)] === ci ? 'bg-slate-800/30' : ''">
                       <div class="space-y-1">
-                        <div v-for="name in ((block.data?.cells?.[row.id]?.[col.id]) || [])" :key="name" class="rounded bg-slate-800/70 px-2 py-1" :class="matchName(name) ? 'ring-2 ring-emerald-500/70' : ''">{{ name }}</div>
+                        <template v-if="!isPairRow(row)">
+                          <div v-for="name in ((block.data?.cells?.[row.id]?.[col.id]) || [])" :key="name" class="rounded bg-slate-800/70 px-2 py-1" :class="matchName(name) ? 'ring-2 ring-emerald-500/70' : ''">{{ name }}</div>
+                        </template>
+                        <template v-else>
+                          <div class="grid grid-cols-2 gap-1">
+                            <div class="rounded bg-slate-900/40 p-1 min-h-6">
+                              <div class="text-[10px] text-slate-500 mb-0.5">{{ row.fromLabel || 'Priest' }}</div>
+                              <div v-if="(block.data?.cells?.[row.id]?.[col.id]?.from)" class="rounded bg-slate-800/70 px-2 py-1" :class="matchName(block.data?.cells?.[row.id]?.[col.id]?.from) ? 'ring-2 ring-emerald-500/70' : ''">{{ block.data?.cells?.[row.id]?.[col.id]?.from }}</div>
+                              <div v-else class="text-slate-500 text-[11px]">—</div>
+                            </div>
+                            <div class="rounded bg-slate-900/40 p-1 min-h-6">
+                              <div class="text-[10px] text-slate-500 mb-0.5">{{ row.toLabel || 'Target' }}</div>
+                              <div v-if="(block.data?.cells?.[row.id]?.[col.id]?.to)" class="rounded bg-slate-800/70 px-2 py-1" :class="matchName(block.data?.cells?.[row.id]?.[col.id]?.to) ? 'ring-2 ring-emerald-500/70' : ''">{{ block.data?.cells?.[row.id]?.[col.id]?.to }}</div>
+                              <div v-else class="text-slate-500 text-[11px]">—</div>
+                            </div>
+                          </div>
+                        </template>
                       </div>
                     </td>
                   </tr>
@@ -319,7 +339,7 @@ function copyLink() {
               <table class="min-w-full text-[11px] border border-slate-800 rota-table">
                 <thead>
                   <tr class="bg-slate-900/70 sticky top-0">
-                    <th class="border-b border-slate-800 p-1 text-left w-40">Target</th>
+                    <th class="border-b border-slate-800 p-1 text-left w-40">{{ block.data?.rowHeaderLabel || 'Target' }}</th>
                     <th v-for="(col, ci) in (block.data?.columns || [])" :key="col.id" class="border-b border-l border-slate-800 p-1" @mouseenter="hoveredCol[blocks.indexOf(block)] = ci" @mouseleave="hoveredCol[blocks.indexOf(block)] = null" :class="hoveredCol[blocks.indexOf(block)] === ci ? 'bg-slate-800/60' : ''">{{ col.label }}</th>
                   </tr>
                 </thead>

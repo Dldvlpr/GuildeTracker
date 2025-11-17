@@ -290,11 +290,22 @@ class RaidPlanController extends AbstractController
                 if (isset($data['cells']) && is_array($data['cells'])) {
                     foreach ($data['cells'] as $rowId => $cols) {
                         if (!is_array($cols)) continue;
-                        foreach ($cols as $colId => $ids) {
-                            if (is_array($ids)) {
-                                $data['cells'][$rowId][$colId] = array_map(fn($id) => $nameById[$id] ?? $id, $ids);
+                        foreach ($cols as $colId => $cell) {
+                            if (!is_array($cell)) continue;
+                            // Distinguish list vs associative pair
+                            $isList = array_keys($cell) === range(0, count($cell) - 1);
+                            if ($isList) {
+                                $cols[$colId] = array_map(fn($id) => $nameById[$id] ?? $id, $cell);
+                            } else {
+                                $from = $cell['from'] ?? null;
+                                $to = $cell['to'] ?? null;
+                                $cols[$colId] = [
+                                    'from' => $from ? ($nameById[$from] ?? $from) : null,
+                                    'to' => $to ? ($nameById[$to] ?? $to) : null,
+                                ];
                             }
                         }
+                        $data['cells'][$rowId] = $cols;
                     }
                 }
             }

@@ -323,6 +323,67 @@ function updateRow(block: RaidPlanBlock, rowId: string, patch: Record<string, an
   updateBlockData(block, { rows: next })
 }
 
+function isPairRow(row: any): boolean {
+  const mode = (row?.mode as string) || ''
+  if (mode === 'pair') return true
+  const t = (row?.type as string) || ''
+  const lbl = ((row?.label as string) || '').toLowerCase()
+  return t === 'pair' || lbl.includes('infusion') || lbl === 'pi'
+}
+
+type PairCell = { from: string | null; to: string | null }
+type PairCellMap = Record<string, Record<string, PairCell>>
+
+function ensurePairCells(block: RaidPlanBlock): PairCellMap {
+  const cells = (block.data?.cells as any) ?? {}
+  if (!block.data) (block as any).data = {}
+  if (!block.data!.cells) (block.data as any).cells = {}
+  return cells as PairCellMap
+}
+
+function getPairCell(block: RaidPlanBlock, rowId: string, colId: string): PairCell {
+  const cells = ensurePairCells(block)
+  const row = cells[rowId] ?? (cells[rowId] = {})
+  const cur = row[colId] ?? (row[colId] = { from: null, to: null })
+  return cur
+}
+
+function isPriest(charId: string | null): boolean {
+  if (!charId) return false
+  const c = getCharacterById(charId)
+  return (c?.class || '').toLowerCase() === 'priest'
+}
+
+function dropToPairCell(block: RaidPlanBlock, rowId: string, colId: string, slot: 'from'|'to', e: DragEvent) {
+  const charId = e.dataTransfer?.getData('text/plain') || null
+  if (!charId) return
+  const rows = (block.data?.rows ?? []) as any[]
+  const rowCfg = rows.find((r: any) => r.id === rowId)
+  const pair = getPairCell(block, rowId, colId)
+  if (slot === 'from') {
+    // Enforce Priest for PI rows when required (default true)
+    const requirePriest = rowCfg?.requirePriest !== false
+    if (requirePriest && !isPriest(charId)) return
+    pair.from = charId
+  } else {
+    // Target can be anyone
+    pair.to = charId
+  }
+  const cells = ensurePairCells(block)
+  const row = cells[rowId] ?? (cells[rowId] = {})
+  row[colId] = pair
+  updateBlockData(block, { cells })
+}
+
+function clearPair(block: RaidPlanBlock, rowId: string, colId: string, slot: 'from'|'to') {
+  const pair = getPairCell(block, rowId, colId)
+  pair[slot] = null
+  const cells = ensurePairCells(block)
+  const row = cells[rowId] ?? (cells[rowId] = {})
+  row[colId] = pair
+  updateBlockData(block, { cells })
+}
+
 function addColumns(block: RaidPlanBlock, labels: string[]) {
   const cols = (block.data?.columns ?? []) as any[]
   const next = [...cols]
@@ -985,7 +1046,7 @@ defineExpose({ assignToSelected, selectedBlockId });
               </div>
 
               
-              <div v-else-if="block.type === 'COOLDOWN_ROTATION'" class="space-y-2">
+              <div v-else-if="false && block.type === 'COOLDOWN_ROTATION'" class="space-y-2">
                 <div class="flex flex-wrap items-center gap-2" v-if="selectedBlockId === block.id">
                   <button class="px-2 py-0.5 text-[11px] rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="updateBlockData(block, { columns: [...(block.data?.columns ?? []), { id: 't' + (block.data?.columns?.length ?? 0) + 1, label: 'New' }] })">+ Column</button>
                   <button class="px-2 py-0.5 text-[11px] rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="updateBlockData(block, { rows: [...(block.data?.rows ?? []), { id: 'cd' + (block.data?.rows?.length ?? 0) + 1, label: 'CD', cells: {} }] })">+ Row</button>
@@ -1099,8 +1160,16 @@ defineExpose({ assignToSelected, selectedBlockId });
                   <table class="w-full text-xs border-separate border-spacing-y-1">
                     <thead>
                       <tr>
-                        <th class="text-left text-slate-400 px-2 py-1">Target</th>
-                        <th v-for="col in (block.data?.columns ?? [])" :key="col.id" class="text-left text-slate-300 px-2 py-1">{{ col.label }}</th>
+                        <th class="text-left text-slate-400 px-2 py-1">{{ block.data?.rowHeaderLabel || 'Target' }}</th>
+                        <th v-for="(col, ci) in (block.data?.columns ?? [])" :key="col.id" class="text-left text-slate-300 px-2 py-1">
+                          <div class="flex items-center gap-1">
+                            <input class="w-16 bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="col.label" @input="updateColumn(block, col.id, { label: ($event.target as HTMLInputElement).value })" />
+                            <button class="text-slate-400 hover:text-slate-200" title="←" @click.stop="(function(){ const cols=(block.data!.columns as any[]).slice(); const idx=cols.findIndex((c:any)=>c.id===col.id); if(idx>0){ const tmp=cols[idx-1]; cols[idx-1]=cols[idx]; cols[idx]=tmp; updateBlockData(block, { columns: cols }) } })()">←</button>
+                            <button class="text-slate-400 hover:text-slate-200" title=">" @click.stop="(function(){ const cols=(block.data!.columns as any[]).slice(); const idx=cols.findIndex((c:any)=>c.id===col.id); if(idx<cols.length-1){ const tmp=cols[idx+1]; cols[idx+1]=cols[idx]; cols[idx]=tmp; updateBlockData(block, { columns: cols }) } })()">→</button>
+                            <button class="text-emerald-400 hover:text-emerald-300" title="⧉" @click.stop="(function(){ const cols=(block.data!.columns as any[]).slice(); const idx=cols.findIndex((c:any)=>c.id===col.id); const clone={ ...cols[idx], id: cols[idx].id + '_copy' }; cols.splice(idx+1,0,clone); updateBlockData(block, { columns: cols }) })()">⧉</button>
+                            <button class="text-red-400 hover:text-red-300" title="✕" @click.stop="removeRotationColumn(block, col.id)">✕</button>
+                          </div>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1417,7 +1486,14 @@ defineExpose({ assignToSelected, selectedBlockId });
               
               <div v-else-if="block.type === 'COOLDOWN_ROTATION'" class="space-y-2">
                 <div class="flex items-center justify-between gap-2">
-                  <div class="text-[11px] text-slate-400">Define time slots and assign cooldowns (e.g., Power Infusion, Barrier, Rally)</div>
+                  <div class="text-[11px] text-slate-400 flex items-center gap-2" v-if="selectedBlockId === block.id">
+                    <span>Define time slots and assign cooldowns</span>
+                    <label class="inline-flex items-center gap-1">
+                      <span class="text-slate-500">Row header</span>
+                      <input class="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 w-28" :value="block.data?.rowHeaderLabel || 'Cooldown'" @input="updateBlockData(block, { rowHeaderLabel: ($event.target as HTMLInputElement).value })" />
+                    </label>
+                  </div>
+                  <div class="text-[11px] text-slate-400" v-else>Define time slots and assign cooldowns</div>
                   <div class="flex items-center gap-1">
                     <button class="text-[11px] px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addRotationColumn(block)">+ Add time</button>
                     <span class="text-[10px] text-slate-500 ml-1">Presets:</span>
@@ -1433,7 +1509,7 @@ defineExpose({ assignToSelected, selectedBlockId });
                   <table class="min-w-full text-[11px] border border-slate-700">
                     <thead>
                       <tr class="bg-slate-900/70">
-                        <th class="border-b border-slate-700 p-1 text-left w-40">Cooldown</th>
+                        <th class="border-b border-slate-700 p-1 text-left w-40">{{ block.data?.rowHeaderLabel || 'Cooldown' }}</th>
                         <th v-for="col in (block.data?.columns ?? [])" :key="col.id" class="border-b border-l border-slate-700 p-1">
                           <div class="flex items-center gap-1">
                             <input class="w-20 bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="col.label" @input="updateColumn(block, col.id, { label: ($event.target as HTMLInputElement).value })" />
@@ -1449,9 +1525,21 @@ defineExpose({ assignToSelected, selectedBlockId });
                     <tbody>
                       <tr v-for="row in (block.data?.rows ?? [])" :key="row.id" class="odd:bg-slate-900/40">
                         <td class="border-t border-slate-700 p-1 align-top">
-                          <div class="flex items-center gap-1">
+                          <div class="flex items-center gap-1 flex-wrap">
                             <span v-if="rowChip(row)" class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-semibold ring-1 ring-inset" :class="rowChip(row)!.cls">{{ rowChip(row)!.text }}</span>
-                            <input class="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="row.label" @input="updateRow(block, row.id, { label: ($event.target as HTMLInputElement).value })" />
+                            <input class="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 w-44" :value="row.label" @input="updateRow(block, row.id, { label: ($event.target as HTMLInputElement).value })" />
+                            <div class="flex items-center gap-1 text-[10px] text-slate-400">
+                              <label class="inline-flex items-center gap-1">
+                                <input type="checkbox" :checked="isPairRow(row)" @change="updateRow(block, row.id, { mode: ($event.target as HTMLInputElement).checked ? 'pair' : 'single' })" /> Pair
+                              </label>
+                              <template v-if="isPairRow(row)">
+                                <input class="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 w-24" :value="row.fromLabel || 'Priest'" @input="updateRow(block, row.id, { fromLabel: ($event.target as HTMLInputElement).value })" placeholder="Caster label" />
+                                <input class="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 w-24" :value="row.toLabel || 'Target'" @input="updateRow(block, row.id, { toLabel: ($event.target as HTMLInputElement).value })" placeholder="Target label" />
+                                <label class="inline-flex items-center gap-1">
+                                  <input type="checkbox" :checked="(row.requirePriest ?? true)" @change="updateRow(block, row.id, { requirePriest: ($event.target as HTMLInputElement).checked })" /> Priest only
+                                </label>
+                              </template>
+                            </div>
                             <button class="text-slate-400 hover:text-slate-200" title="↑" @click.stop="(function(){ const rows=(block.data!.rows as any[]).slice(); const idx=rows.findIndex((r:any)=>r.id===row.id); if(idx>0){ const tmp=rows[idx-1]; rows[idx-1]=rows[idx]; rows[idx]=tmp; updateBlockData(block, { rows }) } })()">↑</button>
                             <button class="text-slate-400 hover:text-slate-200" title="↓" @click.stop="(function(){ const rows=(block.data!.rows as any[]).slice(); const idx=rows.findIndex((r:any)=>r.id===row.id); if(idx<rows.length-1){ const tmp=rows[idx+1]; rows[idx+1]=rows[idx]; rows[idx]=tmp; updateBlockData(block, { rows }) } })()">↓</button>
                             <button class="text-emerald-400 hover:text-emerald-300" title="⧉" @click.stop="(function(){ const rows=(block.data!.rows as any[]).slice(); const idx=rows.findIndex((r:any)=>r.id===row.id); const clone={ ...rows[idx], id: rows[idx].id + '_copy' }; rows.splice(idx+1,0,clone); updateBlockData(block, { rows }) })()">⧉</button>
@@ -1459,17 +1547,35 @@ defineExpose({ assignToSelected, selectedBlockId });
                           </div>
                         </td>
                         <td v-for="col in (block.data?.columns ?? [])" :key="col.id" class="border-t border-l border-slate-700 p-1">
-                          <div
-                            class="min-h-9 rounded bg-slate-900/40 p-1 space-y-1 transition-all"
-                            @dragover.prevent
-                            @drop.prevent="(e: DragEvent) => dropToCell(block, row.id, col.id, e)"
-                          >
-                            <div v-for="cid in getCell(block, row.id, col.id)" :key="cid" class="flex items-center justify-between rounded bg-slate-800/70 px-2 py-1" :style="{ borderLeft: '3px solid ' + charColorById(cid) }">
-                              <div class="truncate">{{ getCharacterById(cid)?.name ?? 'Unknown' }}</div>
-                              <button class="text-red-400 hover:text-red-300" @click.stop="removeFromCell(block, row.id, col.id, cid)" title="Remove">✕</button>
+                          <template v-if="isPairRow(row)">
+                            <div class="grid grid-cols-2 gap-1">
+                              <div class="rounded bg-slate-900/40 p-1 min-h-8" @dragover.prevent @drop.prevent="(e: DragEvent) => dropToPairCell(block, row.id, col.id, 'from', e)">
+                                <div class="text-[10px] text-slate-500 mb-0.5">Priest</div>
+                                <div v-if="getPairCell(block, row.id, col.id).from" class="flex items-center justify-between rounded bg-slate-800/70 px-2 py-1" :style="{ borderLeft: '3px solid ' + charColorById(getPairCell(block, row.id, col.id).from!) }">
+                                  <div class="truncate">{{ getCharacterById(getPairCell(block, row.id, col.id).from!)?.name ?? 'Unknown' }}</div>
+                                  <button class="text-red-400 hover:text-red-300" @click.stop="clearPair(block, row.id, col.id, 'from')">✕</button>
+                                </div>
+                                <div v-else class="text-center text-slate-500 text-[11px]">Drop priest</div>
+                              </div>
+                              <div class="rounded bg-slate-900/40 p-1 min-h-8" @dragover.prevent @drop.prevent="(e: DragEvent) => dropToPairCell(block, row.id, col.id, 'to', e)">
+                                <div class="text-[10px] text-slate-500 mb-0.5">Target</div>
+                                <div v-if="getPairCell(block, row.id, col.id).to" class="flex items-center justify-between rounded bg-slate-800/70 px-2 py-1" :style="{ borderLeft: '3px solid ' + charColorById(getPairCell(block, row.id, col.id).to!) }">
+                                  <div class="truncate">{{ getCharacterById(getPairCell(block, row.id, col.id).to!)?.name ?? 'Unknown' }}</div>
+                                  <button class="text-red-400 hover:text-red-300" @click.stop="clearPair(block, row.id, col.id, 'to')">✕</button>
+                                </div>
+                                <div v-else class="text-center text-slate-500 text-[11px]">Drop target</div>
+                              </div>
                             </div>
-                            <div v-if="!getCell(block, row.id, col.id).length" class="text-center text-slate-500">Drop here</div>
-                          </div>
+                          </template>
+                          <template v-else>
+                            <div class="min-h-9 rounded bg-slate-900/40 p-1 transition-all" @dragover.prevent @drop.prevent="(e: DragEvent) => { const id = e.dataTransfer?.getData('text/plain'); if (!id) return; const cells = ensureCells(block); const rowCells = cells[row.id] ?? (cells[row.id] = {}); rowCells[col.id] = [id]; updateBlockData(block, { cells }) }">
+                              <div v-for="cid in getCell(block, row.id, col.id)" :key="cid" class="flex items-center justify-between rounded bg-slate-800/70 px-2 py-1" :style="{ borderLeft: '3px solid ' + charColorById(cid) }">
+                                <div class="truncate">{{ getCharacterById(cid)?.name ?? 'Unknown' }}</div>
+                                <button class="text-red-400 hover:text-red-300" @click.stop="removeFromCell(block, row.id, col.id, cid)" title="Remove">✕</button>
+                              </div>
+                              <div v-if="!getCell(block, row.id, col.id).length" class="text-center text-slate-500">Drop here</div>
+                            </div>
+                          </template>
                         </td>
                       </tr>
                     </tbody>

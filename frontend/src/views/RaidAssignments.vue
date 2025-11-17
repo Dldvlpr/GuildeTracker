@@ -7,6 +7,7 @@ import CharacterSidebar from '@/components/CharacterSidebar.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
 import TemplatesPanel from '@/components/TemplatesPanel.vue';
 import BossLibraryModal from '@/components/BossLibraryModal.vue';
+import PlanManagerModal from '@/components/PlanManagerModal.vue';
 import type { RaidPlanBlock, BlockType } from '@/interfaces/raidPlan.interface.ts';
 import type { Character } from '@/interfaces/game.interface';
 import { Role } from '@/interfaces/game.interface';
@@ -47,23 +48,11 @@ function planIdKey(gid: string) {
   return `raidPlan:planId:${gid}`
 }
 
-const loadOpen = ref(false)
-const plans = ref<RaidPlanDTO[]>([])
-const plansLoading = ref(false)
-const plansError = ref<string | null>(null)
+const showPlanManager = ref(false)
 
-async function openLoadPlans() {
+function openPlanManager() {
   if (!guildId.value) return
-  loadOpen.value = true
-  plansLoading.value = true
-  plansError.value = null
-  try {
-    plans.value = await getRaidPlansByGuild(guildId.value)
-  } catch (e: any) {
-    plansError.value = e?.message || 'Failed to load plans'
-  } finally {
-    plansLoading.value = false
-  }
+  showPlanManager.value = true
 }
 
 function resetHistory() {
@@ -72,13 +61,25 @@ function resetHistory() {
   pushHistorySnapshot()
 }
 
-function applyLoadedPlan(p: RaidPlanDTO) {
+function handleLoadPlan(p: RaidPlanDTO) {
   planId.value = p.id
   planName.value = p.name
   blocks.value = JSON.parse(JSON.stringify(p.blocks))
   try { if (guildId.value) localStorage.setItem(planIdKey(guildId.value), String(p.id)) } catch {}
   resetHistory()
-  window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: `Loaded plan "${p.name}"` } }))
+  window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: `Loaded "${p.name}"` } }))
+}
+
+function handleCreateNew() {
+  const confirmed = confirm('Create a new plan? Current unsaved changes will be lost.');
+  if (!confirmed) return;
+
+  planId.value = null
+  planName.value = 'New Raid Plan'
+  blocks.value = []
+  try { if (guildId.value) localStorage.removeItem(planIdKey(guildId.value)) } catch {}
+  resetHistory()
+  window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: 'New plan created' } }))
 }
 
 const preset = ref<'classic40' | 'mythic20' | 'custom'>('custom');
@@ -197,19 +198,67 @@ function setVersions(v: VersionEntry[]) {
 }
 
 function saveVersion() {
+  if (!versionsKey.value) {
+    window.dispatchEvent(new CustomEvent('app:toast', {
+      detail: { type: 'error', message: 'Cannot save snapshot: No guild selected' }
+    }));
+    return;
+  }
+
   const versions = getVersions();
   const v: VersionEntry = { id: String(Date.now()), ts: Date.now(), name: planName.value, count: blocks.value.length, blocks: cloneBlocks() };
   versions.unshift(v);
 
   setVersions(versions.slice(0, 20));
+
+  window.dispatchEvent(new CustomEvent('app:toast', {
+    detail: { type: 'success', message: `Snapshot saved: "${planName.value}"` }
+  }));
 }
 
 function restoreVersion(id: string) {
   const versions = getVersions();
   const v = versions.find((x) => x.id === id);
-  if (!v) return;
+  if (!v) {
+    window.dispatchEvent(new CustomEvent('app:toast', {
+      detail: { type: 'error', message: 'Snapshot not found' }
+    }));
+    return;
+  }
+
   blocks.value = JSON.parse(JSON.stringify(v.blocks ?? []));
   recalcNextId();
+  resetHistory();
+  showHistory.value = false;
+
+  window.dispatchEvent(new CustomEvent('app:toast', {
+    detail: { type: 'success', message: `Restored snapshot: "${v.name}"` }
+  }));
+}
+
+function deleteVersion(id: string) {
+  const versions = getVersions();
+  const filtered = versions.filter(v => v.id !== id);
+  setVersions(filtered);
+
+  window.dispatchEvent(new CustomEvent('app:toast', {
+    detail: { type: 'success', message: 'Snapshot deleted' }
+  }));
+}
+
+function formatRelativeTime(timestamp: number): string {
+  const now = Date.now();
+  const diff = now - timestamp;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days < 7) return `${days}d ago`;
+
+  return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function onKey(e: KeyboardEvent) {
@@ -847,90 +896,232 @@ function applyBossData(boss: RaidBoss) {
 <template>
   <div class="flex h-screen flex-col bg-slate-900 text-slate-100">
     
-    <header class="flex items-center justify-between border-b border-slate-800 px-4 py-2 bg-slate-950/80">
-      
-      <div class="flex items-center gap-2">
-        <span class="text-sm font-medium text-slate-400">Plan name</span>
-        <input
-          v-model="planName"
-          type="text"
-          class="bg-slate-900/80 border border-slate-700 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          placeholder="My Mythic+ plan"
-        />
-      </div>
-
-      
-      <div class="flex items-center gap-2">
-        <button class="px-3 py-1.5 text-sm rounded-md border border-slate-700 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed" @click="undo" :disabled="historyIndex <= 0" title="Undo (Ctrl/Cmd+Z)">
-          ↶ Undo
-        </button>
-        <button class="px-3 py-1.5 text-sm rounded-md border border-slate-700 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed" @click="redo" :disabled="historyIndex >= history.length - 1" title="Redo (Ctrl/Cmd+Y)">
-          ↷ Redo
-        </button>
-        <button class="px-3 py-1.5 text-sm rounded-md border border-slate-700 hover:bg-slate-800" @click="showHistory = true" title="View version history">
-          📜 History
-        </button>
-        <button class="px-3 py-1.5 text-sm rounded-md border border-slate-700 hover:bg-slate-800" @click="saveVersion" title="Save current version">
-          💾 Save Version
-        </button>
-        <button class="px-3 py-1.5 text-sm rounded-md border border-emerald-700 bg-emerald-900/40 text-emerald-300 hover:bg-emerald-900/60" @click="showBossLibrary = true" title="Load boss with pre-configured positions and cooldowns">
-          📚 Boss Library
-        </button>
-        <button class="px-3 py-1.5 text-sm rounded-md border border-slate-700 hover:bg-slate-800" @click="showTemplates = true" title="Browse templates">
-          📋 Templates
-        </button>
-        <button class="px-3 py-1.5 text-sm rounded-md border border-slate-700 hover:bg-slate-800" @click="saveBlockAsTemplate" title="Save selected block as reusable template">
-          💾 Save Block
-        </button>
-        <button class="px-3 py-1.5 text-sm rounded-md border border-slate-700 hover:bg-slate-800" @click="openLoadPlans" title="Load an existing plan from database">
-          📂 Load from DB
-        </button>
-        <button class="px-3 py-1.5 text-sm rounded-md border border-blue-700 bg-blue-900/40 text-blue-300 hover:bg-blue-900/60" @click="saveToDatabase" title="Persist raid plan in database">
-          💽 Save to DB
-        </button>
-        <button class="px-3 py-1.5 text-sm rounded-md border border-emerald-700 bg-emerald-900/40 text-emerald-300 hover:bg-emerald-900/60" @click="openShare" title="Generate a public read-only link">
-          🔗 Share
-        </button>
-        <div class="relative inline-block">
-          <button class="px-3 py-1.5 text-sm rounded-md bg-emerald-600 hover:bg-emerald-500 font-medium" @click="exportMenuOpen = !exportMenuOpen">
-            📤 Export
-          </button>
-          <div v-if="exportMenuOpen" class="absolute right-0 mt-1 w-48 rounded-md border border-slate-700 bg-slate-900/95 backdrop-blur shadow-xl z-10">
-            <button class="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-800" @click="copyMarkdown(); exportMenuOpen = false">📝 Copy Markdown</button>
-            <button class="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-800" @click="downloadJson(); exportMenuOpen = false">{ } Download JSON</button>
-            <button class="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-800" @click="copyImage(); exportMenuOpen = false">🖼️ Copy Image</button>
-            <button class="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-800" @click="downloadPng(); exportMenuOpen = false">💾 Download PNG</button>
+    <!-- Header redesigné - Organisation claire et ergonomique -->
+    <header class="border-b border-slate-800 bg-slate-950/90 backdrop-blur-sm shadow-lg">
+      <!-- Ligne 1: Titre et actions principales -->
+      <div class="flex items-center justify-between px-4 py-3 border-b border-slate-800/50">
+        <!-- Gauche: Titre du plan -->
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">🎯</span>
+            <input
+              v-model="planName"
+              type="text"
+              class="bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-base font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent min-w-[300px]"
+              placeholder="My Raid Plan"
+            />
+          </div>
+          <!-- Status autosave -->
+          <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700">
+            <div class="w-2 h-2 rounded-full" :class="saving ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'"></div>
+            <span class="text-xs text-slate-400">
+              <template v-if="saving">Saving...</template>
+              <template v-else-if="lastSavedAt">
+                Saved {{ Math.max(1, Math.round((Date.now() - lastSavedAt)/1000)) }}s ago
+              </template>
+              <template v-else>Autosave</template>
+            </span>
           </div>
         </div>
-        <button class="px-3 py-1.5 text-sm rounded-md border border-slate-700 hover:bg-slate-800" @click="showHelp = true" title="Keyboard shortcuts">
-          ❓ Help
-        </button>
-        <div class="flex items-center gap-1.5 ml-2 px-2 py-1.5 rounded-md bg-slate-800/60 border border-slate-700">
-          <span class="text-xs text-slate-400">
-            <template v-if="saving">Saving...</template>
-            <template v-else-if="lastSavedAt">
-              ✓ {{ Math.max(1, Math.round((Date.now() - lastSavedAt)/1000)) }}s ago
-            </template>
-            <template v-else>Autosave ON</template>
-          </span>
+
+        <!-- Droite: Actions primaires -->
+        <div class="flex items-center gap-2">
+          <!-- Groupe: Édition -->
+          <div class="flex items-center gap-1 px-1 py-1 rounded-lg bg-slate-900/60 border border-slate-700/50">
+            <button
+              class="p-2 rounded hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              @click="undo"
+              :disabled="historyIndex <= 0"
+              title="Undo (Ctrl/Cmd+Z)"
+            >
+              <span class="text-lg">↶</span>
+            </button>
+            <button
+              class="p-2 rounded hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              @click="redo"
+              :disabled="historyIndex >= history.length - 1"
+              title="Redo (Ctrl/Cmd+Y)"
+            >
+              <span class="text-lg">↷</span>
+            </button>
+            <div class="w-px h-6 bg-slate-700"></div>
+            <button
+              class="px-3 py-2 rounded hover:bg-slate-800 text-sm font-medium transition-colors"
+              @click="showHistory = true"
+              title="View version history"
+            >
+              📜 History
+            </button>
+          </div>
+
+          <!-- Groupe: Sauvegarde -->
+          <div class="flex items-center gap-1">
+            <button
+              class="px-4 py-2 rounded-lg border border-blue-600/50 bg-blue-900/30 text-blue-300 hover:bg-blue-900/50 text-sm font-medium transition-colors"
+              @click="saveToDatabase"
+              title="Save to database"
+            >
+              💾 Save
+            </button>
+            <button
+              class="px-4 py-2 rounded-lg border border-emerald-600/50 bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/50 text-sm font-medium transition-colors"
+              @click="openShare"
+              title="Share this plan"
+            >
+              🔗 Share
+            </button>
+          </div>
+
+          <!-- Groupe: Export -->
+          <div class="relative">
+            <button
+              class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition-colors flex items-center gap-2"
+              @click="exportMenuOpen = !exportMenuOpen"
+            >
+              📤 Export
+              <span class="text-xs">▼</span>
+            </button>
+            <div v-if="exportMenuOpen" class="absolute right-0 mt-2 w-52 rounded-lg border border-slate-700 bg-slate-900/98 backdrop-blur shadow-2xl z-50 overflow-hidden">
+              <button class="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-800 transition-colors flex items-center gap-2" @click="copyMarkdown(); exportMenuOpen = false">
+                📝 <span>Copy Markdown</span>
+              </button>
+              <button class="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-800 transition-colors flex items-center gap-2" @click="downloadJson(); exportMenuOpen = false">
+                { } <span>Download JSON</span>
+              </button>
+              <div class="border-t border-slate-800"></div>
+              <button class="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-800 transition-colors flex items-center gap-2" @click="copyImage(); exportMenuOpen = false">
+                🖼️ <span>Copy as Image</span>
+              </button>
+              <button class="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-800 transition-colors flex items-center gap-2" @click="downloadPng(); exportMenuOpen = false">
+                💾 <span>Download PNG</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Help -->
+          <button
+            class="p-2 rounded-lg border border-slate-700 hover:bg-slate-800 transition-colors"
+            @click="showHelp = true"
+            title="Keyboard shortcuts & help"
+          >
+            <span class="text-lg">❓</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Ligne 2: Outils et bibliothèques -->
+      <div class="flex items-center justify-between px-4 py-2">
+        <!-- Gauche: Bibliothèques et templates -->
+        <div class="flex items-center gap-2">
+          <span class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Tools</span>
+          <button
+            class="px-3 py-1.5 rounded-md border border-emerald-600/40 bg-emerald-900/20 text-emerald-300 hover:bg-emerald-900/40 text-xs font-medium transition-colors"
+            @click="showBossLibrary = true"
+            title="Load boss templates"
+          >
+            📚 Boss Library
+          </button>
+          <button
+            class="px-3 py-1.5 rounded-md border border-slate-700 hover:bg-slate-800 text-xs font-medium transition-colors"
+            @click="showTemplates = true"
+            title="Browse plan templates"
+          >
+            📋 Templates
+          </button>
+          <button
+            class="px-3 py-1.5 rounded-md border border-slate-700 hover:bg-slate-800 text-xs font-medium transition-colors"
+            @click="saveBlockAsTemplate"
+            title="Save selected block as template"
+          >
+            💾 Save Block
+          </button>
+          <div class="w-px h-4 bg-slate-700"></div>
+          <button
+            class="px-3 py-1.5 rounded-md border border-blue-600/40 bg-blue-900/20 text-blue-300 hover:bg-blue-900/40 text-xs font-medium transition-colors"
+            @click="openPlanManager"
+            title="Manage your saved plans"
+          >
+            📂 My Plans
+          </button>
+          <button
+            class="px-3 py-1.5 rounded-md border border-slate-700 hover:bg-slate-800 text-xs font-medium transition-colors"
+            @click="saveVersion"
+            title="Save version snapshot"
+          >
+            📸 Snapshot
+          </button>
+        </div>
+
+        <!-- Droite: Presets rapides -->
+        <div class="flex items-center gap-2">
+          <span class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Quick Setup</span>
+          <button
+            class="px-3 py-1.5 rounded-md border border-slate-700 hover:bg-slate-800 text-xs font-medium transition-colors"
+            @click="applyPreset('classic40')"
+            title="40-player Classic raid (5T, 10H, 25DPS)"
+          >
+            🏛️ Classic 40
+          </button>
+          <button
+            class="px-3 py-1.5 rounded-md border border-slate-700 hover:bg-slate-800 text-xs font-medium transition-colors"
+            @click="applyPreset('mythic20')"
+            title="20-player Mythic raid (2T, 4H, 14DPS)"
+          >
+            ⚔️ Mythic 20
+          </button>
         </div>
       </div>
     </header>
 
-    
-    <div class="flex items-center justify-between px-4 py-2 border-b border-slate-800 bg-slate-950/60 text-xs">
-      <div class="flex items-center gap-2">
-        <span class="uppercase tracking-wide text-slate-500">Summary</span>
-        <button class="px-1.5 py-0.5 rounded border border-blue-500/40 bg-blue-500/10 hover:bg-blue-500/20" @click="setRosterFilter('Tanks')">T {{ summary.tanks }}</button>
-        <button class="px-1.5 py-0.5 rounded border border-green-500/40 bg-green-500/10 hover:bg-green-500/20" @click="setRosterFilter('Healers')">H {{ summary.healers }}</button>
-        <button class="px-1.5 py-0.5 rounded border border-red-500/40 bg-red-500/10 hover:bg-red-500/20" @click="setRosterFilter('Melee')">M {{ summary.melee }}</button>
-        <button class="px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20" @click="setRosterFilter('Ranged')">R {{ summary.ranged }}</button>
-        <span v-if="summary.missingText" class="ml-2 text-amber-400">{{ summary.missingText }}</span>
+    <!-- Composition Summary Bar -->
+    <div class="flex items-center justify-between px-4 py-2 border-b border-slate-800 bg-slate-950/60">
+      <div class="flex items-center gap-3">
+        <span class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Composition</span>
+        <div class="flex items-center gap-1.5">
+          <button
+            class="px-2.5 py-1 rounded-md border border-blue-500/40 bg-blue-500/10 hover:bg-blue-500/20 text-xs font-medium transition-colors flex items-center gap-1.5"
+            @click="setRosterFilter('Tanks')"
+            title="Click to filter roster by Tanks"
+          >
+            <span class="text-blue-400">🛡️</span>
+            <span class="text-slate-300">{{ summary.tanks }}</span>
+          </button>
+          <button
+            class="px-2.5 py-1 rounded-md border border-green-500/40 bg-green-500/10 hover:bg-green-500/20 text-xs font-medium transition-colors flex items-center gap-1.5"
+            @click="setRosterFilter('Healers')"
+            title="Click to filter roster by Healers"
+          >
+            <span class="text-green-400">✚</span>
+            <span class="text-slate-300">{{ summary.healers }}</span>
+          </button>
+          <button
+            class="px-2.5 py-1 rounded-md border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-xs font-medium transition-colors flex items-center gap-1.5"
+            @click="setRosterFilter('Melee')"
+            title="Click to filter roster by Melee DPS"
+          >
+            <span class="text-red-400">⚔️</span>
+            <span class="text-slate-300">{{ summary.melee }}</span>
+          </button>
+          <button
+            class="px-2.5 py-1 rounded-md border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-xs font-medium transition-colors flex items-center gap-1.5"
+            @click="setRosterFilter('Ranged')"
+            title="Click to filter roster by Ranged DPS"
+          >
+            <span class="text-amber-400">🏹</span>
+            <span class="text-slate-300">{{ summary.ranged }}</span>
+          </button>
+        </div>
+        <div class="w-px h-4 bg-slate-700"></div>
+        <span class="text-xs font-medium" :class="summary.missingText?.includes('✅') ? 'text-emerald-400' : 'text-amber-400'">
+          {{ summary.missingText || 'No expected composition set' }}
+        </span>
       </div>
+
+      <!-- Total assignments -->
       <div class="flex items-center gap-2">
-        <span class="uppercase tracking-wide text-slate-500">Preset</span>
-        <button class="px-2 py-1 rounded border border-slate-700 hover:bg-slate-800" @click="applyPreset('classic40')">Classic 40</button>
-        <button class="px-2 py-1 rounded border border-slate-700 hover:bg-slate-800" @click="applyPreset('mythic20')">Mythic 20</button>
+        <span class="text-xs text-slate-400">
+          Total: <span class="font-semibold text-slate-300">{{ summary.tanks + summary.healers + summary.melee + summary.ranged }}</span>
+        </span>
       </div>
     </div>
 
@@ -991,26 +1182,60 @@ function applyBossData(boss: RaidBoss) {
       </aside>
     </div>
 
-    
-    <BaseModal v-model="showHistory" title="Version History" size="lg">
-      <div class="space-y-2 text-sm">
-        <div
-          v-for="v in getVersions()"
-          :key="v.id"
-          class="flex items-center justify-between rounded border border-slate-700 bg-slate-900/60 px-3 py-2"
-        >
-          <div>
-            <div class="text-slate-100">{{ v.name }} — {{ new Date(v.ts).toLocaleString() }}</div>
-            <div class="text-xs text-slate-400">{{ v.count }} blocks</div>
+
+    <BaseModal v-model="showHistory" title="📜 Version History" size="lg">
+      <div class="space-y-3">
+        <p class="text-sm text-slate-400 mb-4">
+          Restore previous snapshots of your raid plan. Snapshots are saved locally (max 20).
+        </p>
+        <div class="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+          <div
+            v-for="v in getVersions()"
+            :key="v.id"
+            class="group flex items-start justify-between rounded-lg border border-slate-700 bg-slate-900/60 hover:bg-slate-900/80 px-4 py-3 transition-all"
+          >
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <h3 class="font-semibold text-slate-100 truncate">{{ v.name }}</h3>
+                <span class="px-2 py-0.5 rounded-md bg-slate-800/60 text-slate-400 text-xs font-medium">
+                  {{ v.count }} blocks
+                </span>
+              </div>
+              <div class="flex items-center gap-3 text-xs text-slate-400">
+                <span>🕒 {{ formatRelativeTime(v.ts) }}</span>
+                <span>•</span>
+                <span>{{ new Date(v.ts).toLocaleString() }}</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button
+                class="px-3 py-1.5 rounded-md border border-emerald-600/50 bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/50 text-sm font-medium transition-colors"
+                @click="restoreVersion(v.id)"
+                title="Restore this snapshot"
+              >
+                📂 Restore
+              </button>
+              <button
+                class="px-3 py-1.5 rounded-md border border-red-600/50 bg-red-900/30 text-red-300 hover:bg-red-900/50 text-sm font-medium transition-colors"
+                @click="deleteVersion(v.id)"
+                title="Delete this snapshot"
+              >
+                🗑️
+              </button>
+            </div>
           </div>
-          <div class="flex items-center gap-2">
-            <button class="px-2 py-1 text-xs rounded border border-slate-700 hover:bg-slate-800" @click="restoreVersion(v.id)">Restore</button>
+          <div v-if="!getVersions().length" class="text-center py-12">
+            <div class="text-6xl mb-3">📸</div>
+            <div class="text-lg font-medium text-slate-300 mb-1">No snapshots yet</div>
+            <div class="text-sm text-slate-400">Click the "📸 Snapshot" button to save a version of your plan</div>
           </div>
         </div>
-        <div v-if="!getVersions().length" class="text-xs text-slate-500 italic text-center py-4">No versions yet</div>
       </div>
       <template #footer>
-        <div class="flex justify-end">
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-slate-400">
+            {{ getVersions().length }} of 20 snapshots saved
+          </span>
           <button class="px-3 py-1.5 text-sm rounded-md border border-slate-700 hover:bg-slate-800" @click="showHistory = false">Close</button>
         </div>
       </template>
@@ -1207,36 +1432,14 @@ function applyBossData(boss: RaidBoss) {
       </template>
     </BaseModal>
 
-    
-    <BaseModal v-model="loadOpen" title="Load a saved raid plan" size="lg">
-      <div class="space-y-3">
-        <div v-if="plansLoading" class="text-slate-400">Loading plans…</div>
-        <div v-else-if="plansError" class="text-red-300">{{ plansError }}</div>
-        <div v-else>
-          <div v-if="!plans.length" class="text-slate-400">No plans found for this guild.</div>
-          <div v-else class="divide-y divide-slate-800 rounded border border-slate-800">
-            <button
-              v-for="p in plans"
-              :key="p.id"
-              class="w-full text-left px-3 py-2 hover:bg-white/5"
-              @click="applyLoadedPlan(p); loadOpen = false"
-            >
-              <div class="flex items-center justify-between">
-                <div>
-                  <div class="text-sm font-medium text-white">{{ p.name }}</div>
-                  <div class="text-xs text-slate-400">Updated {{ new Date(p.updatedAt).toLocaleString() }}</div>
-                </div>
-                <div class="text-xs text-slate-500">ID #{{ p.id }}</div>
-              </div>
-            </button>
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <div class="flex justify-end">
-          <button class="px-3 py-1.5 text-sm rounded-md border border-slate-700 hover:bg-slate-800" @click="loadOpen = false">Close</button>
-        </div>
-      </template>
-    </BaseModal>
+
+    <PlanManagerModal
+      v-if="showPlanManager && guildId"
+      :guild-id="guildId"
+      :current-plan-id="planId"
+      @close="showPlanManager = false"
+      @load="handleLoadPlan"
+      @create-new="handleCreateNew"
+    />
   </div>
 </template>
