@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, computed } from 'vue';
+import { ref, watch, onMounted, onUnmounted, computed, type ComponentPublicInstance } from 'vue';
 import Draggable from 'vuedraggable';
 import type { RaidPlanBlock } from '@/interfaces/raidPlan.interface.ts';
 import type { Character } from '@/interfaces/game.interface';
@@ -11,6 +11,7 @@ const props = defineProps<{
   blocks: RaidPlanBlock[];
   characters?: Character[];
   groupTargets?: { tank: number; healer: number } | null;
+  readonly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -27,6 +28,230 @@ const hoveredPositionId = ref<string | null>(null);
 const allowedStarts = [1, 3, 5, 7, 9, 11];
 const resizing = ref(false);
 const showGridOverlay = ref(false);
+
+// FREE_CANVAS drag/resize state
+type DragMode = 'move' | 'resize-nw' | 'resize-ne' | 'resize-sw' | 'resize-se' | 'rotate'
+const activeShape = ref<{
+  blockId: string; shapeId: string; mode: DragMode;
+  startMouseX: number; startMouseY: number;
+  startX: number; startY: number; startW: number; startH: number;
+  centerX?: number; centerY?: number;
+} | null>(null)
+const canvasRefs = new Map<string, HTMLElement>()
+
+function setCanvasRef(blockId: string, el: Element | ComponentPublicInstance | null) {
+  const dom = (el as any)?.$el ? (el as any).$el as HTMLElement : (el as HTMLElement | null)
+  if (dom) canvasRefs.set(blockId, dom)
+}
+
+function snap8(n: number): number { return Math.round(n / 8) * 8 }
+
+function clamp(n: number, min: number, max: number): number { return Math.max(min, Math.min(max, n)) }
+
+function getCanvasSize(blockId: string): { w: number; h: number } {
+  const el = canvasRefs.get(blockId)
+  if (!el) return { w: 0, h: 0 }
+  return { w: el.clientWidth || 0, h: el.clientHeight || 0 }
+}
+
+function getShape(block: RaidPlanBlock, id: string): any | null {
+  const arr = (block.data?.shapes as any[] | undefined) || []
+  return arr.find((s: any) => s.id === id) || null
+}
+
+function updateShape(block: RaidPlanBlock, id: string, mutate: (s: any) => any) {
+  const shapes = ([...(block.data?.shapes as any[] || [])]).map((s: any) => s.id === id ? mutate({ ...s }) : s)
+  updateBlockData(block, { shapes })
+}
+
+function onShapeMouseDown(block: RaidPlanBlock, shapeId: string, e: MouseEvent) {
+  // Select shape on drag start
+  selectShape(block, shapeId)
+  const s = getShape(block, shapeId)
+  if (!s) return
+  const startMouseX = e.clientX
+  const startMouseY = e.clientY
+  activeShape.value = {
+    blockId: block.id,
+    shapeId,
+    mode: 'move',
+    startMouseX,
+    startMouseY,
+    startX: Number(s.x || 0),
+    startY: Number(s.y || 0),
+    startW: Number(s.w || 60),
+    startH: Number(s.h || 40),
+  }
+
+  const onMove = (ev: MouseEvent) => {
+    const act = activeShape.value
+    if (!act) return
+    const dx = ev.clientX - act.startMouseX
+    const dy = ev.clientY - act.startMouseY
+    const size = getCanvasSize(act.blockId)
+    const minW = 16, minH = 16
+    let nx = act.startX + dx
+    let ny = act.startY + dy
+    // Snap to 8px grid
+    nx = snap8(nx)
+    ny = snap8(ny)
+    // Clamp into canvas
+    nx = clamp(nx, 0, Math.max(0, size.w - minW))
+    ny = clamp(ny, 0, Math.max(0, size.h - minH))
+    updateShape(block, shapeId, (sh: any) => ({ ...sh, x: nx, y: ny }))
+  }
+
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    activeShape.value = null
+  }
+
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
+function onShapeResizeMouseDown(block: RaidPlanBlock, shapeId: string, mode: DragMode, e: MouseEvent) {
+  // Select shape on resize start
+  selectShape(block, shapeId)
+  const s = getShape(block, shapeId)
+  if (!s) return
+  const startMouseX = e.clientX
+  const startMouseY = e.clientY
+  activeShape.value = {
+    blockId: block.id,
+    shapeId,
+    mode,
+    startMouseX,
+    startMouseY,
+    startX: Number(s.x || 0),
+    startY: Number(s.y || 0),
+    startW: Number(s.w || 60),
+    startH: Number(s.h || 40),
+  }
+
+  const onMove = (ev: MouseEvent) => {
+    const act = activeShape.value
+    if (!act) return
+    const dx = ev.clientX - act.startMouseX
+    const dy = ev.clientY - act.startMouseY
+    const size = getCanvasSize(act.blockId)
+    const minW = 16, minH = 16
+
+    // Base new values before modifiers
+    let nx = act.startX
+    let ny = act.startY
+    let nw = act.startW
+    let nh = act.startH
+
+    if (act.mode === 'resize-se') {
+      nw = act.startW + dx
+      nh = act.startH + dy
+    } else if (act.mode === 'resize-ne') {
+      nw = act.startW + dx
+      nh = act.startH - dy
+      ny = act.startY + dy
+    } else if (act.mode === 'resize-sw') {
+      nw = act.startW - dx
+      nh = act.startH + dy
+      nx = act.startX + dx
+    } else if (act.mode === 'resize-nw') {
+      nw = act.startW - dx
+      nh = act.startH - dy
+      nx = act.startX + dx
+      ny = act.startY + dy
+    }
+
+    // Keep aspect ratio with Shift
+    const keepRatio = ev.shiftKey
+    const ratio = act.startW > 0 && act.startH > 0 ? (act.startW / act.startH) : 1
+    if (keepRatio) {
+      // Decide dominant axis
+      const aw = Math.abs(nw - act.startW)
+      const ah = Math.abs(nh - act.startH)
+      if (aw >= ah) {
+        nh = nw / ratio
+      } else {
+        nw = nh * ratio
+      }
+      // Recompute position for handles that move origin
+      if (act.mode === 'resize-ne') {
+        ny = act.startY + (act.startH - nh)
+      } else if (act.mode === 'resize-sw') {
+        nx = act.startX + (act.startW - nw)
+      } else if (act.mode === 'resize-nw') {
+        nx = act.startX + (act.startW - nw)
+        ny = act.startY + (act.startH - nh)
+      }
+    }
+
+    // Resize from center with Alt/Option
+    if (ev.altKey) {
+      const dw = nw - act.startW
+      const dh = nh - act.startH
+      nx = act.startX - dw / 2
+      ny = act.startY - dh / 2
+    }
+
+    // Snap values to 8px
+    nx = snap8(nx)
+    ny = snap8(ny)
+    nw = Math.max(minW, snap8(nw))
+    nh = Math.max(minH, snap8(nh))
+
+    // Clamp within canvas bounds
+    nx = clamp(nx, 0, Math.max(0, size.w - minW))
+    ny = clamp(ny, 0, Math.max(0, size.h - minH))
+    nw = clamp(nw, minW, Math.max(minW, size.w - nx))
+    nh = clamp(nh, minH, Math.max(minH, size.h - ny))
+
+    updateShape(block, shapeId, (sh: any) => ({ ...sh, x: nx, y: ny, w: nw, h: nh }))
+  }
+
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    activeShape.value = null
+  }
+
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
+function onShapeRotateMouseDown(block: RaidPlanBlock, shapeId: string, e: MouseEvent) {
+  const s = getShape(block, shapeId)
+  if (!s) return
+  const rect = (e.currentTarget as HTMLElement).parentElement?.getBoundingClientRect()
+  if (!rect) return
+  const centerX = rect.left + rect.width / 2
+  const centerY = rect.top + rect.height / 2
+  activeShape.value = {
+    blockId: block.id,
+    shapeId,
+    mode: 'rotate',
+    startMouseX: e.clientX,
+    startMouseY: e.clientY,
+    startX: s.x || 0,
+    startY: s.y || 0,
+    startW: s.w || 60,
+    startH: s.h || 40,
+    centerX, centerY
+  }
+  const onMove = (ev: MouseEvent) => {
+    const act = activeShape.value
+    if (!act || act.mode !== 'rotate') return
+    const ang = Math.atan2(ev.clientY - (act.centerY || 0), ev.clientX - (act.centerX || 0)) * 180 / Math.PI
+    const snapped = ev.shiftKey ? Math.round(ang / 5) * 5 : ang
+    updateShape(block, shapeId, (sh: any) => ({ ...sh, rotation: snapped }))
+  }
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    activeShape.value = null
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
 
 function detectCollisions(blocks: RaidPlanBlock[]): Map<string, string[]> {
   const collisions = new Map<string, string[]>();
@@ -69,6 +294,8 @@ watch(
   () => props.blocks,
   (newVal) => {
     innerBlocks.value = [...newVal];
+    // enforce widths for fixed-width blocks
+    normalizeBlockLayout(innerBlocks.value)
   },
   { deep: true }
 );
@@ -102,6 +329,41 @@ function snapSpan(rawSpan: number): number {
   return best;
 }
 
+function isFixedWidth(block: RaidPlanBlock): boolean {
+  return [
+    'GROUPS_GRID',
+    'ROLE_MATRIX',
+    'COOLDOWN_ROTATION',
+    'INTERRUPT_ROTATION',
+    'HEADING',
+    'DIVIDER',
+    'BOSS_GRID',
+  ].includes(block.type as any)
+}
+
+function enforcedColSpan(block: RaidPlanBlock): number | null {
+  if (isFixedWidth(block)) return 12
+  return null
+}
+
+function minColSpanFor(block: RaidPlanBlock): number {
+  switch (block.type) {
+    case 'BOSS_GRID':
+    case 'CUSTOM_SECTION':
+    case 'PHASE_STRATEGY':
+    case 'IMAGE':
+      return 6
+    case 'TEXT':
+    case 'CHECKLIST':
+    case 'BENCH_ROSTER':
+      return 4
+    case 'FREE_CANVAS':
+      return 6
+    default:
+      return 6
+  }
+}
+
 function updateBlockData(block: RaidPlanBlock, partial: Record<string, unknown>) {
   emit('update-block', {
     ...block,
@@ -114,18 +376,24 @@ function updateBlockData(block: RaidPlanBlock, partial: Record<string, unknown>)
 
 
 function setBlockSpan(block: RaidPlanBlock, rawSpan: number) {
-  const snapped = snapSpan(rawSpan);
+  const enforced = enforcedColSpan(block)
+  if (enforced) {
+    emit('update-block', { ...block, colSpan: enforced, colStart: 1 })
+    return
+  }
+  const min = minColSpanFor(block)
+  const snapped = Math.max(min, snapSpan(rawSpan));
   const maxStart = 12 - snapped + 1;
   const safeStart = Math.min(block.colStart, maxStart);
 
-  emit('update-block', {
-    ...block,
-    colSpan: snapped,
-    colStart: safeStart,
-  });
+  emit('update-block', { ...block, colSpan: snapped, colStart: safeStart });
 }
 
 function setBlockStart(block: RaidPlanBlock, rawStart: number) {
+  if (enforcedColSpan(block)) {
+    emit('update-block', { ...block, colStart: 1 });
+    return;
+  }
   const start = Math.max(1, Math.min(rawStart, 12));
   const maxStart = 12 - block.colSpan + 1;
   const safeStart = Math.min(start, maxStart);
@@ -134,6 +402,16 @@ function setBlockStart(block: RaidPlanBlock, rawStart: number) {
     ...block,
     colStart: safeStart,
   });
+}
+
+// Normalize block widths on load/updates so fixed-width blocks become full-width automatically
+function normalizeBlockLayout(blocks: RaidPlanBlock[]) {
+  for (const b of blocks) {
+    const w = enforcedColSpan(b)
+    if (w && (b.colSpan !== w || b.colStart !== 1)) {
+      emit('update-block', { ...b, colSpan: w, colStart: 1 })
+    }
+  }
 }
 
 function onStartInput(block: RaidPlanBlock, event: Event) {
@@ -217,6 +495,35 @@ function onGlobalKey(e: KeyboardEvent) {
   const block = innerBlocks.value.find(b => b.id === selectedBlockId.value);
   if (!block) return;
   const key = e.key.toLowerCase();
+
+  // Arrow keys for Free Canvas shapes when selected
+  if (block.type === 'FREE_CANVAS') {
+    const sel = (block.data as any)?.selectedShapeId as string | undefined
+    if (sel) {
+      const s = getShape(block, sel)
+      if (s) {
+        const delta = e.shiftKey ? 8 : 1
+        let handled = false
+        let nx = Number(s.x || 0)
+        let ny = Number(s.y || 0)
+        if (key === 'arrowleft') { nx -= delta; handled = true }
+        if (key === 'arrowright') { nx += delta; handled = true }
+        if (key === 'arrowup') { ny -= delta; handled = true }
+        if (key === 'arrowdown') { ny += delta; handled = true }
+        if (handled) {
+          const size = getCanvasSize(block.id)
+          const minW = 16, minH = 16
+          nx = clamp(nx, 0, Math.max(0, size.w - minW))
+          ny = clamp(ny, 0, Math.max(0, size.h - minH))
+          updateShape(block, sel, (sh: any) => ({ ...sh, x: nx, y: ny }))
+          e.preventDefault()
+          return
+        }
+      }
+    }
+  }
+
+  // Default block-level arrow controls
   const step = e.shiftKey ? 2 : 1;
   if (key === 'arrowleft') { setBlockStart(block, block.colStart - step); e.preventDefault(); }
   if (key === 'arrowright') { setBlockStart(block, block.colStart + step); e.preventDefault(); }
@@ -268,6 +575,61 @@ function getCell(block: RaidPlanBlock, rowId: string, colId: string): string[] {
   }
   const arr = row[colId] ?? (row[colId] = [])
   return arr as string[]
+}
+
+// Free canvas helpers
+function addShape(block: RaidPlanBlock, type: 'rect'|'text'|'timer'|'image'|'marker'|'arrow') {
+  const shapes = ([...(block.data?.shapes as any[] || [])])
+  const id = 'sh' + String(Date.now()) + '-' + String(Math.random()).slice(2,6)
+  const base: any = { id, type, x: 10, y: 10, w: 80, h: 40, rotation: 0 }
+  if (type === 'rect') { Object.assign(base, { color: '#64748b' }) }
+  if (type === 'text') { Object.assign(base, { text: 'Text', color: '#e5e7eb' }) }
+  if (type === 'timer') { Object.assign(base, { seconds: 30 }) }
+  if (type === 'image') { Object.assign(base, { w: 240, h: 160, url: '', fit: 'contain', opacity: 1 }) }
+  if (type === 'marker') { Object.assign(base, { w: 40, h: 40, marker: 'star', color: undefined }) }
+  if (type === 'arrow') { Object.assign(base, { w: 160, h: 40, color: '#e5e7eb', thickness: 4, head: 12, twoHeads: false }) }
+  shapes.push(base)
+  updateBlockData(block, { shapes, selectedShapeId: id })
+}
+function removeShape(block: RaidPlanBlock, id: string) {
+  const shapes = ([...(block.data?.shapes as any[] || [])]).filter((s: any) => s.id !== id)
+  const sel = (block.data as any)?.selectedShapeId
+  updateBlockData(block, { shapes, selectedShapeId: sel === id ? undefined : sel })
+}
+function selectShape(block: RaidPlanBlock, id: string) {
+  updateBlockData(block, { selectedShapeId: id })
+}
+function currentShape(block: RaidPlanBlock): any | null {
+  const id = (block.data as any)?.selectedShapeId
+  const arr = (block.data?.shapes as any[] || [])
+  return arr.find((s: any) => s.id === id) || null
+}
+function patchShape(block: RaidPlanBlock, patch: Record<string, any>) {
+  const id = (block.data as any)?.selectedShapeId
+  if (!id) return
+  const shapes = ([...(block.data?.shapes as any[] || [])]).map((s: any) => s.id === id ? { ...s, ...patch } : s)
+  updateBlockData(block, { shapes })
+}
+function shapeStyle(s: any): Record<string, string> {
+  return {
+    left: (s.x || 0) + 'px',
+    top: (s.y || 0) + 'px',
+    width: (s.w || 60) + 'px',
+    height: (s.h || 40) + 'px',
+    transform: `rotate(${Number(s.rotation||0)}deg)`,
+    transformOrigin: 'center',
+    backgroundColor: s.type === 'rect' ? (s.color || '#64748b') : 'transparent',
+    border: s.type === 'text' || s.type === 'timer' ? ('1px dashed ' + (s.color || '#64748b')) : 'none',
+  }
+}
+const MARKER_COLORS: Record<string, string> = { star: '#fbbf24', circle: '#fb923c', diamond: '#a855f7', triangle: '#22c55e', moon: '#93c5fd', square: '#3b82f6', cross: '#ef4444', skull: '#e5e7eb' }
+const MARKER_SYMBOLS: Record<string, string> = { star: '✦', circle: '●', diamond: '◆', triangle: '▲', moon: '☾', square: '■', cross: '✖', skull: '☠' }
+function markerColor(kind: string): string { return MARKER_COLORS[kind] || '#94a3b8' }
+function markerSymbol(kind: string): string { return MARKER_SYMBOLS[kind] || '●' }
+function formatTimer(sec: number): string {
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return String(m).padStart(1,'0') + ':' + String(s).padStart(2,'0')
 }
 
 function dropToCell(block: RaidPlanBlock, rowId: string, colId: string, e: DragEvent) {
@@ -330,8 +692,38 @@ function removeRotationRow(block: RaidPlanBlock, rowId: string) {
 
 function updateRow(block: RaidPlanBlock, rowId: string, patch: Record<string, any>) {
   const rows = (block.data?.rows ?? []) as any[]
-  const next = rows.map((r: any) => r.id === rowId ? { ...r, ...patch } : r)
-  updateBlockData(block, { rows: next })
+  const prev = rows.find((r: any) => r.id === rowId)
+  const nextRows = rows.map((r: any) => r.id === rowId ? { ...r, ...patch } : r)
+
+  // If switching mode, convert existing cell shapes accordingly
+  if (patch.hasOwnProperty('mode') && prev && prev.mode !== patch.mode) {
+    const nextMode = patch.mode as string
+    const cells = ensureCells(block)
+    const rowCells = cells[rowId] ?? (cells[rowId] = {})
+    for (const colId of Object.keys(rowCells)) {
+      const cur = rowCells[colId]
+      if (nextMode === 'pair') {
+        if (Array.isArray(cur)) {
+          const from = cur[0] || null
+          const to = cur[1] || null
+          rowCells[colId] = { from, to } as any
+        } else if (typeof cur === 'string') {
+          rowCells[colId] = { from: cur, to: null } as any
+        }
+      } else {
+        // list/single mode
+        if (cur && typeof cur === 'object' && !Array.isArray(cur)) {
+          const from = (cur as any).from || null
+          const to = (cur as any).to || null
+          rowCells[colId] = [from, to].filter(Boolean) as any
+        }
+      }
+    }
+    updateBlockData(block, { rows: nextRows, cells })
+    return
+  }
+
+  updateBlockData(block, { rows: nextRows })
 }
 
 function isPairRow(row: any): boolean {
@@ -573,6 +965,7 @@ function roleLabel(role: Role): string {
 }
 
 function onDropToRole(block: RaidPlanBlock, role: Role, e: DragEvent) {
+  if (props.readonly) return;
   const charId = e.dataTransfer?.getData('text/plain');
   if (!charId) return;
   const assignments = (block.data?.roleAssignments ?? {}) as Record<Role, string[]>;
@@ -598,6 +991,7 @@ function onDropToRole(block: RaidPlanBlock, role: Role, e: DragEvent) {
 }
 
 function removeFromRole(block: RaidPlanBlock, role: Role, charId: string) {
+  if (props.readonly) return;
   const assignments = (block.data?.roleAssignments ?? {}) as Record<Role, string[]>;
   const newAssignments: Record<Role, string[]> = {
     Tanks: [...(assignments.Tanks ?? [])],
@@ -610,6 +1004,7 @@ function removeFromRole(block: RaidPlanBlock, role: Role, charId: string) {
 }
 
 function onDropToGroup(block: RaidPlanBlock, groupId: string, e: DragEvent) {
+  if (props.readonly) return;
   const charId = e.dataTransfer?.getData('text/plain');
   if (!charId) return;
   const groups = (block.data?.groups ?? []) as { id: string; title: string; members: string[] }[];
@@ -632,6 +1027,7 @@ function onDropToGroup(block: RaidPlanBlock, groupId: string, e: DragEvent) {
 }
 
 function removeFromGroup(block: RaidPlanBlock, groupId: string, charId: string) {
+  if (props.readonly) return;
   const groups = (block.data?.groups ?? []) as { id: string; title: string; members: string[] }[];
   const cloned = groups.map((g) => ({ ...g, members: g.members.filter((id) => id !== charId) }));
   updateBlockData(block, { groups: cloned });
@@ -720,6 +1116,7 @@ function canDropToPosition(_block: RaidPlanBlock, _positionId: string, charId: s
 }
 
 function onDropToPosition(block: RaidPlanBlock, positionId: string, e: DragEvent) {
+  if (props.readonly) return;
   const charId = e.dataTransfer?.getData('text/plain') || null;
   if (!charId) return;
   if (!canDropToPosition(block, positionId, charId)) return;
@@ -740,6 +1137,7 @@ function onDropToPosition(block: RaidPlanBlock, positionId: string, e: DragEvent
 }
 
 function removeFromPosition(block: RaidPlanBlock, positionId: string, charId: string) {
+  if (props.readonly) return;
   const assignments = { ...(block.data?.assignments ?? {}) } as Record<string, string[]>;
   assignments[positionId] = (assignments[positionId] ?? []).filter((id) => id !== charId);
   updateBlockData(block, { assignments });
@@ -896,26 +1294,34 @@ defineExpose({ assignToSelected, selectedBlockId });
 
     
     <div v-if="!innerBlocks.length" class="flex flex-col items-center justify-center h-full text-center px-8">
-      <div class="max-w-md space-y-4">
-        <div class="text-6xl">📋</div>
-        <h2 class="text-2xl font-bold text-slate-200">Start Building Your Raid Plan</h2>
-        <p class="text-slate-400 text-sm leading-relaxed">
-          Add blocks from the left sidebar to create your custom raid layout.
-          Each block can be resized, repositioned, and filled with character assignments.
+      <div class="max-w-2xl space-y-5">
+        <div class="text-6xl">🛠️</div>
+        <h2 class="text-2xl font-bold text-slate-200">Build Your Raid Plan</h2>
+        <p class="text-slate-300 text-sm leading-relaxed">
+          This canvas lets you compose your raid strategy using blocks: Groups, Role Matrix, Boss Assignments,
+          Rotations, and more. Add blocks from the left, then drag players from the roster on the right.
         </p>
-        <div class="space-y-2 text-left bg-slate-950/60 rounded-lg p-4 border border-slate-800">
-          <div class="text-xs font-semibold text-emerald-400 uppercase tracking-wide mb-2">Quick Start</div>
-          <div class="flex items-start gap-2 text-sm text-slate-300">
-            <span class="text-emerald-500">1.</span>
-            <span>Click <strong>"Raid Groups"</strong> to add a groups grid</span>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-left">
+          <div class="bg-slate-950/60 rounded-lg p-4 border border-slate-800">
+            <div class="text-xs font-semibold text-emerald-400 uppercase tracking-wide mb-2">Step-by-step</div>
+            <ol class="list-decimal list-inside space-y-1 text-sm text-slate-300">
+              <li>Add <strong>Raid Groups</strong> to structure your roster (auto full width).</li>
+              <li>Choose a <strong>Preset</strong> in Tools → Presets (Raid 40/25/20/10).</li>
+              <li>Drag & drop players into groups; adjust specs per block if needed.</li>
+              <li>Add <strong>Boss Assignments</strong> and <strong>Rotations</strong> for specific encounters.</li>
+              <li>Use <strong>Smart Assign</strong> (Tools) to auto-fill Groups/Matrix intelligently.</li>
+              <li>Click <strong>Save</strong> and <strong>Share</strong> when ready.</li>
+            </ol>
           </div>
-          <div class="flex items-start gap-2 text-sm text-slate-300">
-            <span class="text-emerald-500">2.</span>
-            <span>Use <strong>Classic 40 / Mythic 20</strong> presets for instant setup</span>
-          </div>
-          <div class="flex items-start gap-2 text-sm text-slate-300">
-            <span class="text-emerald-500">3.</span>
-            <span>Drag characters from the right sidebar into groups</span>
+          <div class="bg-slate-950/60 rounded-lg p-4 border border-slate-800">
+            <div class="text-xs font-semibold text-blue-400 uppercase tracking-wide mb-2">Tips</div>
+            <ul class="space-y-1 text-sm text-slate-300">
+              <li>Fixed-width blocks (Groups/Matrix/Rotations/Boss) always span 12 for clarity.</li>
+              <li>Use the <strong>Tools</strong> menu for Templates, Presets, Export, and History.</li>
+              <li><strong>Bench</strong> a player to hide them from the roster and prevent assignments.</li>
+              <li>Preview the <strong>public view</strong> from Tools to share a read-only link.</li>
+              <li>Autosave keeps changes locally; use <strong>Save</strong> to persist on the server.</li>
+            </ul>
           </div>
         </div>
       </div>
@@ -928,6 +1334,7 @@ defineExpose({ assignToSelected, selectedBlockId });
       item-key="id"
       handle=".drag-handle"
       ghost-class="opacity-60"
+      :disabled="props.readonly === true"
       @change="onDragChange"
       tag="div"
       class="planner-grid grid auto-rows-min gap-3 relative z-10"
@@ -961,7 +1368,7 @@ defineExpose({ assignToSelected, selectedBlockId });
             </div>
             
             <div
-              v-if="selectedBlockId === block.id && block.colStart > 1"
+              v-if="!props.readonly && selectedBlockId === block.id && block.colStart > 1 && !isFixedWidth(block)"
               class="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-emerald-500/30 transition-colors flex items-center justify-center group/handle"
               @mousedown="onResizeLeft(block, $event)"
               title="Resize left edge"
@@ -969,7 +1376,7 @@ defineExpose({ assignToSelected, selectedBlockId });
               <div class="w-1 h-8 bg-emerald-500/60 rounded-full opacity-0 group-hover/handle:opacity-100 transition-opacity"></div>
             </div>
             <div
-              v-if="selectedBlockId === block.id && block.colStart + block.colSpan - 1 < 12"
+              v-if="!props.readonly && selectedBlockId === block.id && block.colStart + block.colSpan - 1 < 12 && !isFixedWidth(block)"
               class="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-emerald-500/30 transition-colors flex items-center justify-center group/handle"
               @mousedown="onResizeRight(block, $event)"
               title="Resize right edge"
@@ -1019,19 +1426,11 @@ defineExpose({ assignToSelected, selectedBlockId });
 
             
             <div
-              v-if="selectedBlockId === block.id"
+              v-if="!props.readonly && selectedBlockId === block.id"
               class="mb-2 flex flex-wrap items-center gap-3 text-[11px] text-slate-300"
             >
-              <div class="flex items-center gap-1">
+              <div v-if="!isFixedWidth(block)" class="flex items-center gap-1">
                 <span class="uppercase tracking-wide text-slate-500">Start</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="12"
-                  :value="block.colStart"
-                  @input="onStartInput(block, $event)"
-                  class="w-16 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                />
                 <div class="inline-flex rounded-md border border-slate-700 overflow-hidden">
                   <button
                     v-for="s in allowedStarts"
@@ -1045,16 +1444,8 @@ defineExpose({ assignToSelected, selectedBlockId });
                 </div>
               </div>
 
-              <div class="flex items-center gap-1">
+              <div v-if="!isFixedWidth(block)" class="flex items-center gap-1">
                 <span class="uppercase tracking-wide text-slate-500">Span</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="12"
-                  :value="block.colSpan"
-                  @input="onSpanInput(block, $event)"
-                  class="w-16 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                />
 
                 <div class="inline-flex rounded-md border border-slate-700 overflow-hidden">
                   <button
@@ -1183,7 +1574,8 @@ defineExpose({ assignToSelected, selectedBlockId });
                   <span class="px-1.5 py-0.5 rounded border" :style="{ borderColor: (ROLE_COLORS as any)['Melee'] + '66', backgroundColor: (ROLE_COLORS as any)['Melee'] + '22' }">⚔️ M</span>
                   <span class="px-1.5 py-0.5 rounded border" :style="{ borderColor: (ROLE_COLORS as any)['Ranged'] + '66', backgroundColor: (ROLE_COLORS as any)['Ranged'] + '22' }">🏹 R</span>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
+                <div class="h-[260px] overflow-auto pr-1">
+                  <div class="grid grid-cols-1 md:grid-cols-4 gap-2">
                   <div
                     v-for="role in ['Tanks','Healers','Melee','Ranged'] as Role[]"
                     :key="role"
@@ -1231,6 +1623,7 @@ defineExpose({ assignToSelected, selectedBlockId });
                       </div>
                     </div>
                   </div>
+                  </div>
                 </div>
               </div>
 
@@ -1245,7 +1638,8 @@ defineExpose({ assignToSelected, selectedBlockId });
                   <span class="px-1.5 py-0.5 rounded border" :style="{ borderColor: (ROLE_COLORS as any)['Melee'] + '66', backgroundColor: (ROLE_COLORS as any)['Melee'] + '22' }">⚔️ M</span>
                   <span class="px-1.5 py-0.5 rounded border" :style="{ borderColor: (ROLE_COLORS as any)['Ranged'] + '66', backgroundColor: (ROLE_COLORS as any)['Ranged'] + '22' }">🏹 R</span>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+                <div class="h-[260px] overflow-auto pr-1">
+                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
                   <div
                     v-for="g in (block.data?.groups ?? [])"
                     :key="g.id"
@@ -1301,8 +1695,9 @@ defineExpose({ assignToSelected, selectedBlockId });
                           <button class="text-red-400 hover:text-red-300" @click.stop="removeFromGroup(block, g.id, cid)" title="Remove">✕</button>
                         </div>
                       </div>
-                      <div v-if="!g.members.length" class="text-[11px] text-slate-500 text-center py-1">Drag characters here</div>
+                      <div v-if="!g.members.length" class="text-[11px] text-slate-500 text-center py-1">Drag players here</div>
                     </div>
+                  </div>
                   </div>
                 </div>
               </div>
@@ -1335,10 +1730,10 @@ defineExpose({ assignToSelected, selectedBlockId });
                     </button>
                   </div>
                 </div>
-                <div class="overflow-auto">
+                <div class="overflow-auto h-[300px]">
                   <table class="w-full text-xs border-separate border-spacing-y-1">
-                    <thead>
-                      <tr>
+                    <thead class="sticky top-0 z-10">
+                      <tr class="bg-slate-900/80 backdrop-blur">
                         <th class="text-left text-slate-400 px-2 py-1 align-top">
                           <div class="font-semibold">Cooldown</div>
                         </th>
@@ -1418,7 +1813,7 @@ defineExpose({ assignToSelected, selectedBlockId });
                   <button class="px-2 py-0.5 text-[11px] rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="updateBlockData(block, { columns: [...(block.data?.columns ?? []), { id: 'i' + (block.data?.columns?.length ?? 0) + 1, label: String((block.data?.columns?.length ?? 0) + 1) }] })">+ Add Slot</button>
                   <button class="px-2 py-0.5 text-[11px] rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="updateBlockData(block, { rows: [...(block.data?.rows ?? []), { id: 'r' + (block.data?.rows?.length ?? 0) + 1, label: 'Add', cells: {} }] })">+ Add Target</button>
                 </div>
-                <div class="overflow-auto">
+                <div class="overflow-auto h-[300px]">
                   <table class="w-full text-xs border-separate border-spacing-y-1">
                     <thead>
                       <tr>
@@ -1460,7 +1855,7 @@ defineExpose({ assignToSelected, selectedBlockId });
                   <button class="px-2 py-0.5 text-[11px] rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="updateBlockData(block, { columns: [...(block.data?.columns ?? []), { id: 'c' + (block.data?.columns?.length ?? 0) + 1, label: 'Col', type: 'text' }] })">+ Column</button>
                   <button class="px-2 py-0.5 text-[11px] rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="updateBlockData(block, { rows: [...(block.data?.rows ?? []), { id: 'r' + (block.data?.rows?.length ?? 0) + 1, data: {} }] })">+ Row</button>
                 </div>
-                <div class="overflow-auto">
+                <div class="overflow-auto h-[260px]">
                   <table class="w-full text-xs border-separate border-spacing-y-1">
                     <thead>
                       <tr>
@@ -1630,59 +2025,201 @@ defineExpose({ assignToSelected, selectedBlockId });
 
 
               
-              <div v-else-if="block.type === 'BOSS_GRID'" class="space-y-3">
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <div class="text-[11px] text-slate-400">Configure positions and drag players into them</div>
-                  <button class="text-[11px] px-2 py-1 rounded-md border border-slate-700 hover:bg-slate-800 self-start" @click.stop="addPosition(block)">+ Add position</button>
+              <div v-else-if="block.type === 'BOSS_GRID'" class="space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="text-[11px] text-slate-400">Define boss positions and assign players</div>
+                  <div class="flex items-center gap-1">
+                    <button class="text-[11px] px-2 py-1 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addPosition(block)">+ Add position</button>
+                  </div>
                 </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div
-                    v-for="pos in (block.data?.positions ?? [])"
-                    :key="pos.id"
-                    class="rounded-lg border border-slate-700 bg-slate-900/60 p-3 transition-all hover:border-slate-600"
-                  >
-                    <div class="flex items-center gap-2 mb-2">
-                      <input
-                        type="text"
-                        class="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                        :value="pos.label"
-                        @input="updatePositionLabel(block, pos.id, ($event.target as HTMLInputElement).value)"
-                        placeholder="Position name"
-                      />
-                      <button class="text-red-400 hover:text-red-300 text-sm p-1" title="Remove position" @click.stop="removePosition(block, pos.id)">✕</button>
+                <div class="overflow-auto h-[260px]">
+                  <table class="w-full text-xs border border-slate-700">
+                    <thead class="sticky top-0 z-10 bg-slate-900/80 backdrop-blur">
+                      <tr>
+                        <th class="p-2 text-left w-6"></th>
+                        <th class="p-2 text-left w-48 border-l border-slate-700">Position</th>
+                        <th class="p-2 text-left w-32 border-l border-slate-700">Role</th>
+                        <th class="p-2 text-left border-l border-slate-700">Assignees</th>
+                        <th class="p-2 text-left w-48 border-l border-slate-700">Notes</th>
+                        <th class="p-2 text-left w-10 border-l border-slate-700">✕</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(pos, idx) in (block.data?.positions ?? [])" :key="pos.id" class="odd:bg-slate-900/40">
+                        <td class="p-2 align-top text-slate-500">
+                          <div class="flex flex-col gap-1">
+                            <button class="text-[10px]" title="Up" @click.stop="(function(){ const arr=[...(block.data?.positions||[])]; if(idx>0){ const tmp=arr[idx-1]; arr[idx-1]=arr[idx]; arr[idx]=tmp; updateBlockData(block,{ positions: arr }) } })()">↑</button>
+                            <button class="text-[10px]" title="Down" @click.stop="(function(){ const arr=[...(block.data?.positions||[])]; if(idx<arr.length-1){ const tmp=arr[idx+1]; arr[idx+1]=arr[idx]; arr[idx]=tmp; updateBlockData(block,{ positions: arr }) } })()">↓</button>
+                          </div>
+                        </td>
+                        <td class="p-2 align-top border-l border-slate-700">
+                          <input class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[11px]" :value="pos.label" @input="updatePositionLabel(block, pos.id, ($event.target as HTMLInputElement).value)" placeholder="e.g. Soak 1"/>
+                        </td>
+                        <td class="p-2 align-top border-l border-slate-700">
+                          <select class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[11px]" :value="(pos as any).role || 'Any'" @change="(function(v){ const positions=[...(block.data?.positions||[])].map(p=> p.id===pos.id? { ...p, role: (v.target as HTMLSelectElement).value }: p); updateBlockData(block,{ positions }) })($event)">
+                            <option value="Any">Any</option>
+                            <option value="Tanks">Tanks</option>
+                            <option value="Healers">Healers</option>
+                            <option value="Melee">Melee</option>
+                            <option value="Ranged">Ranged</option>
+                          </select>
+                        </td>
+                        <td class="p-2 align-top border-l border-slate-700">
+                          <div class="min-h-10 rounded bg-slate-900/40 p-1 space-y-1"
+                               @dragover.prevent
+                               @drop.prevent="onDropToPosition(block, pos.id, $event)">
+                            <div v-for="cid in (block.data?.assignments?.[pos.id] ?? [])" :key="cid" class="flex items-center justify-between rounded px-2 py-1" :style="{ backgroundColor: charColorById(cid) + '22', border: '1px solid ' + charColorById(cid) + '55' }">
+                              <div class="truncate font-medium" :style="{ color: charColorById(cid) }">{{ getCharacterById(cid)?.name ?? 'Unknown' }}</div>
+                              <button class="text-red-400 hover:text-red-300" @click.stop="removeFromPosition(block, pos.id, cid)" title="Remove">✕</button>
+                            </div>
+                            <div v-if="!(block.data?.assignments?.[pos.id]?.length)" class="text-[11px] text-slate-500 text-center py-1">Drag players here</div>
+                          </div>
+                        </td>
+                        <td class="p-2 align-top border-l border-slate-700">
+                          <input class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[11px]" :value="(((block.data?.positionNotes||{}) as any)[pos.id]?.[0] || '')" @input="(function(ev){ const txt=(ev.target as HTMLInputElement).value; const notes=Object.assign({}, (block.data?.positionNotes||{})); notes[pos.id]= txt? [txt]: []; updateBlockData(block,{ positionNotes: notes }) })($event)" placeholder="Notes (optional)"/>
+                        </td>
+                        <td class="p-2 align-top border-l border-slate-700">
+                          <button class="text-red-400 hover:text-red-300" title="Remove position" @click.stop="removePosition(block, pos.id)">✕</button>
+                        </td>
+                      </tr>
+                      <tr v-if="!(block.data?.positions?.length)" class="text-slate-500">
+                        <td colspan="6" class="p-4 text-center">No positions yet — click “+ Add position”</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              
+              <div v-else-if="block.type === 'FREE_CANVAS'" class="space-y-2">
+                <div v-if="selectedBlockId === block.id" class="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                  <button class="px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addShape(block, 'rect')">+ Rectangle</button>
+                  <button class="px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addShape(block, 'text')">+ Text</button>
+                  <button class="px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addShape(block, 'timer')">+ Timer</button>
+                  <button class="px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addShape(block, 'image')">+ Image</button>
+                  <button class="px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addShape(block, 'marker')">+ Marker</button>
+                  <button class="px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addShape(block, 'arrow')">+ Arrow</button>
+                  <label class="ml-2 inline-flex items-center gap-1"><input type="checkbox" :checked="block.data?.grid === true" @change="updateBlockData(block, { grid: ($event.target as HTMLInputElement).checked })"/> Grid</label>
+                  <span class="ml-2">Height</span>
+                  <input class="w-20 bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="block.data?.canvasHeight || 280" @input="updateBlockData(block, { canvasHeight: Number(($event.target as HTMLInputElement).value || 0) })" />
+                </div>
+                <div class="relative border border-dashed border-slate-700 rounded-md"
+                     :style="{ height: (block.data?.canvasHeight || 280) + 'px', background: (block.data?.grid ? 'repeating-linear-gradient(0deg, rgba(148,163,184,.08), rgba(148,163,184,.08) 1px, transparent 1px, transparent 8px), repeating-linear-gradient(90deg, rgba(148,163,184,.08), rgba(148,163,184,.08) 1px, transparent 1px, transparent 8px)' : 'rgba(15,23,42,.4)') }"
+                     :ref="(el) => setCanvasRef(block.id, el)">
+                  <div v-for="s in (block.data?.shapes || [])" :key="s.id"
+                       class="absolute rounded cursor-move group"
+                       :style="shapeStyle(s)"
+                       @mousedown.stop="!props.readonly && !(s as any).locked && onShapeMouseDown(block, s.id, $event)"
+                       @click.stop="selectShape(block, s.id)">
+                    <template v-if="s.type === 'rect'">
+                      <div class="w-full h-full"></div>
+                    </template>
+                    <template v-else-if="s.type === 'text'">
+                      <div class="w-full h-full grid place-items-center text-xs" :style="{ color: s.color || '#e5e7eb' }">{{ s.text || 'Text' }}</div>
+                    </template>
+                    <template v-else-if="s.type === 'timer'">
+                      <div class="w-full h-full grid place-items-center text-[11px] text-slate-200">⏱ {{ formatTimer(s.seconds || 0) }}</div>
+                    </template>
+                    <template v-else-if="s.type === 'image'">
+                      <div class="w-full h-full overflow-hidden rounded">
+                        <img :src="s.url || ''" alt="" class="w-full h-full" :style="{ objectFit: s.fit || 'contain', opacity: (typeof s.opacity==='number'? s.opacity : 1) }"/>
+                      </div>
+                    </template>
+                    <template v-else-if="s.type === 'marker'">
+                      <div class="w-full h-full grid place-items-center font-semibold"
+                           :style="{ color: (s.color || markerColor(s.marker || 'star')), fontSize: (Math.min(Number(s.w||60), Number(s.h||40)) * 0.6) + 'px', lineHeight: 1 }">{{ markerSymbol(s.marker || 'star') }}</div>
+                    </template>
+                    <template v-else-if="s.type === 'arrow'">
+                      <svg :width="s.w || 60" :height="s.h || 40" class="block">
+                        <defs>
+                          <marker :id="'arrowhead-end-' + s.id" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                            <path d="M0,0 L0,6 L9,3 z" :fill="s.color || '#e5e7eb'"></path>
+                          </marker>
+                          <marker :id="'arrowhead-start-' + s.id" markerWidth="10" markerHeight="10" refX="0" refY="3" orient="auto" markerUnits="strokeWidth">
+                            <path d="M9,0 L9,6 L0,3 z" :fill="s.color || '#e5e7eb'"></path>
+                          </marker>
+                        </defs>
+                        <line :x1="(s.twoHeads? 10: 0) + 5" :y1="(s.h||40)/2" :x2="(s.w||60) - 5 - (s.twoHeads? 10: 0)" :y2="(s.h||40)/2"
+                              :stroke="s.color || '#e5e7eb'" :stroke-width="s.thickness || 4"
+                              :marker-end="'url(#arrowhead-end-' + s.id + ')'"
+                              :marker-start="s.twoHeads ? ('url(#arrowhead-start-' + s.id + ')') : undefined" />
+                      </svg>
+                    </template>
+                    <!-- Resize handles -->
+                    <template v-if="!props.readonly && (block.data?.selectedShapeId === s.id)">
+                      <div class="absolute -top-1 -left-1 h-2.5 w-2.5 rounded bg-emerald-500 cursor-nwse-resize" @mousedown.stop="onShapeResizeMouseDown(block, s.id, 'resize-nw', $event)"></div>
+                      <div class="absolute -top-1 -right-1 h-2.5 w-2.5 rounded bg-emerald-500 cursor-nesw-resize" @mousedown.stop="onShapeResizeMouseDown(block, s.id, 'resize-ne', $event)"></div>
+                      <div class="absolute -bottom-1 -left-1 h-2.5 w-2.5 rounded bg-emerald-500 cursor-nesw-resize" @mousedown.stop="onShapeResizeMouseDown(block, s.id, 'resize-sw', $event)"></div>
+                      <div class="absolute -bottom-1 -right-1 h-2.5 w-2.5 rounded bg-emerald-500 cursor-nwse-resize" @mousedown.stop="onShapeResizeMouseDown(block, s.id, 'resize-se', $event)"></div>
+                      <!-- Rotate handle -->
+                      <div class="absolute -top-5 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-emerald-500 cursor-grab" @mousedown.stop="onShapeRotateMouseDown(block, s.id, $event)"></div>
+                      <div class="absolute -top-2 left-1/2 -translate-x-1/2 w-0.5 h-2 bg-emerald-500"></div>
+                    </template>
+                  </div>
+                </div>
+                <div v-if="selectedBlockId === block.id" class="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] text-slate-300">
+                  <div>
+                    <div class="text-slate-400 mb-1">Shapes</div>
+                    <div class="space-y-1 max-h-40 overflow-auto pr-1">
+                      <div v-for="(s, si) in (block.data?.shapes || [])" :key="s.id"
+                           class="flex items-center justify-between rounded border border-slate-700 bg-slate-900/60 px-2 py-1"
+                           :class="(block.data?.selectedShapeId === s.id) ? 'ring-1 ring-emerald-500/50' : ''"
+                           @click.stop="selectShape(block, s.id)">
+                        <span class="truncate">{{ s.type.toUpperCase() }} • {{ s.id.slice(-4) }}</span>
+                        <div class="flex items-center gap-1">
+                          <button class="text-slate-400 hover:text-slate-200" title="Up" @click.stop="(function(){ const arr=[...(block.data?.shapes||[])]; if(si>0){ const tmp=arr[si-1]; arr[si-1]=arr[si]; arr[si]=tmp; updateBlockData(block,{ shapes: arr }) } })()">↑</button>
+                          <button class="text-slate-400 hover:text-slate-200" title="Down" @click.stop="(function(){ const arr=[...(block.data?.shapes||[])]; if(si<arr.length-1){ const tmp=arr[si+1]; arr[si+1]=arr[si]; arr[si]=tmp; updateBlockData(block,{ shapes: arr }) } })()">↓</button>
+                          <button class="text-slate-400 hover:text-slate-200" title="Duplicate" @click.stop="(function(){ const arr=[...(block.data?.shapes||[])]; const idx=arr.findIndex(x=>x.id===s.id); const cp={...arr[idx], id: ('sh' + Date.now() + '-' + String(Math.random()).slice(2,6))}; arr.splice(idx+1,0,cp); updateBlockData(block,{ shapes: arr, selectedShapeId: cp.id }) })()">⧉</button>
+                          <button class="text-slate-400 hover:text-slate-200" :title="(s as any).locked ? 'Unlock' : 'Lock'" @click.stop="patchShape(block, { locked: !(s as any).locked })">{{ (s as any).locked ? '🔒' : '🔓' }}</button>
+                          <button class="text-red-400 hover:text-red-300" title="Delete" @click.stop="removeShape(block, s.id)">✕</button>
+                        </div>
+                      </div>
                     </div>
-                    <div
-                      class="min-h-14 rounded bg-slate-900/40 p-1 space-y-1 transition-all duration-150"
-                      :class="hoveredPositionId === pos.id ? 'ring-2 ring-emerald-500/80 bg-emerald-500/10 shadow-lg' : 'hover:bg-slate-900/60'"
-                      @dragover.prevent
-                      @dragenter.prevent="hoveredPositionId = pos.id"
-                      @dragleave.prevent="hoveredPositionId = null"
-                      @drop.prevent="onDropToPosition(block, pos.id, $event)"
-                    >
-                      <div
-                        v-for="cid in (block.data?.assignments?.[pos.id] ?? [])"
-                        :key="cid"
-                        class="flex items-center justify-between rounded bg-slate-800/70 px-2 py-1"
-                        :style="{ borderLeft: '4px solid ' + charColorById(cid) }"
-                      >
-                        <div class="truncate">{{ getCharacterById(cid)?.name ?? 'Unknown' }}</div>
-                        <button class="text-red-400 hover:text-red-300" @click.stop="removeFromPosition(block, pos.id, cid)" title="Remove">✕</button>
+                  </div>
+                  <div>
+                    <div class="text-slate-400 mb-1">Properties</div>
+                    <template v-if="currentShape(block)">
+                      <div class="grid grid-cols-2 gap-2">
+                        <label class="text-slate-400">X <input class="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="currentShape(block)!.x || 0" @input="patchShape(block, { x: Number(($event.target as HTMLInputElement).value || 0) })"/></label>
+                        <label class="text-slate-400">Y <input class="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="currentShape(block)!.y || 0" @input="patchShape(block, { y: Number(($event.target as HTMLInputElement).value || 0) })"/></label>
+                        <label class="text-slate-400">W <input class="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="currentShape(block)!.w || 60" @input="patchShape(block, { w: Number(($event.target as HTMLInputElement).value || 0) })"/></label>
+                        <label class="text-slate-400">H <input class="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="currentShape(block)!.h || 40" @input="patchShape(block, { h: Number(($event.target as HTMLInputElement).value || 0) })"/></label>
+                        <label class="text-slate-400">Rotation° <input class="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="currentShape(block)!.rotation || 0" @input="patchShape(block, { rotation: Number(($event.target as HTMLInputElement).value || 0) })"/></label>
+                        <label v-if="currentShape(block)!.type !== 'timer'" class="text-slate-400 col-span-2">Color <input type="color" class="ml-2" :value="currentShape(block)!.color || '#64748b'" @input="patchShape(block, { color: ($event.target as HTMLInputElement).value })"/></label>
+                        <label v-if="currentShape(block)!.type === 'text'" class="text-slate-400 col-span-2">Text <input class="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="currentShape(block)!.text || ''" @input="patchShape(block, { text: ($event.target as HTMLInputElement).value })"/></label>
+                        <label v-if="currentShape(block)!.type === 'timer'" class="text-slate-400 col-span-2">Seconds <input class="w-28 bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="currentShape(block)!.seconds || 30" @input="patchShape(block, { seconds: Number(($event.target as HTMLInputElement).value || 0) })"/></label>
+                        <template v-if="currentShape(block)!.type === 'image'">
+                          <label class="text-slate-400 col-span-2">Image URL <input class="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="currentShape(block)!.url || ''" @input="patchShape(block, { url: ($event.target as HTMLInputElement).value })" placeholder="https://..."/></label>
+                          <label class="text-slate-400">Fit
+                            <select class="ml-2 bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="currentShape(block)!.fit || 'contain'" @change="patchShape(block, { fit: ($event.target as HTMLSelectElement).value })">
+                              <option value="contain">Contain</option>
+                              <option value="cover">Cover</option>
+                            </select>
+                          </label>
+                          <label class="text-slate-400">Opacity <input type="range" min="0" max="1" step="0.05" :value="currentShape(block)!.opacity ?? 1" @input="patchShape(block, { opacity: Number(($event.target as HTMLInputElement).value) })"/></label>
+                        </template>
+                        <template v-if="currentShape(block)!.type === 'marker'">
+                          <label class="text-slate-400 col-span-2">Marker
+                            <select class="ml-2 bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="currentShape(block)!.marker || 'star'" @change="patchShape(block, { marker: ($event.target as HTMLSelectElement).value })">
+                              <option value="star">⭐ Star</option>
+                              <option value="circle">⭕ Circle</option>
+                              <option value="diamond">◇ Diamond</option>
+                              <option value="triangle">▲ Triangle</option>
+                              <option value="moon">☽ Moon</option>
+                              <option value="square">■ Square</option>
+                              <option value="cross">✖ Cross</option>
+                              <option value="skull">☠ Skull</option>
+                            </select>
+                          </label>
+                        </template>
+                        <template v-if="currentShape(block)!.type === 'arrow'">
+                          <label class="text-slate-400">Thickness <input type="range" min="1" max="12" :value="currentShape(block)!.thickness || 4" @input="patchShape(block, { thickness: Number(($event.target as HTMLInputElement).value) })"/></label>
+                          <label class="text-slate-400">Head <input type="range" min="6" max="24" :value="currentShape(block)!.head || 12" @input="patchShape(block, { head: Number(($event.target as HTMLInputElement).value) })"/></label>
+                          <label class="text-slate-400 inline-flex items-center gap-2">Two heads <input type="checkbox" :checked="currentShape(block)!.twoHeads || false" @change="patchShape(block, { twoHeads: ($event.target as HTMLInputElement).checked })"/></label>
+                        </template>
                       </div>
-                      <div v-if="!(block.data?.assignments?.[pos.id]?.length)" class="text-[11px] text-slate-500 text-center py-1">
-                        Drag characters here
-                      </div>
-                    </div>
-                    <div class="mt-2 space-y-1">
-                      <div class="flex items-center justify-between text-[11px] text-slate-400">
-                        <span>Notes</span>
-                        <button class="px-1.5 py-0.5 rounded border border-slate-700 hover:bg-slate-800" @click.stop="addPositionNote(block, pos.id)">+ Add</button>
-                      </div>
-                      <div v-for="(note, ni) in ((block.data?.positionNotes?.[pos.id] ?? []) as any[])" :key="pos.id + ':' + ni" class="flex items-center gap-1">
-                        <input class="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-[11px] text-slate-200" :value="note" @input="updatePositionNote(block, pos.id, ni, ($event.target as HTMLInputElement).value)"/>
-                        <button class="text-red-400 hover:text-red-300" title="Remove note" @click.stop="removePositionNote(block, pos.id, ni)">✕</button>
-                      </div>
-                      <div v-if="!((block.data?.positionNotes?.[pos.id] ?? []) as any[]).length" class="text-[10px] text-slate-500">—</div>
-                    </div>
+                    </template>
+                    <div v-else class="text-slate-500">Select a shape…</div>
                   </div>
                 </div>
               </div>
@@ -1693,15 +2230,7 @@ defineExpose({ assignToSelected, selectedBlockId });
                 <div
                   class="min-h-24 rounded border border-dashed border-slate-600 p-2 space-y-1"
                   @dragover.prevent
-                  @drop.prevent="
-                    (e: DragEvent) => {
-                      const id = e.dataTransfer?.getData('text/plain');
-                      if (!id) return;
-                      const bench = new Set<string>((block.data?.bench ?? []) as string[]);
-                      bench.add(id);
-                      updateBlockData(block, { bench: Array.from(bench) });
-                    }
-                  "
+                  @drop.prevent="(e: DragEvent) => { if (props.readonly) return; const id = e.dataTransfer?.getData('text/plain'); if (!id) return; const bench = new Set<string>((block.data?.bench ?? []) as string[]); bench.add(id); updateBlockData(block, { bench: Array.from(bench) }); removeCharacterFromAllAssignments(id); }"
                 >
                   <div
                     v-for="cid in (block.data?.bench ?? [])"
@@ -1711,7 +2240,7 @@ defineExpose({ assignToSelected, selectedBlockId });
                     <div class="truncate">{{ getCharacterById(cid)?.name ?? 'Unknown' }}</div>
                     <button class="text-red-400 hover:text-red-300" @click.stop="updateBlockData(block, { bench: (block.data?.bench ?? []).filter((x: string) => x !== cid) })" title="Remove">✕</button>
                   </div>
-                  <div v-if="!(block.data?.bench?.length)" class="text-[11px] text-slate-500 text-center py-1">Drag characters here</div>
+                  <div v-if="!(block.data?.bench?.length)" class="text-[11px] text-slate-500 text-center py-1">Drag players here</div>
                 </div>
               </div>
 
@@ -1775,10 +2304,10 @@ defineExpose({ assignToSelected, selectedBlockId });
                     <button class="text-[11px] px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addRotationRow(block, 'Rally')">+ Rally</button>
                   </div>
                 </div>
-                <div class="overflow-auto">
+                <div class="overflow-auto h-[300px]">
                   <table class="min-w-full text-[11px] border border-slate-700">
-                    <thead>
-                      <tr class="bg-slate-900/70">
+                    <thead class="sticky top-0 z-10">
+                      <tr class="bg-slate-900/80 backdrop-blur">
                         <th class="border-b border-slate-700 p-1 text-left w-40">{{ block.data?.rowHeaderLabel || 'Cooldown' }}</th>
                         <th v-for="col in (block.data?.columns ?? [])" :key="col.id" class="border-b border-l border-slate-700 p-1">
                           <div class="flex items-center gap-1">
@@ -1843,7 +2372,7 @@ defineExpose({ assignToSelected, selectedBlockId });
                                 <div class="truncate">{{ getCharacterById(cid)?.name ?? 'Unknown' }}</div>
                                 <button class="text-red-400 hover:text-red-300" @click.stop="removeFromCell(block, row.id, col.id, cid)" title="Remove">✕</button>
                               </div>
-                              <div v-if="!getCell(block, row.id, col.id).length" class="text-center text-slate-500">Drop here</div>
+                              <div v-if="!getCell(block, row.id, col.id).length" class="text-center text-slate-500">Drag players here</div>
                             </div>
                           </template>
                         </td>
@@ -1864,10 +2393,10 @@ defineExpose({ assignToSelected, selectedBlockId });
                   <div class="text-[11px] text-slate-400">Set interrupt order across waves or time slots</div>
                   <button class="text-[11px] px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addRotationColumn(block)">+ Add slot</button>
                 </div>
-                <div class="overflow-auto">
+                <div class="overflow-auto h-[300px]">
                   <table class="min-w-full text-[11px] border border-slate-700">
-                    <thead>
-                      <tr class="bg-slate-900/70">
+                    <thead class="sticky top-0 z-10">
+                      <tr class="bg-slate-900/80 backdrop-blur">
                         <th class="border-b border-slate-700 p-1 text-left w-40">Target</th>
                         <th v-for="col in (block.data?.columns ?? [])" :key="col.id" class="border-b border-l border-slate-700 p-1">
                           <div class="flex items-center gap-1">
@@ -1895,7 +2424,7 @@ defineExpose({ assignToSelected, selectedBlockId });
                               <div class="truncate">{{ getCharacterById(cid)?.name ?? 'Unknown' }}</div>
                               <button class="text-red-400 hover:text-red-300" @click.stop="removeFromCell(block, row.id, col.id, cid)" title="Remove">✕</button>
                             </div>
-                            <div v-if="!getCell(block, row.id, col.id).length" class="text-center text-slate-500">Drop here</div>
+                            <div v-if="!getCell(block, row.id, col.id).length" class="text-center text-slate-500">Drag players here</div>
                           </div>
                         </td>
                       </tr>

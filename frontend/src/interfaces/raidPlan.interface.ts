@@ -14,7 +14,8 @@ export type BlockType =
   | 'INTERRUPT_ROTATION'
   | 'CUSTOM_SECTION'
   | 'CUSTOM_GRID'
-  | 'IMAGE';
+  | 'IMAGE'
+  | 'FREE_CANVAS';
 
 export interface RaidPlanBlockBase {
   id: string;

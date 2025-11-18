@@ -11,4 +11,5 @@ export interface GameGuild {
   nbrCharacters: number;
   isValid: boolean;
   players?: PlayerInterface[] | [];
+  myRole?: 'GM' | 'Officer' | 'Member' | null;
 }

@@ -16,10 +16,11 @@ readonly class GameGuildDTO
         public int    $nbrGuildMembers,
         public int    $nbrCharacters,
         public bool   $isValid,
-        public array  $userIds = []
+        public array  $userIds = [],
+        public ?string $myRole = null,
     ) {}
 
-    public static function fromEntity(GameGuild $guild): self
+    public static function fromEntity(GameGuild $guild, ?string $myRole = null): self
     {
         $nbrGuildMembers = count($guild->getGuildMemberships() ?? 0);
         $nbrCharacters = count($guild->getGameCharacters() ?? 0);
@@ -36,7 +37,8 @@ readonly class GameGuildDTO
             $guild->isValid(),
             $guild?->getGuildMemberships()?->map(
                 static fn($m) => $m?->getUser()?->getId()?->toRfc4122()
-            )->toArray()
+            )->toArray(),
+            $myRole
             );
     }
 
@@ -45,7 +47,7 @@ readonly class GameGuildDTO
     {
         $out = [];
         foreach ($guilds as $g) {
-            $out[] = self::fromEntity($g);
+            $out[] = self::fromEntity($g, null);
         }
         return $out;
     }

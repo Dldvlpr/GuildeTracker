@@ -126,7 +126,16 @@ final class GameGuildController extends AbstractController
 
         $this->denyAccessUnlessGranted('GUILD_VIEW', $guild);
 
-        return $this->json(GameGuildDTO::fromEntity($guild));
+        $securityUser = $this->getUser();
+        $myRole = null;
+        if ($securityUser) {
+            try {
+                $roleEnum = $this->gameGuildRepository->findRoleForUserInGuild($securityUser, $guild);
+                $myRole = $roleEnum?->value;
+            } catch (\Throwable) {}
+        }
+
+        return $this->json(GameGuildDTO::fromEntity($guild, $myRole));
     }
 
     #[Route('/api/guilds/{id}/sync', name: 'api_guild_sync', methods: ['POST'])]

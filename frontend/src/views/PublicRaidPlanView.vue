@@ -17,6 +17,10 @@ const updatedAt = ref('');
 const highlight = ref('');
 const hoveredCol: Record<number, number | null> = {};
 const roster = ref<Record<string, { class?: string; spec?: string; role?: string; color?: string }>>({});
+const MARKER_COLORS: Record<string, string> = { star: '#fbbf24', circle: '#fb923c', diamond: '#a855f7', triangle: '#22c55e', moon: '#93c5fd', square: '#3b82f6', cross: '#ef4444', skull: '#e5e7eb' };
+const MARKER_SYMBOLS: Record<string, string> = { star: '✦', circle: '●', diamond: '◆', triangle: '▲', moon: '☾', square: '■', cross: '✖', skull: '☠' };
+function markerColor(kind: string): string { return MARKER_COLORS[kind] || '#94a3b8' }
+function markerSymbol(kind: string): string { return MARKER_SYMBOLS[kind] || '●' }
 
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 
@@ -295,7 +299,8 @@ function copyLink() {
 
             
             
-            <div v-else-if="block.type === 'ROLE_MATRIX'" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div v-else-if="block.type === 'ROLE_MATRIX'" class="h-[260px] overflow-auto pr-1">
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div v-for="role in ['Tanks','Healers','Melee','Ranged']" :key="role" class="rounded border p-2"
                    :style="{ borderColor: (ROLE_COLORS as any)[role as Role] + '55', backgroundColor: (ROLE_COLORS as any)[role as Role] + '15' }">
                 <div class="text-[11px] font-semibold mb-1"
@@ -305,15 +310,17 @@ function copyLink() {
                       class="rounded px-2 py-1"
                       :style="roster[name]?.color ? { backgroundColor: roster[name].color + '22', border: '1px solid ' + roster[name].color + '55', color: roster[name].color } : {}"
                       :class="[!roster[name]?.color ? 'bg-slate-800/70' : '', matchName(name) ? 'ring-2 ring-emerald-500/70' : '']">
-                    {{ name }}
+                  {{ name }}
                   </li>
                   <li v-if="!(block.data?.roleAssignments?.[role]?.length)" class="text-slate-500 italic">No assignments</li>
                 </ul>
               </div>
+              </div>
             </div>
 
             
-            <div v-else-if="block.type === 'GROUPS_GRID'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div v-else-if="block.type === 'GROUPS_GRID'" class="h-[260px] overflow-auto pr-1">
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
               <div v-for="g in (block.data?.groups || [])" :key="g.id" class="rounded border border-slate-800 bg-slate-900/60 p-2">
                 <div class="text-[11px] font-semibold text-slate-300 mb-1 flex items-center justify-between">
                   <span>{{ g.title }}</span>
@@ -329,32 +336,51 @@ function copyLink() {
                   <li v-if="!(g.members?.length)" class="text-slate-500 italic">Empty</li>
                 </ul>
               </div>
-            </div>
-
-            
-            <div v-else-if="block.type === 'BOSS_GRID'" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div v-for="pos in (block.data?.positions || [])" :key="pos.id" class="rounded border border-slate-800 bg-slate-900/60 p-2">
-                <div class="text-[11px] font-semibold text-slate-300 mb-1">{{ pos.label }}</div>
-                <ul class="space-y-1">
-                  <li v-for="name in (block.data?.assignments?.[pos.id] || [])" :key="name"
-                      class="rounded px-2 py-1"
-                      :style="roster[name]?.color ? { backgroundColor: roster[name].color + '22', border: '1px solid ' + roster[name].color + '55', color: roster[name].color } : {}"
-                      :class="[!roster[name]?.color ? 'bg-slate-800/70' : '', matchName(name) ? 'ring-2 ring-emerald-500/70' : '']">
-                    {{ name }}
-                  </li>
-                  <li v-if="!(block.data?.assignments?.[pos.id]?.length)" class="text-slate-500 italic">Unassigned</li>
-                </ul>
-                <div v-if="(block.data?.positionNotes?.[pos.id]?.length)" class="mt-1">
-                  <div class="text-[10px] text-slate-500">Notes:</div>
-                  <ul class="mt-0.5 space-y-0.5">
-                    <li v-for="(note, ni) in (block.data?.positionNotes?.[pos.id] || [])" :key="pos.id + ':' + ni" class="text-[11px] text-slate-300">- {{ note }}</li>
-                  </ul>
-                </div>
               </div>
             </div>
 
             
-            <div v-else-if="block.type === 'COOLDOWN_ROTATION'" class="overflow-auto">
+            <div v-else-if="block.type === 'BOSS_GRID'" class="overflow-auto h-[260px]">
+              <table class="w-full text-xs border border-slate-800">
+                <thead class="sticky top-0 z-10 bg-slate-900/80 backdrop-blur">
+                  <tr>
+                    <th class="p-2 text-left w-48">Position</th>
+                    <th class="p-2 text-left w-32">Role</th>
+                    <th class="p-2 text-left">Assignees</th>
+                    <th class="p-2 text-left w-48">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="pos in (block.data?.positions || [])" :key="pos.id" class="odd:bg-slate-900/40">
+                    <td class="p-2 align-top">{{ pos.label }}</td>
+                    <td class="p-2 align-top">{{ (pos as any).role || 'Any' }}</td>
+                    <td class="p-2 align-top">
+                      <div class="space-y-1">
+                        <div v-for="name in (block.data?.assignments?.[pos.id] || [])" :key="name"
+                             class="rounded px-2 py-1"
+                             :style="roster[name]?.color ? { backgroundColor: roster[name].color + '22', border: '1px solid ' + roster[name].color + '55', color: roster[name].color } : {}"
+                             :class="[!roster[name]?.color ? 'bg-slate-800/70' : '', matchName(name) ? 'ring-2 ring-emerald-500/70' : '']">
+                          {{ name }}
+                        </div>
+                        <div v-if="!(block.data?.assignments?.[pos.id]?.length)" class="text-slate-500 italic">Unassigned</div>
+                      </div>
+                    </td>
+                    <td class="p-2 align-top">
+                      <div v-if="(block.data?.positionNotes?.[pos.id]?.length)" class="space-y-0.5">
+                        <div v-for="(note, ni) in (block.data?.positionNotes?.[pos.id] || [])" :key="pos.id + ':' + ni" class="text-[11px] text-slate-300">- {{ note }}</div>
+                      </div>
+                      <div v-else class="text-slate-500 italic">—</div>
+                    </td>
+                  </tr>
+                  <tr v-if="!(block.data?.positions?.length)" class="text-slate-500">
+                    <td colspan="4" class="p-4 text-center">No positions</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            
+            <div v-else-if="block.type === 'COOLDOWN_ROTATION'" class="overflow-auto h-[300px]">
               <table class="min-w-full text-[11px] border border-slate-800 rota-table">
                 <thead>
                   <tr class="bg-slate-900/70 sticky top-0">
@@ -446,7 +472,7 @@ function copyLink() {
             </div>
 
             
-            <div v-else-if="block.type === 'INTERRUPT_ROTATION'" class="overflow-auto">
+            <div v-else-if="block.type === 'INTERRUPT_ROTATION'" class="overflow-auto h-[300px]">
               <table class="min-w-full text-[11px] border border-slate-800 rota-table">
                 <thead>
                   <tr class="bg-slate-900/70 sticky top-0">
@@ -484,6 +510,30 @@ function copyLink() {
                 </li>
                 <li v-if="!(block.data?.bench?.length)" class="text-slate-500 italic">No bench</li>
               </ul>
+            </div>
+
+            
+            <div v-else-if="block.type === 'FREE_CANVAS'">
+              <div class="relative border border-slate-800 rounded bg-slate-900/60" :style="{ height: (block.data?.canvasHeight || 280) + 'px' }">
+                <div v-for="s in (block.data?.shapes || [])" :key="s.id"
+                     class="absolute rounded"
+                     :style="{ left: (s.x||0)+'px', top: (s.y||0)+'px', width: (s.w||60)+'px', height: (s.h||40)+'px', transform: 'rotate(' + Number(s.rotation||0) + 'deg)', transformOrigin: 'center', backgroundColor: (s.type==='rect'||s.type==='marker') ? (s.color || (s.type==='marker' ? markerColor(s.marker||'star') : '#64748b')) : 'transparent', border: (s.type==='text'||s.type==='timer') ? ('1px dashed ' + (s.color || '#64748b')) : 'none' }">
+                  <template v-if="s.type === 'text'">
+                    <div class="w-full h-full grid place-items-center text-xs" :style="{ color: s.color || '#e5e7eb' }">{{ s.text || 'Text' }}</div>
+                  </template>
+                  <template v-else-if="s.type === 'timer'">
+                    <div class="w-full h-full grid place-items-center text-[11px] text-slate-200">⏱ {{ String(Math.floor((s.seconds||0)/60)).padStart(1,'0') }}:{{ String((s.seconds||0)%60).padStart(2,'0') }}</div>
+                  </template>
+                  <template v-else-if="s.type === 'image'">
+                    <div class="w-full h-full overflow-hidden rounded">
+                      <img :src="s.url || ''" alt="" class="w-full h-full" :style="{ objectFit: s.fit || 'contain', opacity: (typeof s.opacity==='number'? s.opacity : 1) }"/>
+                    </div>
+                  </template>
+                  <template v-else-if="s.type === 'marker'">
+                    <div class="w-full h-full grid place-items-center font-semibold" :style="{ color: (s.color || markerColor(s.marker || 'star')), fontSize: (Math.min(Number(s.w||60), Number(s.h||40)) * 0.6) + 'px', lineHeight: 1 }">{{ markerSymbol(s.marker || 'star') }}</div>
+                  </template>
+                </div>
+              </div>
             </div>
 
             <div v-else class="text-slate-500 italic">

@@ -33,6 +33,18 @@ function add(type: BlockType) {
     
     <section>
       <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
+        Custom Widgets
+      </h3>
+      <div class="space-y-1">
+        <button class="w-full text-left px-2 py-1.5 rounded-md hover:bg-slate-800/80" @click="add('FREE_CANVAS')">
+          🧪 Free Canvas
+        </button>
+      </div>
+    </section>
+
+    
+    <section>
+      <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
         Group Management
       </h3>
       <div class="space-y-1">

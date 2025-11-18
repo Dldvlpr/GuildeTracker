@@ -8,15 +8,20 @@ import BaseModal from '@/components/ui/BaseModal.vue';
 import TemplatesPanel from '@/components/TemplatesPanel.vue';
 import BossLibraryModal from '@/components/BossLibraryModal.vue';
 import PlanManagerModal from '@/components/PlanManagerModal.vue';
+import SmartAssignModal from '@/components/SmartAssignModal.vue';
 import type { RaidPlanBlock, BlockType } from '@/interfaces/raidPlan.interface.ts';
 import type { Character } from '@/interfaces/game.interface';
 import { Role } from '@/interfaces/game.interface';
 import { getCharactersByGuildId } from '@/services/character.service';
 import { getRoleByClassAndSpec } from '@/data/gameData';
 import { createRaidPlan, updateRaidPlan, generateShareLink, revokeShareLink, getRaidPlansByGuild, type RaidPlanDTO } from '@/services/raidPlan.service'
+import { getGameGuild } from '@/services/gameGuild.service'
+import type { GameGuild } from '@/interfaces/GameGuild.interface'
 import type { RaidBoss } from '@/data/raidData';
 
 const planName = ref('My Raid Plan');
+const planRaidName = ref<string>('');
+const planFolder = ref<string>('');
 const route = useRoute();
 const guildId = ref<string | null>(null);
 const characters = ref<Character[]>([]);
@@ -36,8 +41,11 @@ const showTemplates = ref(false);
 const saving = ref(false);
 const lastSavedAt = ref<number | null>(null);
 const canvasRef = ref<any>(null);
-  const exportMenuOpen = ref(false);
+  const toolsMenuOpen = ref(false);
+  const toolsMenuRef = ref<HTMLElement | null>(null);
 const showHelp = ref(false);
+const showLeftPanel = ref(true);
+const showRightPanel = ref(true);
 const showSaveTemplate = ref(false);
 const templateName = ref('');
 const showBossLibrary = ref(false);
@@ -50,10 +58,20 @@ function planIdKey(gid: string) {
 }
 
 const showPlanManager = ref(false)
+const showSmartAssign = ref(false)
+
+// Permissions
+const guild = ref<GameGuild | null>(null)
+const myRole = computed(() => guild.value?.myRole || 'GM')
+const canEdit = computed(() => myRole.value === 'GM' || myRole.value === 'Officer')
 
 function openPlanManager() {
   if (!guildId.value) return
   showPlanManager.value = true
+}
+
+function openSmartAssign() {
+  showSmartAssign.value = true
 }
 
 function resetHistory() {
@@ -65,6 +83,8 @@ function resetHistory() {
 function handleLoadPlan(p: RaidPlanDTO) {
   planId.value = p.id
   planName.value = p.name
+  planRaidName.value = p.raidName || ''
+  try { planFolder.value = (p.metadata as any)?.folder || '' } catch { planFolder.value = '' }
   blocks.value = JSON.parse(JSON.stringify(p.blocks))
   try { if (guildId.value) localStorage.setItem(planIdKey(guildId.value), String(p.id)) } catch {}
   resetHistory()
@@ -77,16 +97,17 @@ function handleCreateNew() {
 
   planId.value = null
   planName.value = 'New Raid Plan'
+  planRaidName.value = ''
+  planFolder.value = ''
   blocks.value = []
   try { if (guildId.value) localStorage.removeItem(planIdKey(guildId.value)) } catch {}
   resetHistory()
   window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: 'New plan created' } }))
 }
 
-const preset = ref<'classic40' | 'mythic20' | 'custom'>('custom');
+const preset = ref<'raid40' | 'raid25' | 'raid20' | 'raid10' | 'custom'>('custom');
 const expected = ref<{ tanks: number; healers: number; dps: number }>({ tanks: 0, healers: 0, dps: 0 });
 const summary = ref<{ tanks: number; healers: number; melee: number; ranged: number; missingText: string | null }>({ tanks: 0, healers: 0, melee: 0, ranged: 0, missingText: null });
-const showDetails = ref(false);
 
 function makeKeys(id: string) {
   draftKey.value = `raidPlan:draft:${id}`;
@@ -134,6 +155,8 @@ async function saveToDatabase() {
         guildId: guildId.value,
         name: planName.value || 'Untitled Raid Plan',
         blocks: cloneBlocks(),
+        raidName: planRaidName.value || undefined,
+        metadata: { folder: planFolder.value || null },
       })
       planId.value = created.id
       localStorage.setItem(planIdKey(guildId.value), String(created.id))
@@ -142,6 +165,8 @@ async function saveToDatabase() {
       const updated: RaidPlanDTO = await updateRaidPlan(planId.value, {
         name: planName.value || 'Untitled Raid Plan',
         blocks: cloneBlocks(),
+        raidName: planRaidName.value || null,
+        metadata: { folder: planFolder.value || null },
       })
       window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: 'Raid plan saved' } }))
     }
@@ -262,6 +287,17 @@ function deleteVersion(id: string) {
   }));
 }
 
+async function quickStartCreate(p?: 'raid40' | 'raid25' | 'raid20' | 'raid10') {
+  try {
+    if (p) applyPreset(p)
+    if (!planName.value.trim()) planName.value = 'New Raid Plan'
+    await saveToDatabase()
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  } catch (e: any) {
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: e?.message || 'Failed to create plan' } }))
+  }
+}
+
 function formatRelativeTime(timestamp: number): string {
   const now = Date.now();
   const diff = now - timestamp;
@@ -289,11 +325,11 @@ function getDefaultColSpan(type: BlockType): number {
     case 'ROLE_MATRIX':
     case 'HEADING':
     case 'DIVIDER':
-      return 12;
-
-    case 'BOSS_GRID':
     case 'COOLDOWN_ROTATION':
     case 'INTERRUPT_ROTATION':
+    case 'BOSS_GRID':
+      return 12;
+
     case 'CUSTOM_SECTION':
     case 'PHASE_STRATEGY':
     case 'IMAGE':
@@ -494,6 +530,17 @@ function reorderBlocks(newOrder: RaidPlanBlock[]) {
   blocks.value = newOrder;
 }
 
+function resetToOnboarding() {
+  planId.value = null
+  planName.value = 'My Raid Plan'
+  planRaidName.value = ''
+  planFolder.value = ''
+  blocks.value = []
+  try { if (guildId.value) localStorage.removeItem(planIdKey(guildId.value)) } catch {}
+  resetHistory()
+  window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: 'Plan deleted — Onboarding reset' } }))
+}
+
 onMounted(async () => {
   const idParam = route.params.id;
   guildId.value = typeof idParam === 'string' ? idParam : Array.isArray(idParam) ? idParam[0] : null;
@@ -510,7 +557,34 @@ onMounted(async () => {
 
   pushHistorySnapshot();
   window.addEventListener('keydown', onKey);
+  // Restore panel states
+  try {
+    const l = localStorage.getItem('raidPlan:ui:leftOpen');
+    const r = localStorage.getItem('raidPlan:ui:rightOpen');
+    if (l !== null) showLeftPanel.value = l === '1';
+    if (r !== null) showRightPanel.value = r === '1';
+  } catch {}
+  // Close tools menu on outside click / Esc
+  const onDocClick = (e: MouseEvent) => {
+    const el = toolsMenuRef.value as HTMLElement | null
+    if (!el) return
+    const target = e.target as Node
+    if (toolsMenuOpen.value && el && !el.contains(target)) toolsMenuOpen.value = false
+  }
+  const onDocKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && toolsMenuOpen.value) toolsMenuOpen.value = false
+  }
+  document.addEventListener('click', onDocClick)
+  document.addEventListener('keydown', onDocKey)
+  // store for removal
+  ;(window as any).__raid_onDocClick = onDocClick
+  ;(window as any).__raid_onDocKey = onDocKey
   loadingChars.value = true;
+  // Load guild for permissions (fallback to editable in dev if request fails)
+  try {
+    const g = await getGameGuild(guildId.value)
+    if (g.ok) guild.value = g.data
+  } catch {}
   const res = await getCharactersByGuildId(guildId.value).catch((e) => ({ ok: false, error: e?.message || 'Network error' } as const));
   loadingChars.value = false;
   if (!res.ok) {
@@ -524,6 +598,17 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKey);
+  const onDocClick = (window as any).__raid_onDocClick as ((e: MouseEvent) => void) | undefined
+  const onDocKey = (window as any).__raid_onDocKey as ((e: KeyboardEvent) => void) | undefined
+  if (onDocClick) document.removeEventListener('click', onDocClick)
+  if (onDocKey) document.removeEventListener('keydown', onDocKey)
+});
+
+watch(showLeftPanel, (v) => {
+  try { localStorage.setItem('raidPlan:ui:leftOpen', v ? '1' : '0') } catch {}
+});
+watch(showRightPanel, (v) => {
+  try { localStorage.setItem('raidPlan:ui:rightOpen', v ? '1' : '0') } catch {}
 });
 
 watch(blocks, () => { pushHistorySnapshot(); scheduleAutosave(); }, { deep: true });
@@ -611,46 +696,6 @@ const sidebarCharacters = computed(() => {
   return characters.value.filter(c => !benched.has(c.id));
 });
 
-const specBreakdown = computed(() => {
-  const byClass: Record<string, Record<string, number>> = {};
-
-  // If a block is selected, compute counts only for members of that block and apply its spec overrides.
-  const selectedId: string | null = (canvasRef.value?.selectedBlockId as string | null) || null;
-  const activeBlock = selectedId ? blocks.value.find(b => b.id === selectedId) : null;
-  const members = new Set<string>();
-  const specOverrides: Record<string, string> = (activeBlock?.data?.specOverrides as Record<string, string>) || {};
-
-  if (activeBlock) {
-    if (activeBlock.type === 'ROLE_MATRIX') {
-      const ra = (activeBlock.data?.roleAssignments ?? {}) as Record<Role, string[]>;
-      (['Tanks','Healers','Melee','Ranged'] as Role[]).forEach((rr) => (ra?.[rr] ?? []).forEach((id) => members.add(String(id))));
-    }
-    if (activeBlock.type === 'GROUPS_GRID') {
-      for (const g of ((activeBlock.data?.groups ?? []) as any[])) (g.members ?? []).forEach((id: string) => members.add(String(id)));
-    }
-  } else {
-    // fallback: all assigned across the plan (no specific overrides applied)
-    getAllAssignedIds().forEach((id) => members.add(id));
-  }
-
-  for (const c of characters.value) {
-    if (!members.has(c.id)) continue;
-    const cls = c.class || 'Unknown';
-    const sp = specOverrides[c.id] || c.spec || 'Unknown';
-    if (!byClass[cls]) byClass[cls] = {};
-    byClass[cls][sp] = (byClass[cls][sp] || 0) + 1;
-  }
-
-  const rows: { cls: string; spec: string; count: number; role?: string }[] = [];
-  for (const cls of Object.keys(byClass).sort()) {
-    for (const sp of Object.keys(byClass[cls]).sort()) {
-      let role: string | undefined;
-      try { role = getRoleByClassAndSpec(cls, sp) || undefined } catch {}
-      rows.push({ cls, spec: sp, count: byClass[cls][sp], role });
-    }
-  }
-  return rows;
-});
 
 function computeSummary() {
   let t = 0, h = 0, m = 0, r = 0;
@@ -724,14 +769,20 @@ function ensureGroupsBlock(groupCount: number, size: number) {
   blocks.value.push(base);
 }
 
-function applyPreset(p: 'classic40' | 'mythic20') {
+function applyPreset(p: 'raid40' | 'raid25' | 'raid20' | 'raid10') {
   preset.value = p;
-  if (p === 'classic40') {
+  if (p === 'raid40') {
     expected.value = { tanks: 5, healers: 10, dps: 25 };
     ensureGroupsBlock(8, 5);
-  } else if (p === 'mythic20') {
+  } else if (p === 'raid25') {
+    expected.value = { tanks: 2, healers: 6, dps: 17 };
+    ensureGroupsBlock(5, 5);
+  } else if (p === 'raid20') {
     expected.value = { tanks: 2, healers: 4, dps: 14 };
     ensureGroupsBlock(4, 5);
+  } else if (p === 'raid10') {
+    expected.value = { tanks: 2, healers: 3, dps: 5 };
+    ensureGroupsBlock(2, 5);
   }
   computeSummary();
 }
@@ -839,9 +890,13 @@ function downloadPng() {
 }
 
 const groupTargets = computed(() => {
-  if (preset.value === 'classic40') return { tank: 1, healer: 2 };
-  if (preset.value === 'mythic20') return { tank: 0, healer: 1 };
-  return null;
+  switch (preset.value) {
+    case 'raid40': return { tank: 1, healer: 2 };
+    case 'raid25': return { tank: 0, healer: 1 };
+    case 'raid20': return { tank: 0, healer: 1 };
+    case 'raid10': return { tank: 0, healer: 1 };
+    default: return null;
+  }
 });
 
 const sidebarRef = ref<any>(null);
@@ -1062,15 +1117,39 @@ function applyBossData(boss: RaidBoss) {
 
           <!-- Groupe: Sauvegarde -->
           <div class="flex items-center gap-1">
+            <div class="flex items-center gap-1 px-1 py-1 rounded-lg bg-slate-900/60 border border-slate-700/50">
+              <button
+                class="px-2 py-1 rounded hover:bg-slate-800 text-xs transition-colors"
+                @click="showLeftPanel = !showLeftPanel"
+                :title="showLeftPanel ? 'Hide Blocks panel' : 'Show Blocks panel'"
+              >
+                🧱 {{ showLeftPanel ? 'Hide Blocks' : 'Show Blocks' }}
+              </button>
+              <div class="w-px h-6 bg-slate-700"></div>
+              <button
+                class="px-2 py-1 rounded hover:bg-slate-800 text-xs transition-colors"
+                @click="showRightPanel = !showRightPanel"
+                :title="showRightPanel ? 'Hide Roster panel' : 'Show Roster panel'"
+              >
+                🧑‍🤝‍🧑 {{ showRightPanel ? 'Hide Roster' : 'Show Roster' }}
+              </button>
+            </div>
             <button
-              class="px-4 py-2 rounded-lg border border-blue-600/50 bg-blue-900/30 text-blue-300 hover:bg-blue-900/50 text-sm font-medium transition-colors"
+              class="px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/60 hover:bg-slate-800 text-sm font-medium transition-colors"
+              @click="openPlanManager"
+              title="Manage your saved plans"
+            >
+              📂 My Plans
+            </button>
+            <button
+              class="px-4 py-2 rounded-lg border border-emerald-600/50 bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/50 text-sm font-medium transition-colors"
               @click="saveToDatabase"
               title="Save to database"
             >
               💾 Save
             </button>
             <button
-              class="px-4 py-2 rounded-lg border border-emerald-600/50 bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/50 text-sm font-medium transition-colors"
+              class="px-4 py-2 rounded-lg border border-blue-600/50 bg-blue-900/30 text-blue-300 hover:bg-blue-900/50 text-sm font-medium transition-colors"
               @click="openShare"
               title="Share this plan"
             >
@@ -1078,113 +1157,71 @@ function applyBossData(boss: RaidBoss) {
             </button>
           </div>
 
-          <!-- Groupe: Export -->
-          <div class="relative">
+          <!-- Tools menu -->
+          <div class="relative" ref="toolsMenuRef">
             <button
-              class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition-colors flex items-center gap-2"
-              @click="exportMenuOpen = !exportMenuOpen"
+              class="px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/60 hover:bg-slate-800 text-sm font-medium transition-colors flex items-center gap-2"
+              @click="toolsMenuOpen = !toolsMenuOpen"
+              title="Open tools and utilities"
             >
-              📤 Export
-              <span class="text-xs">▼</span>
+              🧰 Tools <span class="text-xs">▼</span>
             </button>
-            <div v-if="exportMenuOpen" class="absolute right-0 mt-2 w-52 rounded-lg border border-slate-700 bg-slate-900/98 backdrop-blur shadow-2xl z-50 overflow-hidden">
-              <button class="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-800 transition-colors flex items-center gap-2" @click="copyMarkdown(); exportMenuOpen = false">
-                📝 <span>Copy Markdown</span>
-              </button>
-              <button class="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-800 transition-colors flex items-center gap-2" @click="downloadJson(); exportMenuOpen = false">
-                { } <span>Download JSON</span>
-              </button>
-              <div class="border-t border-slate-800"></div>
-              <button class="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-800 transition-colors flex items-center gap-2" @click="copyImage(); exportMenuOpen = false">
-                🖼️ <span>Copy as Image</span>
-              </button>
-              <button class="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-800 transition-colors flex items-center gap-2" @click="downloadPng(); exportMenuOpen = false">
-                💾 <span>Download PNG</span>
-              </button>
+            <div v-if="toolsMenuOpen" class="absolute right-0 mt-2 w-56 rounded-lg border border-slate-700 bg-slate-900/98 backdrop-blur shadow-2xl z-50 overflow-hidden">
+              <div class="px-3 py-2 text-[10px] uppercase tracking-wide text-slate-500">Compose</div>
+              <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="showBossLibrary = true; toolsMenuOpen = false">📚 Boss Library</button>
+              <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="showTemplates = true; toolsMenuOpen = false">📋 Templates</button>
+              <button v-if="canEdit" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="saveBlockAsTemplate(); toolsMenuOpen = false">💾 Save Block</button>
+              <button v-if="canEdit" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="openSmartAssign(); toolsMenuOpen = false">🧠 Smart Assign</button>
+              <div class="border-t border-slate-800 my-1"></div>
+              <div class="px-3 py-2 text-[10px] uppercase tracking-wide text-slate-500">Manage</div>
+              <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="saveVersion(); toolsMenuOpen = false">📸 Snapshot</button>
+              <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="showHistory = true; toolsMenuOpen = false">📜 History</button>
+              <div class="border-t border-slate-800 my-1"></div>
+              <div class="px-3 py-2 text-[10px] uppercase tracking-wide text-slate-500">Presets</div>
+              <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="applyPreset('raid40'); toolsMenuOpen = false">🏛️ Raid 40</button>
+              <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="applyPreset('raid25'); toolsMenuOpen = false">🏛️ Raid 25</button>
+              <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="applyPreset('raid20'); toolsMenuOpen = false">⚔️ Raid 20</button>
+              <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="applyPreset('raid10'); toolsMenuOpen = false">⚔️ Raid 10</button>
+              <div class="border-t border-slate-800 my-1"></div>
+              <div class="px-3 py-2 text-[10px] uppercase tracking-wide text-slate-500">Export</div>
+              <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="copyMarkdown(); toolsMenuOpen = false">📝 Copy Markdown</button>
+              <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="downloadJson(); toolsMenuOpen = false">{ } Download JSON</button>
+              <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="copyImage(); toolsMenuOpen = false">🖼️ Copy as Image</button>
+              <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="downloadPng(); toolsMenuOpen = false">💾 Download PNG</button>
+              <div class="border-t border-slate-800 my-1"></div>
+              <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="previewPublic(); toolsMenuOpen = false">🔗 Preview public</button>
+              <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="showHelp = true; toolsMenuOpen = false">❓ Help & Shortcuts</button>
             </div>
           </div>
-
-          <!-- Help -->
-          <button
-            class="p-2 rounded-lg border border-slate-700 hover:bg-slate-800 transition-colors"
-            @click="showHelp = true"
-            title="Keyboard shortcuts & help"
-          >
-            <span class="text-lg">❓</span>
-          </button>
         </div>
       </div>
 
-      <!-- Ligne 2: Outils et bibliothèques -->
-      <div class="flex items-center justify-between px-4 py-2">
-        <!-- Gauche: Bibliothèques et templates -->
-        <div class="flex items-center gap-2">
-          <span class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Tools</span>
-          <button
-            class="px-3 py-1.5 rounded-md border border-emerald-600/40 bg-emerald-900/20 text-emerald-300 hover:bg-emerald-900/40 text-xs font-medium transition-colors"
-            @click="showBossLibrary = true"
-            title="Load boss templates"
-          >
-            📚 Boss Library
-          </button>
-          <button
-            class="px-3 py-1.5 rounded-md border border-slate-700 hover:bg-slate-800 text-xs font-medium transition-colors"
-            @click="showTemplates = true"
-            title="Browse plan templates"
-          >
-            📋 Templates
-          </button>
-          <button
-            class="px-3 py-1.5 rounded-md border border-slate-700 hover:bg-slate-800 text-xs font-medium transition-colors"
-            @click="saveBlockAsTemplate"
-            title="Save selected block as template"
-          >
-            💾 Save Block
-          </button>
-          <div class="w-px h-4 bg-slate-700"></div>
-          <button
-            class="px-3 py-1.5 rounded-md border border-blue-600/40 bg-blue-900/20 text-blue-300 hover:bg-blue-900/40 text-xs font-medium transition-colors"
-            @click="openPlanManager"
-            title="Manage your saved plans"
-          >
-            📂 My Plans
-          </button>
-          <button
-            class="px-3 py-1.5 rounded-md border border-slate-700 hover:bg-slate-800 text-xs font-medium transition-colors"
-            @click="saveVersion"
-            title="Save version snapshot"
-          >
-            📸 Snapshot
-          </button>
-          <button
-            class="px-3 py-1.5 rounded-md border border-emerald-700/50 bg-emerald-900/20 text-emerald-300 hover:bg-emerald-900/40 text-xs font-medium transition-colors"
-            @click="previewPublic"
-            title="Open read-only public view in a new tab"
-          >
-            🔗 Preview public
-          </button>
-        </div>
+      <!-- Tools row removed; consolidated into Tools menu -->
 
-        <!-- Droite: Presets rapides -->
-        <div class="flex items-center gap-2">
-          <span class="text-xs uppercase tracking-wide text-slate-500 font-semibold">Quick Setup</span>
-          <button
-            class="px-3 py-1.5 rounded-md border border-slate-700 hover:bg-slate-800 text-xs font-medium transition-colors"
-            @click="applyPreset('classic40')"
-            title="40-player Classic raid (5T, 10H, 25DPS)"
-          >
-            🏛️ Classic 40
-          </button>
-          <button
-            class="px-3 py-1.5 rounded-md border border-slate-700 hover:bg-slate-800 text-xs font-medium transition-colors"
-            @click="applyPreset('mythic20')"
-            title="20-player Mythic raid (2T, 4H, 14DPS)"
-          >
-            ⚔️ Mythic 20
-          </button>
-        </div>
+      <!-- Ligne meta plan -->
+      <div class="flex items-center gap-2 px-4 py-2 border-y border-slate-800 bg-slate-950/60">
+        <input v-model="planRaidName" class="px-3 py-1.5 rounded-md bg-slate-900/60 border border-slate-700 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Raid name" title="Used to group plans"/>
+        <input v-model="planFolder" class="px-3 py-1.5 rounded-md bg-slate-900/60 border border-slate-700 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Folder (optional)" title="Custom folder to organize plans"/>
       </div>
     </header>
+
+    <!-- Onboarding banner: visible until plan is saved (no planId) -->
+    <div v-if="!planId" class="mx-4 mt-3 mb-2 p-4 rounded-lg border border-amber-600/40 bg-amber-900/15 text-sm text-amber-200">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div class="space-y-1">
+          <div class="font-semibold text-amber-300">Create your plan to enable sharing and management</div>
+          <div class="text-amber-200/90">First save creates the plan on the server. You can then Share, organize in My Plans, and collaborate.</div>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button class="px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white" @click="quickStartCreate()">💾 Create Plan</button>
+          <span class="text-amber-200/70 text-xs">or start with a preset:</span>
+          <button class="px-2 py-1 rounded-md border border-slate-700 hover:bg-slate-800" @click="quickStartCreate('raid25')">Raid 25</button>
+          <button class="px-2 py-1 rounded-md border border-slate-700 hover:bg-slate-800" @click="quickStartCreate('raid20')">Raid 20</button>
+          <button class="px-2 py-1 rounded-md border border-slate-700 hover:bg-slate-800" @click="quickStartCreate('raid10')">Raid 10</button>
+          <button class="px-2 py-1 rounded-md border border-slate-700 hover:bg-slate-800" @click="quickStartCreate('raid40')">Raid 40</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Composition Summary Bar -->
     <div class="flex items-center justify-between px-4 py-2 border-b border-slate-800 bg-slate-950/60">
@@ -1238,47 +1275,19 @@ function applyBossData(boss: RaidBoss) {
       </div>
     </div>
 
-    <!-- Spec Breakdown (assigned) -->
-    <div class="px-4 py-2 border-b border-slate-800 bg-slate-950/40">
-      <div class="flex items-center justify-between">
-        <span class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Details</span>
-        <button class="text-xs px-2 py-0.5 rounded border border-slate-700 hover:bg-slate-800 text-slate-300" @click="showDetails = !showDetails">{{ showDetails ? 'Hide' : 'Show' }}</button>
-      </div>
-      <div v-if="showDetails" class="mt-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
-        <div v-for="row in specBreakdown" :key="row.cls + ':' + row.spec" class="flex items-center justify-between rounded border border-slate-800 bg-slate-900/40 px-2 py-1">
-          <div class="text-slate-300 truncate">{{ row.cls }} • {{ row.spec }}</div>
-          <div class="text-slate-400">x{{ row.count }}<span v-if="row.role"> — {{ row.role }}</span></div>
-        </div>
-      </div>
-    </div>
+    
 
     
-    <div class="flex flex-1 overflow-hidden">
+    <div class="relative flex flex-1 overflow-hidden">
       
-      <aside class="w-72 border-r border-slate-800 bg-slate-950/60 p-3 overflow-y-auto space-y-4">
+      <aside v-if="showLeftPanel" class="relative w-72 border-r border-slate-800 bg-slate-950/60 p-3 overflow-y-auto space-y-4">
         <BlockSidebar @add-block="addBlock" />
-
-        
         <section v-if="blockTemplates.length">
-          <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
-            💾 Saved Templates
-          </h3>
+          <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">💾 Saved Templates</h3>
           <div class="space-y-1">
-            <div
-              v-for="tpl in blockTemplates"
-              :key="tpl.id"
-              class="group flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-slate-800/80 text-sm"
-            >
-              <button class="flex-1 text-left truncate" @click="loadBlockTemplate(tpl); blockTemplates = getBlockTemplates()">
-                {{ tpl.name }}
-              </button>
-              <button
-                class="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 text-xs px-1"
-                @click="deleteBlockTemplate(tpl.id); blockTemplates = getBlockTemplates()"
-                title="Delete template"
-              >
-                ✕
-              </button>
+            <div v-for="tpl in blockTemplates" :key="tpl.id" class="group flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-slate-800/80 text-sm">
+              <button class="flex-1 text-left truncate" @click="loadBlockTemplate(tpl); blockTemplates = getBlockTemplates()">{{ tpl.name }}</button>
+              <button class="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 text-xs px-1" @click="deleteBlockTemplate(tpl.id); blockTemplates = getBlockTemplates()" title="Delete template">✕</button>
             </div>
           </div>
         </section>
@@ -1291,6 +1300,7 @@ function applyBossData(boss: RaidBoss) {
           :blocks="blocks"
           :characters="characters"
           :group-targets="groupTargets"
+          :readonly="!canEdit"
           @update-block="updateBlock"
           @remove-block="removeBlock"
           @reorder-blocks="reorderBlocks"
@@ -1298,16 +1308,19 @@ function applyBossData(boss: RaidBoss) {
       </main>
 
       
-      <aside class="w-80 border-l border-slate-800 bg-slate-950/60 p-3 overflow-y-auto">
-        <CharacterSidebar
-          ref="sidebarRef"
-          :characters="sidebarCharacters"
-          :loading="loadingChars"
-          :error="charsError"
-          @quick-assign="(c) => canvasRef?.assignToSelected?.(c.id)"
-        />
+      <aside v-if="showRightPanel" class="relative w-80 border-l border-slate-800 bg-slate-950/60 p-3 overflow-y-auto">
+        <CharacterSidebar ref="sidebarRef" :characters="sidebarCharacters" :loading="loadingChars" :error="charsError" @quick-assign="(c) => canvasRef?.assignToSelected?.(c.id)" />
       </aside>
     </div>
+
+
+    <SmartAssignModal
+      v-model="showSmartAssign"
+      :blocks="blocks"
+      :characters="characters"
+      :selected-block-id="(canvasRef?.selectedBlockId as string | null) || null"
+      @apply="updateBlock"
+    />
 
 
     <BaseModal v-model="showHistory" title="📜 Version History" size="lg">
@@ -1399,10 +1412,42 @@ function applyBossData(boss: RaidBoss) {
     </BaseModal>
 
     
-    <BaseModal v-model="showHelp" title="Keyboard Shortcuts & Tips" size="lg">
-      <div class="space-y-4 text-sm">
+    <BaseModal v-model="showHelp" title="Raid Planner Guide" size="lg">
+      <div class="space-y-5 text-sm">
         <section>
-          <h3 class="text-base font-semibold text-emerald-400 mb-2">⌨️ Keyboard Shortcuts</h3>
+          <h3 class="text-base font-semibold text-emerald-400 mb-2">🚀 Getting Started</h3>
+          <ol class="list-decimal list-inside space-y-1 text-slate-300">
+            <li>Add <strong>Raid Groups</strong> from the left sidebar (full width).</li>
+            <li>Pick a <strong>Preset</strong> in Tools → Presets (Raid 40/25/20/10).</li>
+            <li>Drag players from the roster into blocks; set specs per block if needed.</li>
+            <li>Use <strong>Smart Assign</strong> to auto-fill Groups/Matrix according to roles.</li>
+            <li>Add <strong>Boss Assignments</strong> and <strong>Rotations</strong> (Cooldown/Interrupt).</li>
+            <li><strong>Save</strong> to persist, then <strong>Share</strong> for a public read-only link.</li>
+          </ol>
+        </section>
+
+        <section>
+          <h3 class="text-base font-semibold text-emerald-400 mb-2">🧭 Layout Rules</h3>
+          <ul class="space-y-1 text-slate-300">
+            <li>Fixed-width (12): Groups, Role Matrix, Boss Assignments, Rotations, Heading/Divider.</li>
+            <li>Other blocks have sensible minimum widths to keep the layout readable.</li>
+            <li>Scroll inside large tables; headers stick for readability.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h3 class="text-base font-semibold text-emerald-400 mb-2">🧰 Tools Menu</h3>
+          <ul class="space-y-1 text-slate-300">
+            <li><strong>Compose</strong>: Boss Library, Templates, Save Block, Smart Assign.</li>
+            <li><strong>Manage</strong>: My Plans (Folder/Raid), Snapshot, History.</li>
+            <li><strong>Presets</strong>: Raid 40/25/20/10.</li>
+            <li><strong>Export</strong>: Copy Markdown/JSON/Image/PNG.</li>
+            <li><strong>Preview public</strong>: open read-only view for sharing.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h3 class="text-base font-semibold text-emerald-400 mb-2">⌨️ Shortcuts</h3>
           <div class="space-y-2">
             <div class="flex items-center justify-between py-1 px-2 rounded bg-slate-900/60">
               <span class="text-slate-300">Undo</span>
@@ -1426,98 +1471,14 @@ function applyBossData(boss: RaidBoss) {
             </div>
           </div>
         </section>
-
         <section>
-          <h3 class="text-base font-semibold text-emerald-400 mb-2">🎯 Quick Tips</h3>
-          <ul class="space-y-2 text-slate-300">
-            <li class="flex items-start gap-2">
-              <span class="text-emerald-500">•</span>
-              <span><strong>Click a block</strong> to select it and see layout controls</span>
-            </li>
-            <li class="flex items-start gap-2">
-              <span class="text-emerald-500">•</span>
-              <span><strong>Drag the ☰ handle</strong> to reorder blocks vertically</span>
-            </li>
-            <li class="flex items-start gap-2">
-              <span class="text-emerald-500">•</span>
-              <span><strong>Drag characters</strong> from the right sidebar into assignment blocks</span>
-            </li>
-            <li class="flex items-start gap-2">
-              <span class="text-emerald-500">•</span>
-              <span><strong>Double-click a character</strong> to quick-assign to selected block</span>
-            </li>
-            <li class="flex items-start gap-2">
-              <span class="text-emerald-500">•</span>
-              <span><strong>Click summary chips</strong> (T, H, M, R) to filter roster by role</span>
-            </li>
-            <li class="flex items-start gap-2">
-              <span class="text-emerald-500">•</span>
-              <span><strong>Use presets</strong> (Classic 40 / Mythic 20) for instant raid setup</span>
-            </li>
-            <li class="flex items-start gap-2">
-              <span class="text-emerald-500">•</span>
-              <span><strong>Autosave</strong> runs every 1.2 seconds — your work is safe!</span>
-            </li>
+          <h3 class="text-base font-semibold text-emerald-400 mb-2">🧭 Best Practices</h3>
+          <ul class="space-y-1 text-slate-300">
+            <li>Bench exclusivity: benched players sont retirés des autres assignations.</li>
+            <li>Fixed-width blocks (12) gardent une lisibilité constante.</li>
+            <li>Utilisez Boss Library pour pré-remplir positions et timings.</li>
+            <li>Snapshots/History: enregistrez et restaurez des versions locales rapidement.</li>
           </ul>
-        </section>
-
-        <section>
-          <h3 class="text-base font-semibold text-emerald-400 mb-2">📐 Block Layout</h3>
-          <ul class="space-y-2 text-slate-300">
-            <li class="flex items-start gap-2">
-              <span class="text-blue-400">•</span>
-              <span><strong>Start</strong>: Column position (1-12) where block begins</span>
-            </li>
-            <li class="flex items-start gap-2">
-              <span class="text-blue-400">•</span>
-              <span><strong>Span</strong>: Number of columns (2-12) block occupies</span>
-            </li>
-            <li class="flex items-start gap-2">
-              <span class="text-blue-400">•</span>
-              <span><strong>Row</strong>: Manual row number (0 = auto-flow)</span>
-            </li>
-            <li class="flex items-start gap-2">
-              <span class="text-blue-400">•</span>
-              <span><strong>Tip</strong>: Use Span=6 for side-by-side, Span=4 for three columns</span>
-            </li>
-          </ul>
-        </section>
-
-        <section>
-          <h3 class="text-base font-semibold text-emerald-400 mb-2">🗂️ Block Types</h3>
-          <div class="grid grid-cols-2 gap-2 text-xs">
-            <div class="p-2 rounded bg-slate-900/60 border border-slate-700">
-              <div class="font-semibold text-slate-200 mb-1">Full Width (12)</div>
-              <ul class="text-slate-400 space-y-0.5">
-                <li>• Groups Grid</li>
-                <li>• Role Matrix</li>
-                <li>• Heading / Divider</li>
-              </ul>
-            </div>
-            <div class="p-2 rounded bg-slate-900/60 border border-slate-700">
-              <div class="font-semibold text-slate-200 mb-1">Half Width (6)</div>
-              <ul class="text-slate-400 space-y-0.5">
-                <li>• Boss Grid</li>
-                <li>• Cooldown Rotation</li>
-                <li>• Phase Strategy</li>
-              </ul>
-            </div>
-            <div class="p-2 rounded bg-slate-900/60 border border-slate-700">
-              <div class="font-semibold text-slate-200 mb-1">Third Width (4)</div>
-              <ul class="text-slate-400 space-y-0.5">
-                <li>• Text / Notes</li>
-                <li>• Checklist</li>
-                <li>• Bench Roster</li>
-              </ul>
-            </div>
-            <div class="p-2 rounded bg-slate-900/60 border border-slate-700">
-              <div class="font-semibold text-slate-200 mb-1">Custom</div>
-              <ul class="text-slate-400 space-y-0.5">
-                <li>• Interrupt Rotation</li>
-                <li>• Custom Section</li>
-              </ul>
-            </div>
-          </div>
         </section>
       </div>
       <template #footer>
@@ -1567,6 +1528,7 @@ function applyBossData(boss: RaidBoss) {
       @close="showPlanManager = false"
       @load="handleLoadPlan"
       @create-new="handleCreateNew"
+      @deleted-current="resetToOnboarding"
     />
   </div>
 </template>

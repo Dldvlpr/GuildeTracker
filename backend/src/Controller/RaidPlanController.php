@@ -35,7 +35,7 @@ class RaidPlanController extends AbstractController
             return $this->json(['error' => 'Guild not found'], Response::HTTP_NOT_FOUND);
         }
 
-
+        $this->denyAccessUnlessGranted('GUILD_VIEW', $guild);
 
         $plans = $this->raidPlanRepository->findByGuild($guild);
 
@@ -53,7 +53,7 @@ class RaidPlanController extends AbstractController
             return $this->json(['error' => 'Raid plan not found'], Response::HTTP_NOT_FOUND);
         }
 
-
+        $this->denyAccessUnlessGranted('GUILD_VIEW', $plan->getGuild());
 
         return $this->json($this->serializePlan($plan));
     }
@@ -79,7 +79,7 @@ class RaidPlanController extends AbstractController
             return $this->json(['error' => 'Guild not found'], Response::HTTP_NOT_FOUND);
         }
 
-
+        $this->denyAccessUnlessGranted('GUILD_MANAGE', $guild);
 
         $plan = new RaidPlan();
         $plan->setName($data['name'] ?? 'Untitled Raid Plan');
@@ -148,7 +148,7 @@ class RaidPlanController extends AbstractController
             return $this->json(['error' => 'Raid plan not found'], Response::HTTP_NOT_FOUND);
         }
 
-
+        $this->denyAccessUnlessGranted('GUILD_MANAGE', $plan->getGuild());
 
         $this->em->remove($plan);
         $this->em->flush();
@@ -176,7 +176,7 @@ class RaidPlanController extends AbstractController
             return $this->json(['error' => 'Raid plan not found'], Response::HTTP_NOT_FOUND);
         }
 
-
+        $this->denyAccessUnlessGranted('GUILD_MANAGE', $plan->getGuild());
 
         if (!$plan->getShareToken()) {
             $plan->generateShareToken();
@@ -216,7 +216,7 @@ class RaidPlanController extends AbstractController
             return $this->json(['error' => 'Raid plan not found'], Response::HTTP_NOT_FOUND);
         }
 
-
+        $this->denyAccessUnlessGranted('GUILD_MANAGE', $plan->getGuild());
 
         $plan->setIsPublic(false);
         $this->em->flush();
