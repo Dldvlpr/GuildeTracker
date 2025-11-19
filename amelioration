@@ -1,0 +1,9 @@
+Analyse cette fonctionnalité en profondeur, en couvrant les aspects suivants :
+1. **Sécurité** : Identifie les vulnérabilités potentielles (injections SQL, XSS, CSRF, overload mémoire, etc.) et propose des solutions pour les corriger.
+2. **Back-end** : Vérifie la logique métier, les performances, la structure du code, et la gestion des erreurs.
+3. **Front-end** : Analyse l'implémentation côté client, l'optimisation des ressources, et la compatibilité avec différents navigateurs.
+4. **UX/UI** : Évalue l'expérience utilisateur, la clarté de l'interface, et la cohérence visuelle.
+5. **Fonctionnalité** : Vérifie si la fonctionnalité répond aux besoins spécifiés et identifie les éventuels bugs ou incohérences.
+6. **Axes d'amélioration** : Propose des pistes pour optimiser le code, améliorer les performances, et renforcer la maintenabilité.
+
+Fournis un rapport détaillé avec des exemples de code si nécessaire.

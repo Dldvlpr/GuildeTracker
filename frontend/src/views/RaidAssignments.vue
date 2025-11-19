@@ -14,7 +14,7 @@ import type { Character } from '@/interfaces/game.interface';
 import { Role } from '@/interfaces/game.interface';
 import { getCharactersByGuildId } from '@/services/character.service';
 import { getRoleByClassAndSpec } from '@/data/gameData';
-import { createRaidPlan, updateRaidPlan, generateShareLink, revokeShareLink, getRaidPlansByGuild, type RaidPlanDTO } from '@/services/raidPlan.service'
+import { createRaidPlan, updateRaidPlan, generateShareLink, revokeShareLink, getRaidPlan, type RaidPlanDTO } from '@/services/raidPlan.service'
 import { getGameGuild } from '@/services/gameGuild.service'
 import type { GameGuild } from '@/interfaces/GameGuild.interface'
 import type { RaidBoss } from '@/data/raidData';
@@ -29,12 +29,16 @@ const loadingChars = ref(false);
 const charsError = ref<string | null>(null);
 
 let nextId = 1;
+let bootstrapToken = 0;
 const blocks = ref<RaidPlanBlock[]>([]);
 
 const draftKey = ref<string>('');
 const versionsKey = ref<string>('');
 const history: RaidPlanBlock[][] = [];
+const historySignatures: string[] = [];
+const HISTORY_LIMIT = 50;
 let historyIndex = -1;
+let historyMuteDepth = 0;
 let autosaveTimer: number | null = null;
 const showHistory = ref(false);
 const showTemplates = ref(false);
@@ -49,12 +53,23 @@ const showRightPanel = ref(true);
 const showSaveTemplate = ref(false);
 const templateName = ref('');
 const showBossLibrary = ref(false);
-  const shareOpen = ref(false)
-  const shareUrl = ref('')
-  const planId = ref<number | null>(null)
+const shareOpen = ref(false)
+const shareUrl = ref('')
+const planId = ref<number | null>(null)
+const planIsPublic = ref(false)
 
 function planIdKey(gid: string) {
   return `raidPlan:planId:${gid}`
+}
+
+function resolveGuildId(param: unknown): string | null {
+  if (typeof param === 'string') return param
+  if (Array.isArray(param) && param.length) return param[0]
+  return null
+}
+
+function currentRouteGuildId(): string | null {
+  return resolveGuildId(route.params.id)
 }
 
 const showPlanManager = ref(false)
@@ -76,19 +91,105 @@ function openSmartAssign() {
 
 function resetHistory() {
   history.length = 0
+  historySignatures.length = 0
   historyIndex = -1
-  pushHistorySnapshot()
+  pushHistorySnapshot(true)
 }
 
-function handleLoadPlan(p: RaidPlanDTO) {
+function handleLoadPlan(p: RaidPlanDTO, opts?: { silent?: boolean }) {
   planId.value = p.id
   planName.value = p.name
   planRaidName.value = p.raidName || ''
+  planIsPublic.value = Boolean(p.isPublic)
+  if (!planIsPublic.value) {
+    shareUrl.value = ''
+  }
   try { planFolder.value = (p.metadata as any)?.folder || '' } catch { planFolder.value = '' }
-  blocks.value = JSON.parse(JSON.stringify(p.blocks))
+  runWithoutHistory(() => {
+    blocks.value = JSON.parse(JSON.stringify(p.blocks))
+  })
   try { if (guildId.value) localStorage.setItem(planIdKey(guildId.value), String(p.id)) } catch {}
   resetHistory()
-  window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: `Loaded "${p.name}"` } }))
+  if (!opts?.silent) {
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: `Loaded "${p.name}"` } }))
+  }
+}
+
+async function loadPlanFromServer(id: number, token?: number) {
+  try {
+    const plan = await getRaidPlan(id)
+    if (token && token !== bootstrapToken) return
+    handleLoadPlan(plan, { silent: true })
+  } catch (e: any) {
+    if (token && token !== bootstrapToken) return
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: e?.message || 'Failed to load plan from server' } }))
+    if (guildId.value) {
+      localStorage.removeItem(planIdKey(guildId.value))
+    }
+    planId.value = null
+    planIsPublic.value = false
+    shareUrl.value = ''
+  }
+}
+
+async function bootstrapGuildContext(id: string) {
+  const token = ++bootstrapToken
+  guildId.value = id
+  makeKeys(id)
+  shareUrl.value = ''
+  planIsPublic.value = false
+  planName.value = 'My Raid Plan'
+  planRaidName.value = ''
+  planFolder.value = ''
+
+  let storedPlanId: number | null = null
+  try {
+    const stored = localStorage.getItem(planIdKey(id))
+    if (stored) {
+      const parsed = parseInt(stored, 10)
+      if (Number.isFinite(parsed)) storedPlanId = parsed
+    }
+  } catch {}
+
+  planId.value = storedPlanId
+  runWithoutHistory(() => {
+    blocks.value = []
+  })
+  loadDraft()
+  recalcNextId()
+  resetHistory()
+
+  loadingChars.value = true
+  charsError.value = null
+
+  try {
+    const g = await getGameGuild(id)
+    if (token !== bootstrapToken) return
+    if (g.ok) {
+      guild.value = g.data
+    } else {
+      guild.value = null
+    }
+  } catch {
+    if (token !== bootstrapToken) return
+    guild.value = null
+  }
+
+  const res = await getCharactersByGuildId(id).catch((e) => ({ ok: false, error: e?.message || 'Network error' } as const))
+  if (token !== bootstrapToken) return
+  loadingChars.value = false
+  if (!res.ok) {
+    characters.value = generateMockRoster()
+    charsError.value = res.error || 'Using local mock roster'
+  } else {
+    characters.value = res.data
+    charsError.value = null
+  }
+
+  if (planId.value != null) {
+    await loadPlanFromServer(planId.value, token)
+    if (token !== bootstrapToken) return
+  }
 }
 
 function handleCreateNew() {
@@ -99,7 +200,11 @@ function handleCreateNew() {
   planName.value = 'New Raid Plan'
   planRaidName.value = ''
   planFolder.value = ''
-  blocks.value = []
+  planIsPublic.value = false
+  shareUrl.value = ''
+  runWithoutHistory(() => {
+    blocks.value = []
+  })
   try { if (guildId.value) localStorage.removeItem(planIdKey(guildId.value)) } catch {}
   resetHistory()
   window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: 'New plan created' } }))
@@ -118,24 +223,58 @@ function cloneBlocks(): RaidPlanBlock[] {
   return JSON.parse(JSON.stringify(blocks.value));
 }
 
-function pushHistorySnapshot() {
-  const snapshot = cloneBlocks();
+function runWithoutHistory(mutator: () => void) {
+  historyMuteDepth++;
+  try {
+    mutator();
+  } finally {
+    Promise.resolve().then(() => {
+      historyMuteDepth = Math.max(0, historyMuteDepth - 1);
+    });
+  }
+}
 
-  if (historyIndex < history.length - 1) history.splice(historyIndex + 1);
+function pushHistorySnapshot(force = false) {
+  const serialized = JSON.stringify(blocks.value);
+  if (!force && historySignatures[historyIndex] === serialized) {
+    return;
+  }
+
+  const snapshot = JSON.parse(serialized);
+
+  if (historyIndex < history.length - 1) {
+    history.splice(historyIndex + 1);
+    historySignatures.splice(historyIndex + 1);
+  }
+
   history.push(snapshot);
-  historyIndex = history.length - 1;
+  historySignatures.push(serialized);
+
+  if (history.length > HISTORY_LIMIT) {
+    history.shift();
+    historySignatures.shift();
+    historyIndex = history.length - 1;
+  } else {
+    historyIndex = history.length - 1;
+  }
 }
 
 function undo() {
   if (historyIndex <= 0) return;
   historyIndex--;
-  blocks.value = JSON.parse(JSON.stringify(history[historyIndex]));
+  const snapshot = history[historyIndex] ?? [];
+  runWithoutHistory(() => {
+    blocks.value = JSON.parse(JSON.stringify(snapshot));
+  })
 }
 
 function redo() {
   if (historyIndex >= history.length - 1) return;
   historyIndex++;
-  blocks.value = JSON.parse(JSON.stringify(history[historyIndex]));
+  const snapshot = history[historyIndex] ?? [];
+  runWithoutHistory(() => {
+    blocks.value = JSON.parse(JSON.stringify(snapshot));
+  })
 }
 
 function saveDraftNow() {
@@ -149,6 +288,10 @@ function saveDraftNow() {
 
 async function saveToDatabase() {
   if (!guildId.value) return
+  if (!canEdit.value) {
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: 'You do not have permission to save this plan' } }))
+    return
+  }
   try {
     if (planId.value == null) {
       const created = await createRaidPlan({
@@ -159,6 +302,8 @@ async function saveToDatabase() {
         metadata: { folder: planFolder.value || null },
       })
       planId.value = created.id
+      planIsPublic.value = Boolean(created.isPublic)
+      if (!planIsPublic.value) shareUrl.value = ''
       localStorage.setItem(planIdKey(guildId.value), String(created.id))
       window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: 'Raid plan created' } }))
     } else {
@@ -168,6 +313,8 @@ async function saveToDatabase() {
         raidName: planRaidName.value || null,
         metadata: { folder: planFolder.value || null },
       })
+      planIsPublic.value = Boolean(updated.isPublic)
+      if (!planIsPublic.value) shareUrl.value = ''
       window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: 'Raid plan saved' } }))
     }
   } catch (e: any) {
@@ -175,15 +322,27 @@ async function saveToDatabase() {
   }
 }
 
+async function ensureShareLink(): Promise<string | null> {
+  if (!guildId.value) return null
+  if (planId.value == null) {
+    await saveToDatabase()
+  }
+  if (planId.value == null) return null
+  const { shareUrl: url } = await generateShareLink(planId.value)
+  shareUrl.value = url
+  planIsPublic.value = true
+  return url
+}
+
 async function openShare() {
   if (!guildId.value) return
+  if (!canEdit.value) {
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: 'You do not have permission to share this plan' } }))
+    return
+  }
   try {
-    if (planId.value == null) {
-      await saveToDatabase()
-    }
-    if (planId.value == null) return
-    const { shareUrl: url } = await generateShareLink(planId.value)
-    shareUrl.value = url
+    const url = await ensureShareLink()
+    if (!url) return
     shareOpen.value = true
   } catch (e: any) {
     window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: e?.message || 'Failed to generate share link' } }))
@@ -193,14 +352,31 @@ async function openShare() {
 async function previewPublic() {
   try {
     if (!guildId.value) return
-    if (planId.value == null) {
-      await saveToDatabase()
+    if (!canEdit.value) {
+      window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: 'You do not have permission to share this plan' } }))
+      return
     }
-    if (planId.value == null) return
-    const { shareUrl: url } = await generateShareLink(planId.value)
-    window.open(url, '_blank')
+    if (!planIsPublic.value) {
+      const confirmed = confirm('Previewing will enable a public link that anyone can view. Continue?')
+      if (!confirmed) return
+    }
+    const url = await ensureShareLink()
+    if (!url) return
+    window.open(url, '_blank', 'noopener')
   } catch (e: any) {
     window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: e?.message || 'Failed to open preview' } }))
+  }
+}
+
+async function handleRevokeShare() {
+  if (!planId.value) return
+  try {
+    await revokeShareLink(planId.value)
+    planIsPublic.value = false
+    shareUrl.value = ''
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: 'Public link revoked' } }))
+  } catch (e: any) {
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: e?.message || 'Failed to revoke link' } }))
   }
 }
 
@@ -217,7 +393,9 @@ function loadDraft() {
     const json = JSON.parse(txt);
     if (json?.planName) planName.value = json.planName;
     if (Array.isArray(json?.blocks)) {
-      blocks.value = json.blocks;
+      runWithoutHistory(() => {
+        blocks.value = json.blocks;
+      })
       recalcNextId();
     }
   } catch {}
@@ -267,7 +445,9 @@ function restoreVersion(id: string) {
     return;
   }
 
-  blocks.value = JSON.parse(JSON.stringify(v.blocks ?? []));
+  runWithoutHistory(() => {
+    blocks.value = JSON.parse(JSON.stringify(v.blocks ?? []));
+  })
   recalcNextId();
   resetHistory();
   showHistory.value = false;
@@ -535,36 +715,25 @@ function resetToOnboarding() {
   planName.value = 'My Raid Plan'
   planRaidName.value = ''
   planFolder.value = ''
-  blocks.value = []
+  planIsPublic.value = false
+  shareUrl.value = ''
+  runWithoutHistory(() => {
+    blocks.value = []
+  })
   try { if (guildId.value) localStorage.removeItem(planIdKey(guildId.value)) } catch {}
   resetHistory()
   window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: 'Plan deleted — Onboarding reset' } }))
 }
 
 onMounted(async () => {
-  const idParam = route.params.id;
-  guildId.value = typeof idParam === 'string' ? idParam : Array.isArray(idParam) ? idParam[0] : null;
-  if (!guildId.value) return;
-  makeKeys(guildId.value);
-  try {
-    const stored = localStorage.getItem(planIdKey(guildId.value))
-    if (stored) {
-      const n = parseInt(stored, 10)
-      if (Number.isFinite(n)) planId.value = n
-    }
-  } catch {}
-  loadDraft();
-
-  pushHistorySnapshot();
   window.addEventListener('keydown', onKey);
-  // Restore panel states
   try {
     const l = localStorage.getItem('raidPlan:ui:leftOpen');
     const r = localStorage.getItem('raidPlan:ui:rightOpen');
     if (l !== null) showLeftPanel.value = l === '1';
     if (r !== null) showRightPanel.value = r === '1';
   } catch {}
-  // Close tools menu on outside click / Esc
+
   const onDocClick = (e: MouseEvent) => {
     const el = toolsMenuRef.value as HTMLElement | null
     if (!el) return
@@ -576,23 +745,12 @@ onMounted(async () => {
   }
   document.addEventListener('click', onDocClick)
   document.addEventListener('keydown', onDocKey)
-  // store for removal
   ;(window as any).__raid_onDocClick = onDocClick
   ;(window as any).__raid_onDocKey = onDocKey
-  loadingChars.value = true;
-  // Load guild for permissions (fallback to editable in dev if request fails)
-  try {
-    const g = await getGameGuild(guildId.value)
-    if (g.ok) guild.value = g.data
-  } catch {}
-  const res = await getCharactersByGuildId(guildId.value).catch((e) => ({ ok: false, error: e?.message || 'Network error' } as const));
-  loadingChars.value = false;
-  if (!res.ok) {
 
-    characters.value = generateMockRoster();
-    charsError.value = res.error || 'Using local mock roster';
-  } else {
-    characters.value = res.data;
+  const initialGuildId = currentRouteGuildId()
+  if (initialGuildId) {
+    await bootstrapGuildContext(initialGuildId)
   }
 });
 
@@ -611,9 +769,18 @@ watch(showRightPanel, (v) => {
   try { localStorage.setItem('raidPlan:ui:rightOpen', v ? '1' : '0') } catch {}
 });
 
-watch(blocks, () => { pushHistorySnapshot(); scheduleAutosave(); }, { deep: true });
+watch(blocks, () => {
+  if (historyMuteDepth > 0) return;
+  pushHistorySnapshot();
+  scheduleAutosave();
+}, { deep: true });
 watch(planName, () => scheduleAutosave());
 watch([blocks, characters, expected], () => computeSummary(), { deep: true });
+watch(() => route.params.id, (param) => {
+  const next = resolveGuildId(param)
+  if (!next || next === guildId.value) return
+  bootstrapGuildContext(next)
+});
 
 function recalcNextId() {
   const maxId = blocks.value.reduce((acc, b) => {
@@ -624,7 +791,9 @@ function recalcNextId() {
 }
 
 function loadTemplate(b: RaidPlanBlock[]) {
-  blocks.value = JSON.parse(JSON.stringify(b));
+  runWithoutHistory(() => {
+    blocks.value = JSON.parse(JSON.stringify(b));
+  })
   showTemplates.value = false;
   pushHistorySnapshot();
   recalcNextId();
@@ -925,9 +1094,13 @@ function getBlockTemplates(): BlockTemplate[] {
   }
 }
 
+function refreshBlockTemplates() {
+  blockTemplates.value = getBlockTemplates();
+}
+
 function saveBlockAsTemplate() {
   if (!canvasRef.value?.selectedBlockId) {
-    alert('Please select a block first');
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: 'Select a block first' } }))
     return;
   }
 
@@ -940,7 +1113,7 @@ function saveBlockAsTemplate() {
 
 function confirmSaveTemplate() {
   if (!templateName.value.trim()) {
-    alert('Please enter a template name');
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: 'Please enter a template name' } }))
     return;
   }
 
@@ -962,7 +1135,8 @@ function confirmSaveTemplate() {
 
   showSaveTemplate.value = false;
   templateName.value = '';
-  alert(`Template "${newTemplate.name}" saved!`);
+  refreshBlockTemplates();
+  window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: `Template "${newTemplate.name}" saved` } }))
 }
 
 function loadBlockTemplate(template: BlockTemplate) {
@@ -976,6 +1150,8 @@ function loadBlockTemplate(template: BlockTemplate) {
 function deleteBlockTemplate(templateId: string) {
   const templates = getBlockTemplates().filter(t => t.id !== templateId);
   localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
+  refreshBlockTemplates();
+  window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: 'Template removed' } }))
 }
 
 const blockTemplates = ref<BlockTemplate[]>(getBlockTemplates());
@@ -1058,7 +1234,7 @@ function applyBossData(boss: RaidBoss) {
   <div class="flex h-screen flex-col bg-slate-900 text-slate-100">
     
     <!-- Header redesigné - Organisation claire et ergonomique -->
-    <header class="border-b border-slate-800 bg-slate-950/90 backdrop-blur-sm shadow-lg">
+    <header class="relative z-40 border-b border-slate-800 bg-slate-950/90 backdrop-blur-sm shadow-lg">
       <!-- Ligne 1: Titre et actions principales -->
       <div class="flex items-center justify-between px-4 py-3 border-b border-slate-800/50">
         <!-- Gauche: Titre du plan -->
@@ -1144,6 +1320,8 @@ function applyBossData(boss: RaidBoss) {
             <button
               class="px-4 py-2 rounded-lg border border-emerald-600/50 bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/50 text-sm font-medium transition-colors"
               @click="saveToDatabase"
+              :disabled="!canEdit"
+              :class="{ 'opacity-40 cursor-not-allowed': !canEdit }"
               title="Save to database"
             >
               💾 Save
@@ -1151,6 +1329,8 @@ function applyBossData(boss: RaidBoss) {
             <button
               class="px-4 py-2 rounded-lg border border-blue-600/50 bg-blue-900/30 text-blue-300 hover:bg-blue-900/50 text-sm font-medium transition-colors"
               @click="openShare"
+              :disabled="!canEdit"
+              :class="{ 'opacity-40 cursor-not-allowed': !canEdit }"
               title="Share this plan"
             >
               🔗 Share
@@ -1166,7 +1346,7 @@ function applyBossData(boss: RaidBoss) {
             >
               🧰 Tools <span class="text-xs">▼</span>
             </button>
-            <div v-if="toolsMenuOpen" class="absolute right-0 mt-2 w-56 rounded-lg border border-slate-700 bg-slate-900/98 backdrop-blur shadow-2xl z-50 overflow-hidden">
+            <div v-if="toolsMenuOpen" class="absolute right-0 mt-2 w-56 rounded-lg border border-slate-700 bg-slate-900/98 backdrop-blur shadow-2xl z-[999] overflow-hidden">
               <div class="px-3 py-2 text-[10px] uppercase tracking-wide text-slate-500">Compose</div>
               <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="showBossLibrary = true; toolsMenuOpen = false">📚 Boss Library</button>
               <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="showTemplates = true; toolsMenuOpen = false">📋 Templates</button>
@@ -1189,7 +1369,12 @@ function applyBossData(boss: RaidBoss) {
               <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="copyImage(); toolsMenuOpen = false">🖼️ Copy as Image</button>
               <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="downloadPng(); toolsMenuOpen = false">💾 Download PNG</button>
               <div class="border-t border-slate-800 my-1"></div>
-              <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="previewPublic(); toolsMenuOpen = false">🔗 Preview public</button>
+              <button
+                class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors"
+                :class="{ 'opacity-40 cursor-not-allowed': !canEdit }"
+                :disabled="!canEdit"
+                @click="previewPublic(); toolsMenuOpen = false"
+              >🔗 Preview public</button>
               <button class="w-full text-left px-4 py-2 text-sm hover:bg-slate-800 transition-colors" @click="showHelp = true; toolsMenuOpen = false">❓ Help & Shortcuts</button>
             </div>
           </div>
@@ -1286,8 +1471,8 @@ function applyBossData(boss: RaidBoss) {
           <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">💾 Saved Templates</h3>
           <div class="space-y-1">
             <div v-for="tpl in blockTemplates" :key="tpl.id" class="group flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-slate-800/80 text-sm">
-              <button class="flex-1 text-left truncate" @click="loadBlockTemplate(tpl); blockTemplates = getBlockTemplates()">{{ tpl.name }}</button>
-              <button class="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 text-xs px-1" @click="deleteBlockTemplate(tpl.id); blockTemplates = getBlockTemplates()" title="Delete template">✕</button>
+              <button class="flex-1 text-left truncate" @click="loadBlockTemplate(tpl)">{{ tpl.name }}</button>
+              <button class="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 text-xs px-1" @click="deleteBlockTemplate(tpl.id)" title="Delete template">✕</button>
             </div>
           </div>
         </section>
@@ -1507,8 +1692,8 @@ function applyBossData(boss: RaidBoss) {
           <span>Revoke access to disable the public link.</span>
           <button
             class="px-2 py-1 rounded bg-red-600/20 text-red-300 ring-1 ring-inset ring-red-600/40 hover:bg-red-600/30 disabled:opacity-50"
-            :disabled="!planId"
-            @click="async () => { if (!planId) return; try { await revokeShareLink(planId); shareUrl = ''; window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: 'Public link revoked' } })) } catch (e) { window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: 'Failed to revoke link' } })) } }"
+            :disabled="!planId || !planIsPublic"
+            @click="handleRevokeShare"
           >Unshare</button>
         </div>
         <p class="text-xs text-slate-500">Tip: You can revoke access anytime by updating the plan to private (feature coming soon).</p>

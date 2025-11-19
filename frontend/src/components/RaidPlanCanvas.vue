@@ -6,6 +6,8 @@ import type { Character } from '@/interfaces/game.interface';
 import { Role, ROLE_COLORS } from '@/interfaces/game.interface';
 import { getSpecOptions, getRoleByClassAndSpec } from '@/data/gameData';
 import { getClassColor } from '@/utils/classColors';
+import { CANVAS_MAPS } from '@/data/canvasMaps';
+import { RAID_MARKER_ICONS } from '@/data/raidMarkers';
 
 const props = defineProps<{
   blocks: RaidPlanBlock[];
@@ -28,6 +30,27 @@ const hoveredPositionId = ref<string | null>(null);
 const allowedStarts = [1, 3, 5, 7, 9, 11];
 const resizing = ref(false);
 const showGridOverlay = ref(false);
+const canvasMaps = CANVAS_MAPS;
+const raidMarkerIcons = RAID_MARKER_ICONS;
+const genericAssignmentTokens = {
+  boss: [
+    { id: 'boss-tank', label: 'Boss Tank', role: 'Tanks', tint: '#0ea5e9' },
+    { id: 'boss-healer', label: 'Boss Healer', role: 'Healers', tint: '#22c55e' },
+    { id: 'boss-melee', label: 'Boss Melee', role: 'Melee', tint: '#f97316' },
+    { id: 'boss-ranged', label: 'Boss Ranged', role: 'Ranged', tint: '#a855f7' },
+  ],
+  adds: [
+    { id: 'adds-tank', label: 'Adds Tank', role: 'Tanks', tint: '#06b6d4' },
+    { id: 'adds-healer', label: 'Adds Healer', role: 'Healers', tint: '#34d399' },
+    { id: 'adds-melee', label: 'Adds Melee', role: 'Melee', tint: '#fb923c' },
+    { id: 'adds-ranged', label: 'Adds Ranged', role: 'Ranged', tint: '#c084fc' },
+  ],
+} as const;
+const activeMarkerPaletteId = ref<string | null>(null);
+const activePlayerPaletteId = ref<string | null>(null);
+const activeMapPickerId = ref<string | null>(null);
+const playerSearch = ref('');
+const mapSearch = ref('');
 
 // FREE_CANVAS drag/resize state
 type DragMode = 'move' | 'resize-nw' | 'resize-ne' | 'resize-sw' | 'resize-se' | 'rotate'
@@ -38,13 +61,96 @@ const activeShape = ref<{
   centerX?: number; centerY?: number;
 } | null>(null)
 const canvasRefs = new Map<string, HTMLElement>()
+const mapById = new Map(canvasMaps.map((m) => [m.id, m]))
+const raidMarkerMap = new Map(raidMarkerIcons.map((i) => [i.id, i]))
+
+type CanvasBackgroundState = {
+  color: string;
+  grid: boolean;
+  gridSize: number;
+  imageUrl: string;
+  imageOpacity: number;
+  mapId: string | null;
+  showCenter: boolean;
+}
+
+function ensureCanvasBackground(block: RaidPlanBlock): CanvasBackgroundState {
+  const legacyColor = (block.data?.canvasBackground as any)?.color || '#0f172a'
+  const legacyGrid = (block.data?.canvasBackground as any)?.grid ?? (block.data?.grid ?? false)
+  const legacyGridSize = (block.data?.canvasBackground as any)?.gridSize ?? 8
+  const legacyImage = (block.data?.canvasBackground as any)?.imageUrl || ''
+  const legacyImageOpacity = (block.data?.canvasBackground as any)?.imageOpacity ?? 0.5
+  const legacyMap = (block.data?.canvasBackground as any)?.mapId ?? null
+  const legacyCenter = (block.data?.canvasBackground as any)?.showCenter ?? false
+  return {
+    color: legacyColor,
+    grid: Boolean(legacyGrid),
+    gridSize: Math.max(4, Math.min(64, Number(legacyGridSize) || 8)),
+    imageUrl: legacyImage,
+    imageOpacity: Math.min(1, Math.max(0, Number(legacyImageOpacity) ?? 0.5)),
+    mapId: legacyMap,
+    showCenter: legacyCenter,
+  }
+}
+
+function patchCanvasBackground(block: RaidPlanBlock, patch: Partial<CanvasBackgroundState>) {
+  const current = ensureCanvasBackground(block)
+  const next = { ...current, ...patch }
+  updateBlockData(block, { canvasBackground: next })
+}
+
+function canvasSnap(block: RaidPlanBlock): number {
+  const snap = Number((block.data as any)?.canvasSnap ?? 8)
+  return Math.max(1, Math.min(64, Number.isFinite(snap) ? snap : 8))
+}
+
+function snapTo(block: RaidPlanBlock, value: number): number {
+  const size = canvasSnap(block)
+  return Math.round(value / size) * size
+}
 
 function setCanvasRef(blockId: string, el: Element | ComponentPublicInstance | null) {
   const dom = (el as any)?.$el ? (el as any).$el as HTMLElement : (el as HTMLElement | null)
   if (dom) canvasRefs.set(blockId, dom)
 }
 
-function snap8(n: number): number { return Math.round(n / 8) * 8 }
+function canvasBackgroundStyle(block: RaidPlanBlock): Record<string, string> {
+  const bg = ensureCanvasBackground(block)
+  const style: Record<string, string> = {
+    height: `${block.data?.canvasHeight || 280}px`,
+    backgroundColor: bg.color || '#0f172a',
+  }
+  if (bg.grid) {
+    const size = Math.max(4, Math.min(64, bg.gridSize || 8))
+    style.backgroundImage = `linear-gradient(0deg, rgba(148,163,184,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.12) 1px, transparent 1px)`
+    style.backgroundSize = `${size}px ${size}px`
+  } else {
+    style.backgroundImage = 'none'
+  }
+  return style
+}
+
+function canvasMapSvg(block: RaidPlanBlock): string | null {
+  const bg = ensureCanvasBackground(block)
+  if (!bg.mapId) return null
+  const map = mapById.get(bg.mapId)
+  if (!map) return null
+  return map.svg
+}
+
+function canvasBackgroundImage(block: RaidPlanBlock): { url: string; opacity: number } | null {
+  const bg = ensureCanvasBackground(block)
+  if (!bg.imageUrl) return null
+  return { url: bg.imageUrl, opacity: bg.imageOpacity }
+}
+
+function clearCanvasMap(block: RaidPlanBlock) {
+  patchCanvasBackground(block, { mapId: null })
+}
+
+function clearCanvasImage(block: RaidPlanBlock) {
+  patchCanvasBackground(block, { imageUrl: '' })
+}
 
 function clamp(n: number, min: number, max: number): number { return Math.max(min, Math.min(max, n)) }
 
@@ -93,8 +199,8 @@ function onShapeMouseDown(block: RaidPlanBlock, shapeId: string, e: MouseEvent) 
     let nx = act.startX + dx
     let ny = act.startY + dy
     // Snap to 8px grid
-    nx = snap8(nx)
-    ny = snap8(ny)
+    nx = snapTo(block, nx)
+    ny = snapTo(block, ny)
     // Clamp into canvas
     nx = clamp(nx, 0, Math.max(0, size.w - minW))
     ny = clamp(ny, 0, Math.max(0, size.h - minH))
@@ -194,10 +300,10 @@ function onShapeResizeMouseDown(block: RaidPlanBlock, shapeId: string, mode: Dra
     }
 
     // Snap values to 8px
-    nx = snap8(nx)
-    ny = snap8(ny)
-    nw = Math.max(minW, snap8(nw))
-    nh = Math.max(minH, snap8(nh))
+    nx = snapTo(block, nx)
+    ny = snapTo(block, ny)
+    nw = Math.max(minW, snapTo(block, nw))
+    nh = Math.max(minH, snapTo(block, nh))
 
     // Clamp within canvas bounds
     nx = clamp(nx, 0, Math.max(0, size.w - minW))
@@ -299,6 +405,14 @@ watch(
   },
   { deep: true }
 );
+
+watch(selectedBlockId, () => {
+  activeMarkerPaletteId.value = null
+  activePlayerPaletteId.value = null
+  activeMapPickerId.value = null
+  playerSearch.value = ''
+  mapSearch.value = ''
+});
 
 function selectBlock(id: string) {
   selectedBlockId.value = id;
@@ -578,16 +692,22 @@ function getCell(block: RaidPlanBlock, rowId: string, colId: string): string[] {
 }
 
 // Free canvas helpers
-function addShape(block: RaidPlanBlock, type: 'rect'|'text'|'timer'|'image'|'marker'|'arrow') {
+type CanvasShapeType = 'rect'|'text'|'timer'|'image'|'marker'|'arrow'|'circle'|'icon'|'player'
+
+function addShape(block: RaidPlanBlock, type: CanvasShapeType, overrides: Record<string, any> = {}) {
   const shapes = ([...(block.data?.shapes as any[] || [])])
   const id = 'sh' + String(Date.now()) + '-' + String(Math.random()).slice(2,6)
   const base: any = { id, type, x: 10, y: 10, w: 80, h: 40, rotation: 0 }
   if (type === 'rect') { Object.assign(base, { color: '#64748b' }) }
+  if (type === 'circle') { Object.assign(base, { color: 'rgba(59,130,246,0.15)', border: '#3b82f6', borderWidth: 3, w: 120, h: 120 }) }
   if (type === 'text') { Object.assign(base, { text: 'Text', color: '#e5e7eb' }) }
   if (type === 'timer') { Object.assign(base, { seconds: 30 }) }
   if (type === 'image') { Object.assign(base, { w: 240, h: 160, url: '', fit: 'contain', opacity: 1 }) }
   if (type === 'marker') { Object.assign(base, { w: 40, h: 40, marker: 'star', color: undefined }) }
   if (type === 'arrow') { Object.assign(base, { w: 160, h: 40, color: '#e5e7eb', thickness: 4, head: 12, twoHeads: false }) }
+  if (type === 'icon') { Object.assign(base, { w: 52, h: 52, iconId: raidMarkerIcons[0]?.id || 'star', tint: undefined }) }
+  if (type === 'player') { Object.assign(base, { w: 52, h: 52, showName: false, showRole: false }) }
+  Object.assign(base, overrides)
   shapes.push(base)
   updateBlockData(block, { shapes, selectedShapeId: id })
 }
@@ -595,6 +715,56 @@ function removeShape(block: RaidPlanBlock, id: string) {
   const shapes = ([...(block.data?.shapes as any[] || [])]).filter((s: any) => s.id !== id)
   const sel = (block.data as any)?.selectedShapeId
   updateBlockData(block, { shapes, selectedShapeId: sel === id ? undefined : sel })
+}
+
+function addRaidMarkerShape(block: RaidPlanBlock, markerId: string) {
+  const icon = raidMarkerIcons.find((m) => m.id === markerId) || raidMarkerIcons[0]
+  addShape(block, 'icon', { iconId: icon?.id, tint: icon?.color })
+}
+
+function addPlayerToken(block: RaidPlanBlock, charId: string) {
+  const character = getCharacterById(charId)
+  if (!character) return
+  addShape(block, 'player', {
+    w: 52,
+    h: 52,
+    showName: false,
+    showRole: false,
+    characterId: charId,
+    playerName: character.name,
+    label: character.name,
+    role: character.role,
+    className: character.class,
+  })
+}
+
+function addGenericAssignment(block: RaidPlanBlock, token: { label: string; role: string; tint: string }) {
+  addShape(block, 'player', {
+    w: 52,
+    h: 52,
+    showName: true,
+    showRole: true,
+    playerName: token.label,
+    label: token.label,
+    role: token.role,
+    tint: token.tint,
+  })
+}
+
+function toggleMarkerPalette(blockId: string) {
+  activeMarkerPaletteId.value = activeMarkerPaletteId.value === blockId ? null : blockId
+}
+
+function togglePlayerPalette(blockId: string) {
+  const next = activePlayerPaletteId.value === blockId ? null : blockId
+  activePlayerPaletteId.value = next
+  if (!next) playerSearch.value = ''
+}
+
+function toggleMapPicker(blockId: string) {
+  const next = activeMapPickerId.value === blockId ? null : blockId
+  activeMapPickerId.value = next
+  if (!next) mapSearch.value = ''
 }
 function selectShape(block: RaidPlanBlock, id: string) {
   updateBlockData(block, { selectedShapeId: id })
@@ -611,21 +781,96 @@ function patchShape(block: RaidPlanBlock, patch: Record<string, any>) {
   updateBlockData(block, { shapes })
 }
 function shapeStyle(s: any): Record<string, string> {
-  return {
+  const style: Record<string, string> = {
     left: (s.x || 0) + 'px',
     top: (s.y || 0) + 'px',
     width: (s.w || 60) + 'px',
     height: (s.h || 40) + 'px',
     transform: `rotate(${Number(s.rotation||0)}deg)`,
     transformOrigin: 'center',
-    backgroundColor: s.type === 'rect' ? (s.color || '#64748b') : 'transparent',
-    border: s.type === 'text' || s.type === 'timer' ? ('1px dashed ' + (s.color || '#64748b')) : 'none',
+    backgroundColor: 'transparent',
+    border: 'none',
+  }
+  if (s.type === 'rect') {
+    style.backgroundColor = s.color || '#64748b'
+  }
+  if (s.type === 'circle') {
+    style.backgroundColor = s.color || 'rgba(59,130,246,0.15)'
+    style.border = `${s.borderWidth || 3}px solid ${s.border || '#3b82f6'}`
+    style.borderRadius = '9999px'
+  }
+  if (s.type === 'text' || s.type === 'timer') {
+    style.border = '1px dashed ' + (s.color || '#64748b')
+  }
+  if (s.type === 'player' || s.type === 'icon') {
+    style.borderRadius = '9999px'
+  }
+  return style
+}
+
+function arrowRotateHandleStyle(s: any): Record<string, string> {
+  const w = Number(s.w || 60)
+  const angle = Number(s.rotation || 0)
+  const offset = (w / 2) + 10
+  return {
+    left: '50%',
+    top: '50%',
+    transform: `translate(-50%, -50%) rotate(${angle}deg) translate(${offset}px, -20px)`,
+  }
+}
+
+function arrowRotateLineStyle(s: any): Record<string, string> {
+  const w = Number(s.w || 60)
+  const angle = Number(s.rotation || 0)
+  const offset = w / 2
+  return {
+    left: '50%',
+    top: '50%',
+    width: '2px',
+    height: '20px',
+    transform: `translate(-50%, -50%) rotate(${angle}deg) translate(${offset}px, -10px)`
   }
 }
 const MARKER_COLORS: Record<string, string> = { star: '#fbbf24', circle: '#fb923c', diamond: '#a855f7', triangle: '#22c55e', moon: '#93c5fd', square: '#3b82f6', cross: '#ef4444', skull: '#e5e7eb' }
 const MARKER_SYMBOLS: Record<string, string> = { star: '✦', circle: '●', diamond: '◆', triangle: '▲', moon: '☾', square: '■', cross: '✖', skull: '☠' }
 function markerColor(kind: string): string { return MARKER_COLORS[kind] || '#94a3b8' }
 function markerSymbol(kind: string): string { return MARKER_SYMBOLS[kind] || '●' }
+function raidMarkerSvg(iconId: string | undefined): string | null {
+  if (!iconId) return null
+  const icon = raidMarkerMap.get(iconId)
+  return icon?.svg ?? null
+}
+
+function roleEmoji(role?: string | null): string {
+  if (!role) return ''
+  if (role === 'Tanks') return '🛡️'
+  if (role === 'Healers') return '✚'
+  if (role === 'Melee') return '⚔️'
+  if (role === 'Ranged') return '🏹'
+  return ''
+}
+
+function playerTokenColor(shape: any): string {
+  if (shape.characterId) {
+    const char = getCharacterById(shape.characterId)
+    const color = getClassColor(char?.class)
+    if (color) return color
+  }
+  if (shape.tint) return shape.tint
+  if (shape.role && ROLE_COLORS[shape.role as Role]) {
+    return ROLE_COLORS[shape.role as Role]
+  }
+  return '#475569'
+}
+
+function playerDisplayName(shape: any): string {
+  if (shape.playerName) return shape.playerName
+  if (shape.characterId) {
+    const c = getCharacterById(shape.characterId)
+    if (c?.name) return c.name
+  }
+  return shape.label || 'Player'
+}
 function formatTimer(sec: number): string {
   const m = Math.floor(sec / 60)
   const s = sec % 60
@@ -863,6 +1108,16 @@ function getCharacterById(id: string): Character | undefined {
 function charColorById(id: string): string {
   const c = getCharacterById(id);
   return getClassColor(c?.class);
+}
+
+function characterInitials(char: Character | { name?: string } | undefined): string {
+  const name = char?.name
+  if (!name) return '?'
+  const parts = name.split(' ')
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase()
+  }
+  return name.slice(0, 2).toUpperCase()
 }
 
 function getCharacterClassById(id: string): string | undefined {
@@ -2091,21 +2346,121 @@ defineExpose({ assignToSelected, selectedBlockId });
               </div>
 
               
-              <div v-else-if="block.type === 'FREE_CANVAS'" class="space-y-2">
+              <div v-else-if="block.type === 'FREE_CANVAS'" class="space-y-3">
                 <div v-if="selectedBlockId === block.id" class="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                  <button class="px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addShape(block, 'rect')">+ Rectangle</button>
-                  <button class="px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addShape(block, 'text')">+ Text</button>
-                  <button class="px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addShape(block, 'timer')">+ Timer</button>
-                  <button class="px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addShape(block, 'image')">+ Image</button>
-                  <button class="px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addShape(block, 'marker')">+ Marker</button>
-                  <button class="px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addShape(block, 'arrow')">+ Arrow</button>
-                  <label class="ml-2 inline-flex items-center gap-1"><input type="checkbox" :checked="block.data?.grid === true" @change="updateBlockData(block, { grid: ($event.target as HTMLInputElement).checked })"/> Grid</label>
-                  <span class="ml-2">Height</span>
-                  <input class="w-20 bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="block.data?.canvasHeight || 280" @input="updateBlockData(block, { canvasHeight: Number(($event.target as HTMLInputElement).value || 0) })" />
+                  <div class="flex flex-wrap gap-1">
+                    <button class="px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addShape(block, 'rect')">▭ Rectangle</button>
+                    <button class="px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addShape(block, 'circle')">◯ Circle</button>
+                    <button class="px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addShape(block, 'text')">✎ Texte</button>
+                    <button class="px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addShape(block, 'timer')">⏱ Timer</button>
+                    <button class="px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addShape(block, 'image')">🖼️ Image</button>
+                    <button class="px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addShape(block, 'marker')">⚑ Texte marker</button>
+                    <button class="px-2 py-0.5 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addShape(block, 'arrow')">➤ Flèche</button>
+                  </div>
+                  <div class="relative">
+                    <button class="px-2 py-0.5 rounded-md border border-blue-600/40 bg-blue-900/20 hover:bg-blue-900/40" @click.stop="toggleMarkerPalette(block.id)">🎯 Raid markers ▾</button>
+                    <div v-if="activeMarkerPaletteId === block.id" class="absolute left-0 mt-2 w-64 rounded-lg border border-slate-700 bg-slate-900/95 shadow-xl z-40 p-2">
+                      <div class="grid grid-cols-4 gap-2">
+                        <button
+                          v-for="icon in raidMarkerIcons"
+                          :key="icon.id"
+                          class="h-14 w-14 rounded-md border border-slate-700/60 hover:border-emerald-500/60 bg-slate-800/60"
+                          v-html="icon.svg"
+                          @click.stop="addRaidMarkerShape(block, icon.id)"
+                          title="Add {{ icon.label }}"
+                        ></button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="relative">
+                    <button class="px-2 py-0.5 rounded-md border border-emerald-600/40 bg-emerald-900/20 hover:bg-emerald-900/40" @click.stop="togglePlayerPalette(block.id)">🧙 Ajouter joueurs ▾</button>
+                    <div v-if="activePlayerPaletteId === block.id" class="absolute left-0 mt-2 w-72 rounded-lg border border-slate-700 bg-slate-900/95 shadow-xl z-40 p-2 space-y-2">
+                      <template v-if="props.characters?.length">
+                        <input type="text" v-model="playerSearch" placeholder="Rechercher joueur ou classe" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                        <div class="max-h-64 overflow-auto space-y-1 pr-1">
+                          <button
+                            v-for="char in filteredCharacters"
+                            :key="char.id"
+                            class="w-full flex items-center gap-2 rounded-md border border-slate-800 bg-slate-900/60 px-2 py-1 hover:border-emerald-500/40"
+                            @click.stop="addPlayerToken(block, char.id)"
+                          >
+                            <span class="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold"
+                                  :style="{ backgroundColor: getClassColor(char.class) || '#475569', color: '#0f172a', border: '2px solid #0f172a' }">
+                              {{ characterInitials(char) }}
+                            </span>
+                            <div class="text-left">
+                              <div class="text-slate-200">{{ char.name }}</div>
+                              <div class="text-[10px] text-slate-500">{{ char.class }} • {{ char.role }}</div>
+                            </div>
+                          </button>
+                        </div>
+                      </template>
+                      <template v-else>
+                        <div class="text-[11px] text-slate-400">Aucun roster importé — utilisez les tokens génériques ci-dessous.</div>
+                      </template>
+                    </div>
+                  </div>
+                  <div class="relative">
+                    <button class="px-2 py-0.5 rounded-md border border-purple-600/40 bg-purple-900/20 hover:bg-purple-900/40" @click.stop="toggleMapPicker(block.id)">🗺️ Cartes ▾</button>
+                    <div v-if="activeMapPickerId === block.id" class="absolute left-0 mt-2 w-80 rounded-lg border border-slate-700 bg-slate-900/95 shadow-xl z-40 p-2 space-y-2">
+                      <input type="text" v-model="mapSearch" placeholder="Rechercher raid ou forme" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-purple-500" />
+                      <div class="max-h-64 overflow-auto grid grid-cols-2 gap-2 pr-1">
+                        <button
+                          v-for="map in filteredMaps"
+                          :key="map.id"
+                          class="rounded-md border border-slate-800 bg-slate-900/70 p-2 text-left hover:border-purple-500/50"
+                          @click.stop="patchCanvasBackground(block, { mapId: map.id })"
+                        >
+                          <div class="text-xs font-semibold text-slate-100">{{ map.name }}</div>
+                          <div class="text-[10px] text-slate-500">{{ map.raid }}</div>
+                        </button>
+                      </div>
+                      <div class="flex justify-end text-[10px]">
+                        <button class="px-2 py-0.5 rounded border border-slate-700 hover:bg-slate-800" @click.stop="clearCanvasMap(block)">Clear map</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="flex flex-wrap gap-2 text-[10px] text-slate-400 items-center">
+                    <span class="uppercase tracking-wide text-slate-500">Boss</span>
+                    <button
+                      v-for="token in genericAssignmentTokens.boss"
+                      :key="token.id"
+                      class="px-2 py-0.5 rounded-md border border-slate-700 bg-slate-900/60 hover:border-emerald-500/60"
+                      @click.stop="addGenericAssignment(block, token)"
+                    >{{ token.label }}</button>
+                  </div>
+                  <div class="flex flex-wrap gap-2 text-[10px] text-slate-400 items-center">
+                    <span class="uppercase tracking-wide text-slate-500">Adds</span>
+                    <button
+                      v-for="token in genericAssignmentTokens.adds"
+                      :key="token.id"
+                      class="px-2 py-0.5 rounded-md border border-slate-700 bg-slate-900/60 hover:border-emerald-500/60"
+                      @click.stop="addGenericAssignment(block, token)"
+                    >{{ token.label }}</button>
+                  </div>
+                  <label class="inline-flex items-center gap-1 text-slate-400">
+                    Snap
+                    <input type="number" min="1" max="64" class="w-16 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[11px]" :value="(block.data as any)?.canvasSnap ?? 8" @input="updateBlockData(block, { canvasSnap: Math.max(1, Number(($event.target as HTMLInputElement).value || 1)) })" />
+                  </label>
+                  <label class="inline-flex items-center gap-1 text-slate-400">
+                    Height
+                    <input class="w-20 bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="block.data?.canvasHeight || 280" @input="updateBlockData(block, { canvasHeight: Number(($event.target as HTMLInputElement).value || 0) })" />
+                  </label>
+                  <label class="inline-flex items-center gap-1 text-slate-400">
+                    <input type="checkbox" :checked="ensureCanvasBackground(block).showCenter" @change="patchCanvasBackground(block, { showCenter: ($event.target as HTMLInputElement).checked })" /> Guides centre
+                  </label>
                 </div>
-                <div class="relative border border-dashed border-slate-700 rounded-md"
-                     :style="{ height: (block.data?.canvasHeight || 280) + 'px', background: (block.data?.grid ? 'repeating-linear-gradient(0deg, rgba(148,163,184,.08), rgba(148,163,184,.08) 1px, transparent 1px, transparent 8px), repeating-linear-gradient(90deg, rgba(148,163,184,.08), rgba(148,163,184,.08) 1px, transparent 1px, transparent 8px)' : 'rgba(15,23,42,.4)') }"
+                <div class="relative border border-dashed border-slate-700 rounded-md overflow-hidden"
+                     :style="canvasBackgroundStyle(block)"
                      :ref="(el) => setCanvasRef(block.id, el)">
+                  <div v-if="canvasBackgroundImage(block)" class="absolute inset-0 pointer-events-none">
+                    <img :src="canvasBackgroundImage(block)!.url" alt="canvas background" class="w-full h-full object-cover" :style="{ opacity: canvasBackgroundImage(block)!.opacity }" />
+                  </div>
+                  <div v-if="canvasMapSvg(block)" class="absolute inset-0 pointer-events-none opacity-80" v-html="canvasMapSvg(block)"></div>
+                  <div v-if="ensureCanvasBackground(block).showCenter" class="absolute inset-0 pointer-events-none">
+                    <div class="absolute inset-x-10 top-1/2 border-t border-dashed border-slate-500/40"></div>
+                    <div class="absolute inset-y-10 left-1/2 border-l border-dashed border-slate-500/40"></div>
+                  </div>
                   <div v-for="s in (block.data?.shapes || [])" :key="s.id"
                        class="absolute rounded cursor-move group"
                        :style="shapeStyle(s)"
@@ -2113,6 +2468,9 @@ defineExpose({ assignToSelected, selectedBlockId });
                        @click.stop="selectShape(block, s.id)">
                     <template v-if="s.type === 'rect'">
                       <div class="w-full h-full"></div>
+                    </template>
+                    <template v-else-if="s.type === 'circle'">
+                      <div class="w-full h-full rounded-full"></div>
                     </template>
                     <template v-else-if="s.type === 'text'">
                       <div class="w-full h-full grid place-items-center text-xs" :style="{ color: s.color || '#e5e7eb' }">{{ s.text || 'Text' }}</div>
@@ -2128,6 +2486,20 @@ defineExpose({ assignToSelected, selectedBlockId });
                     <template v-else-if="s.type === 'marker'">
                       <div class="w-full h-full grid place-items-center font-semibold"
                            :style="{ color: (s.color || markerColor(s.marker || 'star')), fontSize: (Math.min(Number(s.w||60), Number(s.h||40)) * 0.6) + 'px', lineHeight: 1 }">{{ markerSymbol(s.marker || 'star') }}</div>
+                    </template>
+                    <template v-else-if="s.type === 'icon'">
+                      <div class="w-full h-full grid place-items-center" v-html="raidMarkerSvg(s.iconId) || ''"></div>
+                    </template>
+                    <template v-else-if="s.type === 'player'">
+                      <div class="w-full h-full flex flex-col items-center justify-center gap-1 text-[10px]">
+                        <div class="w-10 h-10 rounded-full border-2 flex items-center justify-center text-[11px] font-semibold"
+                             :style="{ backgroundColor: playerTokenColor(s), borderColor: '#0f172a', color: '#0f172a' }"
+                             :title="playerDisplayName(s)">
+                          {{ characterInitials(getCharacterById(s.characterId) || { name: playerDisplayName(s) }) }}
+                        </div>
+                        <div v-if="s.showName" class="text-slate-200">{{ playerDisplayName(s) }}</div>
+                        <div v-if="s.showRole" class="text-slate-400">{{ roleEmoji(s.role || getCharacterById(s.characterId)?.role) }}</div>
+                      </div>
                     </template>
                     <template v-else-if="s.type === 'arrow'">
                       <svg :width="s.w || 60" :height="s.h || 40" class="block">
@@ -2151,9 +2523,14 @@ defineExpose({ assignToSelected, selectedBlockId });
                       <div class="absolute -top-1 -right-1 h-2.5 w-2.5 rounded bg-emerald-500 cursor-nesw-resize" @mousedown.stop="onShapeResizeMouseDown(block, s.id, 'resize-ne', $event)"></div>
                       <div class="absolute -bottom-1 -left-1 h-2.5 w-2.5 rounded bg-emerald-500 cursor-nesw-resize" @mousedown.stop="onShapeResizeMouseDown(block, s.id, 'resize-sw', $event)"></div>
                       <div class="absolute -bottom-1 -right-1 h-2.5 w-2.5 rounded bg-emerald-500 cursor-nwse-resize" @mousedown.stop="onShapeResizeMouseDown(block, s.id, 'resize-se', $event)"></div>
-                      <!-- Rotate handle -->
-                      <div class="absolute -top-5 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-emerald-500 cursor-grab" @mousedown.stop="onShapeRotateMouseDown(block, s.id, $event)"></div>
-                      <div class="absolute -top-2 left-1/2 -translate-x-1/2 w-0.5 h-2 bg-emerald-500"></div>
+                      <template v-if="s.type === 'arrow'">
+                        <div class="absolute bg-emerald-500/70" style="width:2px" :style="arrowRotateLineStyle(s)"></div>
+                        <div class="absolute w-3 h-3 rounded-full bg-emerald-500 cursor-grab" :style="arrowRotateHandleStyle(s)" @mousedown.stop="onShapeRotateMouseDown(block, s.id, $event)"></div>
+                      </template>
+                      <template v-else>
+                        <div class="absolute -top-5 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-emerald-500 cursor-grab" @mousedown.stop="onShapeRotateMouseDown(block, s.id, $event)"></div>
+                        <div class="absolute -top-2 left-1/2 -translate-x-1/2 w-0.5 h-2 bg-emerald-500"></div>
+                      </template>
                     </template>
                   </div>
                 </div>
@@ -2185,7 +2562,7 @@ defineExpose({ assignToSelected, selectedBlockId });
                         <label class="text-slate-400">W <input class="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="currentShape(block)!.w || 60" @input="patchShape(block, { w: Number(($event.target as HTMLInputElement).value || 0) })"/></label>
                         <label class="text-slate-400">H <input class="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="currentShape(block)!.h || 40" @input="patchShape(block, { h: Number(($event.target as HTMLInputElement).value || 0) })"/></label>
                         <label class="text-slate-400">Rotation° <input class="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="currentShape(block)!.rotation || 0" @input="patchShape(block, { rotation: Number(($event.target as HTMLInputElement).value || 0) })"/></label>
-                        <label v-if="currentShape(block)!.type !== 'timer'" class="text-slate-400 col-span-2">Color <input type="color" class="ml-2" :value="currentShape(block)!.color || '#64748b'" @input="patchShape(block, { color: ($event.target as HTMLInputElement).value })"/></label>
+                        <label v-if="currentShape(block)!.type !== 'timer' && currentShape(block)!.type !== 'player' && currentShape(block)!.type !== 'icon'" class="text-slate-400 col-span-2">Color <input type="color" class="ml-2" :value="currentShape(block)!.color || '#64748b'" @input="patchShape(block, { color: ($event.target as HTMLInputElement).value })"/></label>
                         <label v-if="currentShape(block)!.type === 'text'" class="text-slate-400 col-span-2">Text <input class="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="currentShape(block)!.text || ''" @input="patchShape(block, { text: ($event.target as HTMLInputElement).value })"/></label>
                         <label v-if="currentShape(block)!.type === 'timer'" class="text-slate-400 col-span-2">Seconds <input class="w-28 bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="currentShape(block)!.seconds || 30" @input="patchShape(block, { seconds: Number(($event.target as HTMLInputElement).value || 0) })"/></label>
                         <template v-if="currentShape(block)!.type === 'image'">
@@ -2212,14 +2589,49 @@ defineExpose({ assignToSelected, selectedBlockId });
                             </select>
                           </label>
                         </template>
+                        <template v-if="currentShape(block)!.type === 'icon'">
+                          <label class="text-slate-400 col-span-2">Icone
+                            <select class="ml-2 bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="currentShape(block)!.iconId" @change="patchShape(block, { iconId: ($event.target as HTMLSelectElement).value })">
+                              <option v-for="icon in raidMarkerIcons" :key="icon.id" :value="icon.id">{{ icon.label }}</option>
+                            </select>
+                          </label>
+                        </template>
+                        <template v-if="currentShape(block)!.type === 'player'">
+                          <label class="inline-flex items-center gap-1 col-span-1"><input type="checkbox" :checked="currentShape(block)!.showName" @change="patchShape(block, { showName: ($event.target as HTMLInputElement).checked })"/> Nom</label>
+                          <label class="inline-flex items-center gap-1 col-span-1"><input type="checkbox" :checked="currentShape(block)!.showRole" @change="patchShape(block, { showRole: ($event.target as HTMLInputElement).checked })"/> Rôle</label>
+                          <label class="text-slate-400 col-span-2">Couleur <input type="color" class="ml-2" :value="currentShape(block)!.tint || '#475569'" @input="patchShape(block, { tint: ($event.target as HTMLInputElement).value })"/></label>
+                        </template>
                         <template v-if="currentShape(block)!.type === 'arrow'">
-                          <label class="text-slate-400">Thickness <input type="range" min="1" max="12" :value="currentShape(block)!.thickness || 4" @input="patchShape(block, { thickness: Number(($event.target as HTMLInputElement).value) })"/></label>
-                          <label class="text-slate-400">Head <input type="range" min="6" max="24" :value="currentShape(block)!.head || 12" @input="patchShape(block, { head: Number(($event.target as HTMLInputElement).value) })"/></label>
-                          <label class="text-slate-400 inline-flex items-center gap-2">Two heads <input type="checkbox" :checked="currentShape(block)!.twoHeads || false" @change="patchShape(block, { twoHeads: ($event.target as HTMLInputElement).checked })"/></label>
+                          <label class="text-slate-400">Épaisseur <input type="range" min="1" max="12" :value="currentShape(block)!.thickness || 4" @input="patchShape(block, { thickness: Number(($event.target as HTMLInputElement).value) })"/></label>
+                          <label class="text-slate-400">Tête <input type="range" min="6" max="24" :value="currentShape(block)!.head || 12" @input="patchShape(block, { head: Number(($event.target as HTMLInputElement).value) })"/></label>
+                          <label class="text-slate-400 inline-flex items-center gap-2">Deux pointes <input type="checkbox" :checked="currentShape(block)!.twoHeads || false" @change="patchShape(block, { twoHeads: ($event.target as HTMLInputElement).checked })"/></label>
                         </template>
                       </div>
                     </template>
                     <div v-else class="text-slate-500">Select a shape…</div>
+                  </div>
+                  <div class="md:col-span-2 border-t border-slate-800 pt-2">
+                    <div class="text-slate-400 mb-1">Fond</div>
+                    <div class="grid grid-cols-2 gap-2">
+                      <label class="text-slate-400">Couleur
+                        <input type="color" class="ml-2" :value="ensureCanvasBackground(block).color" @input="patchCanvasBackground(block, { color: ($event.target as HTMLInputElement).value })" />
+                      </label>
+                      <label class="text-slate-400">Grille
+                        <input type="checkbox" class="ml-2" :checked="ensureCanvasBackground(block).grid" @change="patchCanvasBackground(block, { grid: ($event.target as HTMLInputElement).checked })" />
+                      </label>
+                      <label class="text-slate-400">Taille grille
+                        <input type="number" min="4" max="64" class="ml-2 bg-slate-900 border border-slate-700 rounded px-1 py-0.5" :value="ensureCanvasBackground(block).gridSize" @input="patchCanvasBackground(block, { gridSize: Number(($event.target as HTMLInputElement).value || 8) })" />
+                      </label>
+                      <label class="text-slate-400 col-span-2">Image (URL)
+                        <input type="text" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1" :value="ensureCanvasBackground(block).imageUrl" @input="patchCanvasBackground(block, { imageUrl: ($event.target as HTMLInputElement).value })" placeholder="https://" />
+                      </label>
+                      <label class="text-slate-400">Opacité image
+                        <input type="range" min="0" max="1" step="0.05" :value="ensureCanvasBackground(block).imageOpacity" @input="patchCanvasBackground(block, { imageOpacity: Number(($event.target as HTMLInputElement).value) })" />
+                      </label>
+                      <div class="text-right">
+                        <button class="px-2 py-0.5 rounded border border-slate-700 hover:bg-slate-800" @click="clearCanvasImage(block)">Clear image</button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2452,3 +2864,20 @@ defineExpose({ assignToSelected, selectedBlockId });
 .drag-handle { cursor: grab; }
 .drag-handle:active { cursor: grabbing; }
 </style>
+const filteredCharacters = computed(() => {
+  if (!props.characters) return [] as Character[]
+  const q = playerSearch.value.trim().toLowerCase()
+  if (!q) return props.characters
+  return props.characters.filter((c) => c.name.toLowerCase().includes(q) || (c.class?.toLowerCase().includes(q)))
+})
+
+const filteredMaps = computed(() => {
+  const q = mapSearch.value.trim().toLowerCase()
+  if (!q) return canvasMaps
+  return canvasMaps.filter((m) =>
+    m.name.toLowerCase().includes(q) ||
+    (m.raid?.toLowerCase().includes(q)) ||
+    (m.expansion?.toLowerCase().includes(q)) ||
+    (m.tags?.some((tag) => tag.toLowerCase().includes(q)))
+  )
+})

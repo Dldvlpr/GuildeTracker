@@ -14,6 +14,8 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use JsonException;
 
 #[Route('/api/raid-plans', name: 'api_raid_plan_')]
 class RaidPlanController extends AbstractController
@@ -67,7 +69,7 @@ class RaidPlanController extends AbstractController
             return $this->json(['error' => 'Authentication required'], Response::HTTP_UNAUTHORIZED);
         }
 
-        $data = json_decode($request->getContent(), true);
+        $data = $this->decodeJsonPayload($request);
 
         $guildId = $data['guildId'] ?? null;
         if (!$guildId) {
@@ -106,9 +108,13 @@ class RaidPlanController extends AbstractController
             return $this->json(['error' => 'Raid plan not found'], Response::HTTP_NOT_FOUND);
         }
 
+        if (!$this->getUser()) {
+            return $this->json(['error' => 'Authentication required'], Response::HTTP_UNAUTHORIZED);
+        }
 
+        $this->denyAccessUnlessGranted('GUILD_MANAGE', $plan->getGuild());
 
-        $data = json_decode($request->getContent(), true);
+        $data = $this->decodeJsonPayload($request);
 
         if (isset($data['name'])) {
             $plan->setName($data['name']);
@@ -178,10 +184,7 @@ class RaidPlanController extends AbstractController
 
         $this->denyAccessUnlessGranted('GUILD_MANAGE', $plan->getGuild());
 
-        if (!$plan->getShareToken()) {
-            $plan->generateShareToken();
-        }
-
+        $plan->generateShareToken();
         $plan->setIsPublic(true);
         $this->em->flush();
 
@@ -219,9 +222,26 @@ class RaidPlanController extends AbstractController
         $this->denyAccessUnlessGranted('GUILD_MANAGE', $plan->getGuild());
 
         $plan->setIsPublic(false);
+        $plan->setShareToken(null);
         $this->em->flush();
 
         return $this->json(['success' => true, 'message' => 'Share link revoked']);
+    }
+
+    
+    private function decodeJsonPayload(Request $request): array
+    {
+        try {
+            $data = json_decode($request->getContent(), true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException $e) {
+            throw new BadRequestHttpException('Invalid JSON payload', $e);
+        }
+
+        if (!is_array($data)) {
+            throw new BadRequestHttpException('Invalid JSON payload: object expected');
+        }
+
+        return $data;
     }
 
     
@@ -363,6 +383,19 @@ class RaidPlanController extends AbstractController
 
             if ($type === 'BENCH_ROSTER' && isset($data['bench']) && is_array($data['bench'])) {
                 $data['bench'] = array_map(fn($id) => $nameById[$id] ?? $id, $data['bench']);
+            }
+
+            if ($type === 'FREE_CANVAS' && isset($data['shapes']) && is_array($data['shapes'])) {
+                foreach ($data['shapes'] as &$shape) {
+                    if (($shape['type'] ?? null) === 'player') {
+                        $charId = $shape['characterId'] ?? null;
+                        if ($charId && isset($nameById[$charId])) {
+                            $shape['playerName'] = $nameById[$charId];
+                        }
+                        unset($shape['characterId']);
+                    }
+                }
+                unset($shape);
             }
 
             $block['data'] = $data;

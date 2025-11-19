@@ -9,8 +9,8 @@ echo "🎮 GuildTracker - Database Initialization"
 echo "=========================================="
 echo ""
 
-# Check if .env.local exists
-if [ ! -f .env.local ]; then
+# Check if ..env.local exists
+if [ ! -f ..env.local ]; then
     echo "⚠️  Warning: .env.local not found"
     echo "Please create .env.local with your database configuration"
     echo ""

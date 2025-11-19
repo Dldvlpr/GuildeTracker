@@ -3,6 +3,8 @@ import { ref, onMounted, computed } from 'vue';
 import { Role, ROLE_COLORS } from '@/interfaces/game.interface';
 import { useRoute } from 'vue-router';
 import type { RaidPlanBlock } from '@/interfaces/raidPlan.interface';
+import { CANVAS_MAPS } from '@/data/canvasMaps';
+import { RAID_MARKER_ICONS } from '@/data/raidMarkers';
 
 const route = useRoute();
 const shareToken = route.params.shareToken as string;
@@ -17,10 +19,103 @@ const updatedAt = ref('');
 const highlight = ref('');
 const hoveredCol: Record<number, number | null> = {};
 const roster = ref<Record<string, { class?: string; spec?: string; role?: string; color?: string }>>({});
+const canvasMaps = CANVAS_MAPS;
+const raidMarkerIcons = RAID_MARKER_ICONS;
+const mapById = new Map(canvasMaps.map((m) => [m.id, m]));
+const raidMarkerMap = new Map(raidMarkerIcons.map((i) => [i.id, i]));
 const MARKER_COLORS: Record<string, string> = { star: '#fbbf24', circle: '#fb923c', diamond: '#a855f7', triangle: '#22c55e', moon: '#93c5fd', square: '#3b82f6', cross: '#ef4444', skull: '#e5e7eb' };
 const MARKER_SYMBOLS: Record<string, string> = { star: '✦', circle: '●', diamond: '◆', triangle: '▲', moon: '☾', square: '■', cross: '✖', skull: '☠' };
 function markerColor(kind: string): string { return MARKER_COLORS[kind] || '#94a3b8' }
 function markerSymbol(kind: string): string { return MARKER_SYMBOLS[kind] || '●' }
+function raidMarkerSvg(iconId: string | undefined): string | null {
+  if (!iconId) return null;
+  return raidMarkerMap.get(iconId)?.svg ?? null;
+}
+function roleEmoji(shapeRole?: string | null): string {
+  if (!shapeRole) return ''
+  if (shapeRole === 'Tanks') return '🛡️'
+  if (shapeRole === 'Healers') return '✚'
+  if (shapeRole === 'Melee') return '⚔️'
+  if (shapeRole === 'Ranged') return '🏹'
+  return ''
+}
+function playerDisplayNamePublic(shape: any): string {
+  return shape.playerName || shape.label || 'Player'
+}
+function playerTokenColorPublic(shape: any): string {
+  if (shape.playerName && roster.value[shape.playerName]?.color) {
+    return roster.value[shape.playerName]!.color as string
+  }
+  if (shape.tint) return shape.tint
+  if (shape.role && ROLE_COLORS[shape.role as Role]) {
+    return ROLE_COLORS[shape.role as Role]
+  }
+  return '#475569'
+}
+
+type CanvasBackgroundState = {
+  color: string;
+  grid: boolean;
+  gridSize: number;
+  imageUrl: string;
+  imageOpacity: number;
+  mapId: string | null;
+  showCenter: boolean;
+}
+
+function ensureCanvasBackground(block: any): CanvasBackgroundState {
+  const src = (block?.data?.canvasBackground as any) || {}
+  return {
+    color: src.color || '#0f172a',
+    grid: typeof src.grid === 'boolean' ? src.grid : Boolean(block?.data?.grid),
+    gridSize: Math.max(4, Math.min(64, Number(src.gridSize ?? block?.data?.gridSize ?? 8))),
+    imageUrl: src.imageUrl || '',
+    imageOpacity: Math.min(1, Math.max(0, Number(src.imageOpacity ?? 0.5))),
+    mapId: src.mapId || null,
+    showCenter: Boolean(src.showCenter),
+  }
+}
+
+function canvasBackgroundStyle(block: any): Record<string, string> {
+  const bg = ensureCanvasBackground(block)
+  const style: Record<string, string> = {
+    height: `${block.data?.canvasHeight || 280}px`,
+    backgroundColor: bg.color,
+  }
+  if (bg.grid) {
+    style.backgroundImage = `linear-gradient(0deg, rgba(148,163,184,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.12) 1px, transparent 1px)`
+    style.backgroundSize = `${bg.gridSize}px ${bg.gridSize}px`
+  }
+  return style
+}
+
+function canvasMapSvg(block: any): string | null {
+  const bg = ensureCanvasBackground(block)
+  if (!bg.mapId) return null
+  return mapById.get(bg.mapId)?.svg ?? null
+}
+
+function canvasBackgroundImage(block: any): { url: string; opacity: number } | null {
+  const bg = ensureCanvasBackground(block)
+  if (!bg.imageUrl) return null
+  return { url: bg.imageUrl, opacity: bg.imageOpacity }
+}
+
+function roleEmoji(role?: string | null): string {
+  if (!role) return ''
+  if (role === 'Tanks') return '🛡️'
+  if (role === 'Healers') return '✚'
+  if (role === 'Melee') return '⚔️'
+  if (role === 'Ranged') return '🏹'
+  return ''
+}
+
+function initials(name?: string): string {
+  if (!name) return '?'
+  const parts = name.split(' ')
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+  return name.slice(0, 2).toUpperCase()
+}
 
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 
@@ -514,10 +609,18 @@ function copyLink() {
 
             
             <div v-else-if="block.type === 'FREE_CANVAS'">
-              <div class="relative border border-slate-800 rounded bg-slate-900/60" :style="{ height: (block.data?.canvasHeight || 280) + 'px' }">
+              <div class="relative border border-slate-800 rounded bg-slate-900/60 overflow-hidden" :style="canvasBackgroundStyle(block)">
+                <div v-if="canvasBackgroundImage(block)" class="absolute inset-0 pointer-events-none">
+                  <img :src="canvasBackgroundImage(block)!.url" alt="Background" class="w-full h-full object-cover" :style="{ opacity: canvasBackgroundImage(block)!.opacity }" />
+                </div>
+                <div v-if="canvasMapSvg(block)" class="absolute inset-0 pointer-events-none opacity-80" v-html="canvasMapSvg(block)"></div>
+                <div v-if="ensureCanvasBackground(block).showCenter" class="absolute inset-0 pointer-events-none">
+                  <div class="absolute inset-x-8 top-1/2 border-t border-dashed border-slate-600/40"></div>
+                  <div class="absolute inset-y-8 left-1/2 border-l border-dashed border-slate-600/40"></div>
+                </div>
                 <div v-for="s in (block.data?.shapes || [])" :key="s.id"
                      class="absolute rounded"
-                     :style="{ left: (s.x||0)+'px', top: (s.y||0)+'px', width: (s.w||60)+'px', height: (s.h||40)+'px', transform: 'rotate(' + Number(s.rotation||0) + 'deg)', transformOrigin: 'center', backgroundColor: (s.type==='rect'||s.type==='marker') ? (s.color || (s.type==='marker' ? markerColor(s.marker||'star') : '#64748b')) : 'transparent', border: (s.type==='text'||s.type==='timer') ? ('1px dashed ' + (s.color || '#64748b')) : 'none' }">
+                     :style="{ left: (s.x||0)+'px', top: (s.y||0)+'px', width: (s.w||60)+'px', height: (s.h||40)+'px', transform: 'rotate(' + Number(s.rotation||0) + 'deg)', transformOrigin: 'center', backgroundColor: s.type==='rect' ? (s.color || '#64748b') : s.type==='circle' ? (s.color || 'rgba(59,130,246,0.15)') : 'transparent', border: (s.type==='text'||s.type==='timer') ? ('1px dashed ' + (s.color || '#64748b')) : (s.type==='circle' ? ((s.borderWidth || 3) + 'px solid ' + (s.border || '#3b82f6')) : 'none'), borderRadius: (s.type === 'circle' || s.type === 'player' || s.type === 'icon') ? '9999px' : '0' }">
                   <template v-if="s.type === 'text'">
                     <div class="w-full h-full grid place-items-center text-xs" :style="{ color: s.color || '#e5e7eb' }">{{ s.text || 'Text' }}</div>
                   </template>
@@ -531,6 +634,35 @@ function copyLink() {
                   </template>
                   <template v-else-if="s.type === 'marker'">
                     <div class="w-full h-full grid place-items-center font-semibold" :style="{ color: (s.color || markerColor(s.marker || 'star')), fontSize: (Math.min(Number(s.w||60), Number(s.h||40)) * 0.6) + 'px', lineHeight: 1 }">{{ markerSymbol(s.marker || 'star') }}</div>
+                  </template>
+                  <template v-else-if="s.type === 'icon'">
+                    <div class="w-full h-full grid place-items-center" v-html="raidMarkerSvg(s.iconId) || ''"></div>
+                  </template>
+                  <template v-else-if="s.type === 'player'">
+                    <div class="w-full h-full flex flex-col items-center justify-center gap-1 text-[10px]">
+                      <div class="w-10 h-10 rounded-full border-2 flex items-center justify-center text-[11px] font-semibold"
+                           :style="{ backgroundColor: playerTokenColorPublic(s), borderColor: '#0f172a', color: '#0f172a' }">
+                        {{ initials(playerDisplayNamePublic(s)) }}
+                      </div>
+                      <div v-if="s.showName" class="text-slate-200">{{ playerDisplayNamePublic(s) }}</div>
+                      <div v-if="s.showRole" class="text-slate-400">{{ roleEmoji(s.role) }}</div>
+                    </div>
+                  </template>
+                  <template v-else-if="s.type === 'arrow'">
+                    <svg :width="s.w || 60" :height="s.h || 40" class="block">
+                      <defs>
+                        <marker :id="'pub-arrowhead-end-' + s.id" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                          <path d="M0,0 L0,6 L9,3 z" :fill="s.color || '#e5e7eb'"></path>
+                        </marker>
+                        <marker :id="'pub-arrowhead-start-' + s.id" markerWidth="10" markerHeight="10" refX="0" refY="3" orient="auto" markerUnits="strokeWidth">
+                          <path d="M9,0 L9,6 L0,3 z" :fill="s.color || '#e5e7eb'"></path>
+                        </marker>
+                      </defs>
+                      <line :x1="(s.twoHeads? 10: 0) + 5" :y1="(s.h||40)/2" :x2="(s.w||60) - 5 - (s.twoHeads? 10: 0)" :y2="(s.h||40)/2"
+                            :stroke="s.color || '#e5e7eb'" :stroke-width="s.thickness || 4"
+                            :marker-end="'url(#pub-arrowhead-end-' + s.id + ')'"
+                            :marker-start="s.twoHeads ? ('url(#pub-arrowhead-start-' + s.id + ')') : undefined" />
+                    </svg>
                   </template>
                 </div>
               </div>
