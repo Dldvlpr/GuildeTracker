@@ -2,6 +2,8 @@
 
 namespace App\Controller;
 
+use App\Security\OAuthSessionKeys;
+use App\Security\ReturnToSanitizer;
 use KnpU\OAuth2ClientBundle\Client\ClientRegistry;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -17,6 +19,13 @@ final class DiscordController extends AbstractController
         $limiter = $discordOauthStartLimiter->create($request->getClientIp());
         if (false === $limiter->consume(1)->isAccepted()) {
             throw $this->createAccessDeniedException('Too many requests');
+        }
+
+        $returnTo = ReturnToSanitizer::sanitize($request->query->get('returnTo'));
+        if ($returnTo) {
+            $request->getSession()->set(OAuthSessionKeys::DISCORD_REDIRECT, $returnTo);
+        } else {
+            $request->getSession()->remove(OAuthSessionKeys::DISCORD_REDIRECT);
         }
 
         $verifier = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');

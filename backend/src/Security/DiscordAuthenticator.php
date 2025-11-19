@@ -17,13 +17,9 @@ use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge;
 use Symfony\Component\Security\Http\Authenticator\Passport\SelfValidatingPassport;
 use Symfony\Component\Security\Http\EntryPoint\AuthenticationEntryPointInterface;
-use Symfony\Component\Security\Http\Util\TargetPathTrait;
-use Wohali\OAuth2\Client\Provider\DiscordResourceOwner;
 
 class DiscordAuthenticator extends OAuth2Authenticator implements AuthenticationEntryPointInterface
 {
-    use TargetPathTrait;
-
     public function __construct(
         private readonly ClientRegistry $clientRegistry,
         private readonly EntityManagerInterface $em,
@@ -92,8 +88,20 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
 
     public function onAuthenticationSuccess(Request $request, TokenInterface $token, string $firewallName): ?Response
     {
-        $targetUrl = $this->getTargetPath($request->getSession(), $firewallName) ??
-            (string) $this->params->get('front.success_uri');
+        $session = $request->getSession();
+        $returnTo = null;
+        if ($session) {
+            $stored = $session->get(OAuthSessionKeys::DISCORD_REDIRECT);
+            if (is_string($stored)) {
+                $returnTo = ReturnToSanitizer::sanitize($stored);
+            }
+            $session->remove(OAuthSessionKeys::DISCORD_REDIRECT);
+        }
+
+        $targetUrl = $this->buildFrontRedirectUrl([
+            'linked' => 'discord',
+            'returnTo' => $returnTo,
+        ]);
 
         return new RedirectResponse($targetUrl);
     }
@@ -113,5 +121,21 @@ class DiscordAuthenticator extends OAuth2Authenticator implements Authentication
     {
         $loginUrl = $this->router->generate('connect_discord_start');
         return new RedirectResponse($loginUrl, Response::HTTP_TEMPORARY_REDIRECT);
+    }
+
+    private function buildFrontRedirectUrl(array $extraQuery = []): string
+    {
+        $base = (string) $this->params->get('front.success_uri');
+        $filtered = array_filter(
+            $extraQuery,
+            static fn($value) => $value !== null && $value !== ''
+        );
+
+        if (!$filtered) {
+            return $base;
+        }
+
+        $glue = str_contains($base, '?') ? '&' : '?';
+        return $base . $glue . http_build_query($filtered);
     }
 }

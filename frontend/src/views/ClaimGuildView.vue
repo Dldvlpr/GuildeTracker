@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/userStore'
 import { redirectToBlizzardAuth } from '@/services/auth'
 import { getBlizzardCharacters, claimGuild as claimGuildApi } from '@/services/blizzard.service'
+import { resolvePostLoginTarget, DEFAULT_POST_LOGIN_REDIRECT } from '@/utils/redirect'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -30,10 +31,8 @@ onMounted(() => {
 })
 
 function handleBlizzardLink() {
-  try {
-    localStorage.setItem('postLoginRedirect', window.location.pathname)
-  } catch {}
-  redirectToBlizzardAuth()
+  const target = resolvePostLoginTarget(window.location.pathname, DEFAULT_POST_LOGIN_REDIRECT)
+  redirectToBlizzardAuth(target)
 }
 
 async function loadCharacters() {

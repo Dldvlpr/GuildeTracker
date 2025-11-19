@@ -62,12 +62,12 @@ import { RouterView, useRouter } from 'vue-router'
 import Topbar from '@/components/layout/Topbar.vue'
 import { useUserStore } from '@/stores/userStore'
 import { invalidateBlizzardCharactersCache } from '@/services/blizzard.service'
-import { checkAuthStatus } from '@/services/auth'
 import AppToaster from '@/components/Toaster.vue'
 
 const userStore = useUserStore()
 const router = useRouter()
 const currentYear = computed(() => new Date().getFullYear())
+const API_BASE = import.meta.env.VITE_API_BASE_URL as string
 
 type Banner = { visible: boolean; type: 'success' | 'error'; message: string }
 const banner = ref<Banner>({ visible: false, type: 'success', message: '' })
@@ -84,56 +84,51 @@ function dismissBanner() {
 
 function checkOAuthParams() {
   try {
-    const url = new URL(window.location.href)
-    const params = url.searchParams
-    const linked = params.get('linked')
-    const reason = params.get('reason')
+    const { query, name } = router.currentRoute.value
+    const linked = query.linked as string | null
+    const reason = query.reason as string | null
+    const isOAuthCallback = name === 'oauthCallback'
 
     if (linked === 'blizzard') {
       showBanner('success', 'Votre compte Blizzard a été lié avec succès.')
       try { localStorage.setItem('justLinkedBlizzard', '1') } catch {}
       try { invalidateBlizzardCharactersCache() } catch {}
+    } else if (linked === 'discord') {
+      showBanner('success', 'Connexion Discord réussie.')
     }
     if (reason) {
       const map: Record<string, string> = {
         bnet_token: 'Erreur de connexion à Battle.net. Veuillez réessayer.',
         bnet_profile: 'Impossible de récupérer le profil Battle.net.',
         auth_failed: "Échec d’authentification. Veuillez réessayer.",
+        discord_auth_failed: 'Connexion Discord indisponible, merci de réessayer.',
+        discord_csrf: 'La vérification de sécurité Discord a échoué. Relancez la connexion.',
       }
       const msg = map[reason] ?? 'Une erreur est survenue.'
       showBanner('error', msg)
     }
 
-    if (linked || reason) {
-      params.delete('linked')
-      params.delete('reason')
-      window.history.replaceState({}, '', url.pathname + (params.toString() ? '?' + params.toString() : '') + url.hash)
+    if ((linked || reason) && !isOAuthCallback) {
+      const newQuery = { ...query }
+      delete newQuery.linked
+      delete newQuery.reason
+      router.replace({ query: newQuery }).catch(() => {})
     }
   } catch {}
 }
 
-onMounted(async () => {
-  userStore.setLoading(true)
+async function ensureUserFromApi() {
   try {
-    const a = await checkAuthStatus()
-    if (a.isAuthenticated) userStore.setUser(a.user)
-    else userStore.logout()
+    await userStore.initFromApi(API_BASE)
   } catch {
     userStore.logout()
   }
-  checkOAuthParams()
+}
 
-  if (userStore.isAuthenticated) {
-    try {
-      const redirect = localStorage.getItem('postLoginRedirect')
-      if (redirect) {
-        localStorage.removeItem('postLoginRedirect')
-        if (location.pathname + location.search !== redirect) {
-          router.replace(redirect)
-        }
-      }
-    } catch {}
-  }
+onMounted(async () => {
+  userStore.setLoading(true)
+  await ensureUserFromApi()
+  checkOAuthParams()
 
   window.addEventListener('app:toast', (e: Event) => {
     const ev = e as CustomEvent<{ type?: ToastType; message: string; timeout?: number }>

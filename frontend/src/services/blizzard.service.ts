@@ -1,12 +1,13 @@
 import { redirectToBlizzardAuth } from '@/services/auth'
+import { resolvePostLoginTarget, DEFAULT_POST_LOGIN_REDIRECT } from '@/utils/redirect'
 
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
 type FetchOpts = { signal?: AbortSignal }
 
 function relinkBlizzard() {
-  try { localStorage.setItem('postLoginRedirect', window.location.pathname + window.location.search) } catch {}
-  redirectToBlizzardAuth()
+  const target = resolvePostLoginTarget(window.location.pathname + window.location.search, DEFAULT_POST_LOGIN_REDIRECT)
+  redirectToBlizzardAuth(target)
 }
 
 async function handleBlizzardResponse(res: Response) {

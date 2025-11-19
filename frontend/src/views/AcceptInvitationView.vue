@@ -39,6 +39,7 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { acceptInvitation, type AcceptInvitationSuccess } from '@/services/guildInvitation.service'
 import { redirectToDiscordAuth } from '@/services/auth'
+import { resolvePostLoginTarget, DEFAULT_POST_LOGIN_REDIRECT } from '@/utils/redirect'
 
 type State = 'loading' | 'success' | 'error' | 'unauth'
 
@@ -52,8 +53,8 @@ const countdown = ref(3)
 let timer: number | null = null
 
 function login() {
-  try { localStorage.setItem('postLoginRedirect', window.location.pathname + window.location.search) } catch {}
-  redirectToDiscordAuth()
+  const target = resolvePostLoginTarget(window.location.pathname + window.location.search, DEFAULT_POST_LOGIN_REDIRECT)
+  redirectToDiscordAuth(target)
 }
 
 async function run() {

@@ -12,6 +12,7 @@ import {
 } from '@/services/blizzard.service'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import { matchesWowFilter, type WowFilter } from '@/utils/onboarding'
+import { resolvePostLoginTarget, DEFAULT_POST_LOGIN_REDIRECT } from '@/utils/redirect'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -103,18 +104,13 @@ watch(isAuthenticated, async (v) => {
 })
 
 function handleDiscordLogin() {
-  try {
-    const r = (router.currentRoute.value.query.redirect as string) || '/app'
-    localStorage.setItem('postLoginRedirect', r)
-  } catch {}
-  redirectToDiscordAuth()
+  const redirectParam = router.currentRoute.value.query?.redirect as string | undefined
+  const target = resolvePostLoginTarget(redirectParam, DEFAULT_POST_LOGIN_REDIRECT)
+  redirectToDiscordAuth(target)
 }
 
 function handleBlizzardLink() {
-  try {
-    localStorage.setItem('postLoginRedirect', '/guild/claim')
-  } catch {}
-  redirectToBlizzardAuth()
+  redirectToBlizzardAuth('/guild/claim')
 }
 
 function handleClaimGuild() {

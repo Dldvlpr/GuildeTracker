@@ -23,6 +23,8 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use App\Security\OAuthSessionKeys;
+use App\Security\ReturnToSanitizer;
 
 final class BlizzardController extends AbstractController
 {
@@ -46,6 +48,13 @@ final class BlizzardController extends AbstractController
         $limiter = $blizzardOauthStartLimiter->create($request->getClientIp());
         if (false === $limiter->consume(1)->isAccepted()) {
             throw $this->createAccessDeniedException('Too many requests');
+        }
+
+        $returnTo = ReturnToSanitizer::sanitize($request->query->get('returnTo'));
+        if ($returnTo) {
+            $request->getSession()->set(OAuthSessionKeys::BLIZZARD_REDIRECT, $returnTo);
+        } else {
+            $request->getSession()->remove(OAuthSessionKeys::BLIZZARD_REDIRECT);
         }
 
         $verifier = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
@@ -130,15 +139,27 @@ final class BlizzardController extends AbstractController
             $this->em->persist($user);
             $this->em->flush();
 
-            $successUrl = (string) $this->params->get('front.success_uri');
-            $glue = str_contains($successUrl, '?') ? '&' : '?';
-            return new RedirectResponse($successUrl . $glue . 'linked=blizzard');
+            $returnTo = null;
+            $session = $request->getSession();
+            if ($session) {
+                $stored = $session->get(OAuthSessionKeys::BLIZZARD_REDIRECT);
+                if (is_string($stored)) {
+                    $returnTo = ReturnToSanitizer::sanitize($stored);
+                }
+                $session->remove(OAuthSessionKeys::BLIZZARD_REDIRECT);
+            }
+
+            $successUrl = $this->buildFrontRedirectUrl([
+                'linked' => 'blizzard',
+                'returnTo' => $returnTo,
+            ]);
+            return new RedirectResponse($successUrl);
         } catch (\Throwable $e) {
             error_log("Blizzard profile fetch failed: {$e->getMessage()}");
-            $errorUrl = (string) $this->params->get('front.error_uri');
-            $glue = str_contains($errorUrl, '?') ? '&' : '?';
-
-            return new RedirectResponse($errorUrl . $glue . 'reason=bnet_profile');
+            $errorUrl = $this->buildFrontErrorUrl([
+                'reason' => 'bnet_profile',
+            ], $request);
+            return new RedirectResponse($errorUrl);
         }
     }
 
@@ -677,5 +698,41 @@ final class BlizzardController extends AbstractController
         } catch (\Throwable) {
 
         }
+    }
+
+    private function buildFrontRedirectUrl(array $extraQuery = []): string
+    {
+        $base = (string) $this->params->get('front.success_uri');
+        return $this->appendQuery($base, $extraQuery);
+    }
+
+    private function buildFrontErrorUrl(array $extraQuery, Request $request): string
+    {
+        $session = $request->getSession();
+        if ($session) {
+            $stored = $session->get(OAuthSessionKeys::BLIZZARD_REDIRECT);
+            if (is_string($stored)) {
+                $extraQuery['returnTo'] = ReturnToSanitizer::sanitize($stored);
+            }
+            $session->remove(OAuthSessionKeys::BLIZZARD_REDIRECT);
+        }
+
+        $base = (string) $this->params->get('front.error_uri');
+        return $this->appendQuery($base, $extraQuery);
+    }
+
+    private function appendQuery(string $base, array $extraQuery): string
+    {
+        $filtered = array_filter(
+            $extraQuery,
+            static fn($value) => $value !== null && $value !== ''
+        );
+
+        if (!$filtered) {
+            return $base;
+        }
+
+        $glue = str_contains($base, '?') ? '&' : '?';
+        return $base . $glue . http_build_query($filtered);
     }
 }

@@ -215,6 +215,21 @@
         </div>
       </div>
 
+      <div v-else class="flex items-center gap-3">
+        <button
+          @click="handleDiscordLogin"
+          class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-500/20 text-indigo-100 ring-1 ring-inset ring-indigo-400/40 hover:bg-indigo-500/30 hover:ring-indigo-400/60 transition"
+        >
+          <svg class="w-4 h-4" viewBox="0 0 127.14 96.36" xmlns="http://www.w3.org/2000/svg">
+            <path
+              fill="currentColor"
+              d="M107.7,8.07A105.15,105.15,0,0,0,82.3,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,48.84,6.83,72.37,72.37,0,0,0,45.48,0,105.89,105.89,0,0,0,20.05,8.09C4.26,31.44-2,54.23,1.3,76.72A105.73,105.73,0,0,0,33.71,96.36c2.69-3.25,5.11-6.71,7.2-10.34a68.42,68.42,0,0,1-10.49-5c.88-.63,1.74-1.3,2.57-2a75.57,75.57,0,0,0,65,0c.83.71,1.69,1.38,2.57,2a68.68,68.68,0,0,1-10.51,5c2.09,3.63,4.5,7.09,7.2,10.34A105.25,105.25,0,0,0,125.84,76.72C129.54,51,122.09,28.29,107.7,8.07ZM42.45,65.69c-6.36,0-11.61-5.83-11.61-13s5.08-13,11.61-13S54.16,45.42,54,52.67,48.81,65.69,42.45,65.69Zm42.24,0c-6.36,0-11.61-5.83-11.61-13s5.08-13,11.61-13,11.72,5.79,11.61,13S91.05,65.69,84.69,65.69Z"
+            />
+          </svg>
+          Se connecter
+        </button>
+      </div>
+
     </nav>
   </header>
 </template>
@@ -226,6 +241,7 @@ import { redirectToDiscordAuth, redirectToBlizzardAuth, logoutUser } from '@/ser
 import { useUserStore } from '@/stores/userStore'
 import { getMyGuild } from '@/services/gameGuild.service'
 import type { GameGuild } from '@/interfaces/GameGuild.interface'
+import { resolvePostLoginTarget, DEFAULT_POST_LOGIN_REDIRECT } from '@/utils/redirect'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -306,7 +322,10 @@ function handleCreateGuild() {
 }
 
 function handleDiscordLogin() {
-  redirectToDiscordAuth()
+  const redirectParam = router.currentRoute.value.query?.redirect as string | undefined
+  const fallback = router.currentRoute.value.fullPath || DEFAULT_POST_LOGIN_REDIRECT
+  const target = resolvePostLoginTarget(redirectParam, fallback)
+  redirectToDiscordAuth(target)
 }
 
 function linkBlizzard() {

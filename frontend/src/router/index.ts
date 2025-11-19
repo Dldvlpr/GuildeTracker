@@ -7,6 +7,7 @@ import AssignementView from '../views/AssignementView.vue'
 import CreateGuildView from '@/views/CreateGuildView.vue'
 import ClaimGuildView from '@/views/ClaimGuildView.vue'
 import AcceptInvitationView from '@/views/AcceptInvitationView.vue'
+import OAuthCallbackView from '@/views/OAuthCallbackView.vue'
 import { useUserStore } from '@/stores/userStore'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL as string
@@ -26,6 +27,7 @@ const router = createRouter({
     { path: '/guild/claim', name: 'guildClaim', component: ClaimGuildView, meta: { requiresAuth: true } },
 
     { path: '/invite/:token', name: 'acceptInvitation', component: AcceptInvitationView, props: true },
+    { path: '/oauth/callback', name: 'oauthCallback', component: OAuthCallbackView },
     { path: '/guild/:id', name: 'guildDetails', component: FeaturesView, props: true, meta: { requiresAuth: true } },
     { path: '/guild/:id/characters', name: 'listPlayer', component: ListPlayerView, meta: { requiresAuth: true } },
     { path: '/guild/:id/members', name: 'guildMembers', component: () => import('@/views/GuildRolesView.vue'), props: true, meta: { requiresAuth: true } },
@@ -54,7 +56,6 @@ const router = createRouter({
   }
 
   if (to.meta?.requiresAuth && !userStore.isAuthenticated) {
-    try { localStorage.setItem('postLoginRedirect', to.fullPath) } catch {}
     return { name: 'home', query: { redirect: to.fullPath } }
   }
 

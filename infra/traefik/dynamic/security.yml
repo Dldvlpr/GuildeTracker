@@ -1,0 +1,78 @@
+http:
+  middlewares:
+    guildforge-secure-headers:
+      headers:
+        stsSeconds: 63072000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
+        contentTypeNosniff: true
+        frameDeny: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        permissionsPolicy: "camera=(), microphone=(), geolocation=()"
+        contentSecurityPolicy: >
+          default-src 'self';
+          img-src 'self' data:;
+          style-src 'self' 'unsafe-inline';
+          script-src 'self';
+          font-src 'self' data:;
+          connect-src 'self' https://discord.com https://*.discordapp.com https://*.blizzard.com;
+          frame-ancestors 'none';
+    guildforge-csp-report-only:
+      headers:
+        contentSecurityPolicyReportOnly: true
+        contentSecurityPolicy: >
+          default-src 'self';
+          report-uri https://csp-report.your-domain.tld;
+    guildforge-oauth-rate-limit:
+      rateLimit:
+        average: 10
+        burst: 20
+        period: 1m
+        sourceCriterion:
+          requestHeaderName: CF-Connecting-IP
+    guildforge-api-rate-limit:
+      rateLimit:
+        average: 120
+        burst: 240
+        period: 1m
+        sourceCriterion:
+          requestHeaderName: CF-Connecting-IP
+
+  routers:
+    oauth-discord:
+      rule: Host(`api.mondomaine.fr`) && PathPrefix(`/connect/discord`)
+      entryPoints:
+        - websecure
+      middlewares:
+        - guildforge-secure-headers
+        - guildforge-oauth-rate-limit
+      tls:
+        certResolver: letsencrypt
+      service: backend-api
+    oauth-blizzard:
+      rule: Host(`api.mondomaine.fr`) && PathPrefix(`/api/oauth/blizzard`)
+      entryPoints:
+        - websecure
+      middlewares:
+        - guildforge-secure-headers
+        - guildforge-oauth-rate-limit
+      tls:
+        certResolver: letsencrypt
+      service: backend-api
+    api-general:
+      rule: Host(`api.mondomaine.fr`) && PathPrefix(`/api`)
+      entryPoints:
+        - websecure
+      middlewares:
+        - guildforge-secure-headers
+        - guildforge-api-rate-limit
+      tls:
+        certResolver: letsencrypt
+      service: backend-api
+
+  services:
+    backend-api:
+      loadBalancer:
+        servers:
+          - url: "http://backend:8080"

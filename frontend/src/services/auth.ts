@@ -1,4 +1,5 @@
 import type { DiscordUserInterface } from '@/interfaces/DiscordUser.interface.ts';
+import { buildOAuthRedirectUrl } from '@/utils/redirect';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
@@ -7,12 +8,14 @@ type UserResult =
   | { isAuthenticated: true, user: DiscordUserInterface }
 
 
-export function redirectToDiscordAuth() {
-  window.location.href = `${API_BASE}/connect/discord`;
+export function redirectToDiscordAuth(returnTo?: string | null) {
+  const authUrl = buildOAuthRedirectUrl(`${API_BASE}/connect/discord`, returnTo)
+  window.location.href = authUrl;
 }
 
-export function redirectToBlizzardAuth() {
-  window.location.href = `${API_BASE}/api/oauth/blizzard/connect`;
+export function redirectToBlizzardAuth(returnTo?: string | null) {
+  const authUrl = buildOAuthRedirectUrl(`${API_BASE}/api/oauth/blizzard/connect`, returnTo)
+  window.location.href = authUrl;
 }
 
 export async function checkAuthStatus(): Promise<UserResult> {
