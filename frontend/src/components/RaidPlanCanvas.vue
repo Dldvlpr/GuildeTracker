@@ -51,6 +51,23 @@ const activePlayerPaletteId = ref<string | null>(null);
 const activeMapPickerId = ref<string | null>(null);
 const playerSearch = ref('');
 const mapSearch = ref('');
+const filteredCharacters = computed<Character[]>(() => {
+  if (!props.characters) return [];
+  const q = playerSearch.value.trim().toLowerCase();
+  if (!q) return props.characters;
+  return props.characters.filter((c) => c.name.toLowerCase().includes(q) || (c.class?.toLowerCase().includes(q)));
+});
+
+const filteredMaps = computed(() => {
+  const q = mapSearch.value.trim().toLowerCase();
+  if (!q) return canvasMaps;
+  return canvasMaps.filter((m) =>
+    m.name.toLowerCase().includes(q) ||
+    (m.raid?.toLowerCase().includes(q)) ||
+    (m.expansion?.toLowerCase().includes(q)) ||
+    (m.tags?.some((tag) => tag.toLowerCase().includes(q)))
+  );
+});
 
 // FREE_CANVAS drag/resize state
 type DragMode = 'move' | 'resize-nw' | 'resize-ne' | 'resize-sw' | 'resize-se' | 'rotate'
@@ -1450,7 +1467,7 @@ function assignToSelected(characterId: string) {
   if (block.type === 'GROUPS_GRID') {
     const groups = (block.data?.groups ?? []) as { id: string; title: string; members: string[] }[];
     const max = (block.data?.playersPerGroup ?? 5) as number;
-    let target = groups.slice().sort((a,b) => a.members.length - b.members.length).find(g => g.members.length < max);
+    const target = groups.slice().sort((a,b) => a.members.length - b.members.length).find(g => g.members.length < max);
     if (!target) return false;
     onDropToGroup(block, target.id, { dataTransfer: { getData: () => characterId } } as any as DragEvent);
     // Ensure default override set to character's spec for clarity
@@ -2864,20 +2881,3 @@ defineExpose({ assignToSelected, selectedBlockId });
 .drag-handle { cursor: grab; }
 .drag-handle:active { cursor: grabbing; }
 </style>
-const filteredCharacters = computed(() => {
-  if (!props.characters) return [] as Character[]
-  const q = playerSearch.value.trim().toLowerCase()
-  if (!q) return props.characters
-  return props.characters.filter((c) => c.name.toLowerCase().includes(q) || (c.class?.toLowerCase().includes(q)))
-})
-
-const filteredMaps = computed(() => {
-  const q = mapSearch.value.trim().toLowerCase()
-  if (!q) return canvasMaps
-  return canvasMaps.filter((m) =>
-    m.name.toLowerCase().includes(q) ||
-    (m.raid?.toLowerCase().includes(q)) ||
-    (m.expansion?.toLowerCase().includes(q)) ||
-    (m.tags?.some((tag) => tag.toLowerCase().includes(q)))
-  )
-})

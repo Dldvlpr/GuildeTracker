@@ -1,10 +1,74 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, type CSSProperties } from 'vue';
 import { Role, ROLE_COLORS } from '@/interfaces/game.interface';
 import { useRoute } from 'vue-router';
 import type { RaidPlanBlock } from '@/interfaces/raidPlan.interface';
 import { CANVAS_MAPS } from '@/data/canvasMaps';
 import { RAID_MARKER_ICONS } from '@/data/raidMarkers';
+
+type PublicRosterEntry = {
+  name?: string;
+  class?: string;
+  spec?: string;
+  role?: Role | string;
+  color?: string;
+};
+
+type RosterValue = PublicRosterEntry | PublicRosterEntry[] | null | undefined;
+
+type CanvasShape = {
+  id?: string;
+  type?: string;
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+  rotation?: number;
+  color?: string;
+  border?: string;
+  borderWidth?: number;
+  marker?: string;
+  iconId?: string;
+  text?: string;
+  seconds?: number;
+  url?: string;
+  fit?: string;
+  opacity?: number;
+  playerName?: string;
+  label?: string;
+  tint?: string;
+  role?: Role | string;
+  showName?: boolean;
+  showRole?: boolean;
+  twoHeads?: boolean;
+  thickness?: number;
+};
+
+type PairCellValue = { from?: string | null; to?: string | null };
+type CellValue = string | string[] | PairCellValue | undefined;
+type AssignmentCells = Record<string, Record<string, CellValue>>;
+
+type PlanRow = {
+  id: string;
+  label: string;
+  fromLabel?: string;
+  toLabel?: string;
+  mode?: string;
+  type?: string;
+  cells?: Record<string, CellValue>;
+};
+
+type BossPosition = { id: string; label: string; role?: string };
+
+type PublicRaidPlanResponse = {
+  name: string;
+  guild: string;
+  blocks: RaidPlanBlock[];
+  createdAt: string;
+  updatedAt: string;
+  rosterByName?: Record<string, RosterValue>;
+  roster?: Record<string, RosterValue>;
+};
 
 const route = useRoute();
 const shareToken = route.params.shareToken as string;
@@ -17,8 +81,24 @@ const error = ref<string | null>(null);
 const createdAt = ref('');
 const updatedAt = ref('');
 const highlight = ref('');
-const hoveredCol: Record<number, number | null> = {};
-const roster = ref<Record<string, { class?: string; spec?: string; role?: string; color?: string }>>({});
+const roster = ref<Record<string, RosterValue>>({});
+const rosterByName = computed<Record<string, PublicRosterEntry>>(() => {
+  const out: Record<string, PublicRosterEntry> = {};
+  Object.entries(roster.value || {}).forEach(([rawKey, value]) => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      const first = value.find((entry) => Boolean(entry));
+      if (first) {
+        const n = first.name ?? rawKey;
+        out[n] = first;
+      }
+      return;
+    }
+    const n = value.name ?? rawKey;
+    out[n] = value;
+  });
+  return out;
+});
 const canvasMaps = CANVAS_MAPS;
 const raidMarkerIcons = RAID_MARKER_ICONS;
 const mapById = new Map(canvasMaps.map((m) => [m.id, m]));
@@ -27,30 +107,40 @@ const MARKER_COLORS: Record<string, string> = { star: '#fbbf24', circle: '#fb923
 const MARKER_SYMBOLS: Record<string, string> = { star: '✦', circle: '●', diamond: '◆', triangle: '▲', moon: '☾', square: '■', cross: '✖', skull: '☠' };
 function markerColor(kind: string): string { return MARKER_COLORS[kind] || '#94a3b8' }
 function markerSymbol(kind: string): string { return MARKER_SYMBOLS[kind] || '●' }
+function roleColor(roleName?: string | null): string {
+  if (roleName === Role.TANKS || roleName === Role.HEALERS || roleName === Role.MELEE || roleName === Role.RANGED) {
+    return ROLE_COLORS[roleName];
+  }
+  return '#94a3b8';
+}
 function raidMarkerSvg(iconId: string | undefined): string | null {
   if (!iconId) return null;
   return raidMarkerMap.get(iconId)?.svg ?? null;
 }
 function roleEmoji(shapeRole?: string | null): string {
   if (!shapeRole) return ''
-  if (shapeRole === 'Tanks') return '🛡️'
-  if (shapeRole === 'Healers') return '✚'
-  if (shapeRole === 'Melee') return '⚔️'
-  if (shapeRole === 'Ranged') return '🏹'
+  if (shapeRole === Role.TANKS) return '🛡️'
+  if (shapeRole === Role.HEALERS) return '✚'
+  if (shapeRole === Role.MELEE) return '⚔️'
+  if (shapeRole === Role.RANGED) return '🏹'
   return ''
 }
-function playerDisplayNamePublic(shape: any): string {
-  return shape.playerName || shape.label || 'Player'
+function playerDisplayNamePublic(shape: CanvasShape): string {
+  return shape.playerName || shape.label || 'Player';
 }
-function playerTokenColorPublic(shape: any): string {
-  if (shape.playerName && roster.value[shape.playerName]?.color) {
-    return roster.value[shape.playerName]!.color as string
-  }
-  if (shape.tint) return shape.tint
-  if (shape.role && ROLE_COLORS[shape.role as Role]) {
-    return ROLE_COLORS[shape.role as Role]
-  }
-  return '#475569'
+function playerTokenColorPublic(shape: CanvasShape): string {
+  const rosterEntry = shape.playerName ? rosterByName.value[shape.playerName] : undefined;
+  if (rosterEntry?.color) return rosterEntry.color;
+  if (shape.tint) return shape.tint;
+  if (shape.role) return roleColor(String(shape.role));
+  return '#475569';
+}
+
+function canvasImageStyle(s: CanvasShape): CSSProperties {
+  return {
+    objectFit: (s.fit as CSSProperties['objectFit']) || 'contain',
+    opacity: typeof s.opacity === 'number' ? s.opacity : 1,
+  };
 }
 
 type CanvasBackgroundState = {
@@ -63,12 +153,15 @@ type CanvasBackgroundState = {
   showCenter: boolean;
 }
 
-function ensureCanvasBackground(block: any): CanvasBackgroundState {
-  const src = (block?.data?.canvasBackground as any) || {}
+function ensureCanvasBackground(block: RaidPlanBlock): CanvasBackgroundState {
+  const src = (block.data?.canvasBackground as Partial<CanvasBackgroundState> | undefined) || {};
+  const data = block.data as { grid?: unknown; gridSize?: unknown } | undefined;
+  const gridFlag = typeof src.grid === 'boolean' ? src.grid : typeof data?.grid === 'boolean' ? data.grid : false;
+  const gridSize = Math.max(4, Math.min(64, Number(src.gridSize ?? data?.gridSize ?? 8)));
   return {
     color: src.color || '#0f172a',
-    grid: typeof src.grid === 'boolean' ? src.grid : Boolean(block?.data?.grid),
-    gridSize: Math.max(4, Math.min(64, Number(src.gridSize ?? block?.data?.gridSize ?? 8))),
+    grid: gridFlag,
+    gridSize,
     imageUrl: src.imageUrl || '',
     imageOpacity: Math.min(1, Math.max(0, Number(src.imageOpacity ?? 0.5))),
     mapId: src.mapId || null,
@@ -76,7 +169,7 @@ function ensureCanvasBackground(block: any): CanvasBackgroundState {
   }
 }
 
-function canvasBackgroundStyle(block: any): Record<string, string> {
+function canvasBackgroundStyle(block: RaidPlanBlock): Record<string, string> {
   const bg = ensureCanvasBackground(block)
   const style: Record<string, string> = {
     height: `${block.data?.canvasHeight || 280}px`,
@@ -89,25 +182,16 @@ function canvasBackgroundStyle(block: any): Record<string, string> {
   return style
 }
 
-function canvasMapSvg(block: any): string | null {
+function canvasMapSvg(block: RaidPlanBlock): string | null {
   const bg = ensureCanvasBackground(block)
   if (!bg.mapId) return null
   return mapById.get(bg.mapId)?.svg ?? null
 }
 
-function canvasBackgroundImage(block: any): { url: string; opacity: number } | null {
+function canvasBackgroundImage(block: RaidPlanBlock): { url: string; opacity: number } | null {
   const bg = ensureCanvasBackground(block)
   if (!bg.imageUrl) return null
   return { url: bg.imageUrl, opacity: bg.imageOpacity }
-}
-
-function roleEmoji(role?: string | null): string {
-  if (!role) return ''
-  if (role === 'Tanks') return '🛡️'
-  if (role === 'Healers') return '✚'
-  if (role === 'Melee') return '⚔️'
-  if (role === 'Ranged') return '🏹'
-  return ''
 }
 
 function initials(name?: string): string {
@@ -117,6 +201,17 @@ function initials(name?: string): string {
   return name.slice(0, 2).toUpperCase()
 }
 
+function getBlockData(block: RaidPlanBlock): { rows: PlanRow[]; cells: AssignmentCells; positions: BossPosition[] } {
+  const data = block.data as { rows?: unknown; cells?: unknown; positions?: unknown } | undefined;
+  const rows = Array.isArray(data?.rows) ? (data.rows as PlanRow[]) : [];
+  const cells = data?.cells && typeof data.cells === 'object' && !Array.isArray(data.cells) ? (data.cells as AssignmentCells) : {};
+  const positions = Array.isArray(data?.positions) ? (data.positions as BossPosition[]) : [];
+  return { rows, cells, positions };
+}
+
+function blockPositions(block: RaidPlanBlock): BossPosition[] {
+  return getBlockData(block).positions;
+}
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 
 async function loadPlan() {
@@ -130,15 +225,15 @@ async function loadPlan() {
       throw new Error('Plan not found or no longer public');
     }
 
-    const data = await res.json();
+    const data = (await res.json()) as PublicRaidPlanResponse;
     planName.value = data.name;
     guildName.value = data.guild;
     blocks.value = data.blocks;
     createdAt.value = new Date(data.createdAt).toLocaleDateString();
     updatedAt.value = new Date(data.updatedAt).toLocaleDateString();
-    roster.value = data.roster || {};
-  } catch (e: any) {
-    error.value = e.message;
+    roster.value = data.rosterByName ?? data.roster ?? {};
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : 'Unable to load plan';
   } finally {
     loading.value = false;
   }
@@ -148,17 +243,6 @@ onMounted(() => {
   loadPlan();
   try { const p = new URL(window.location.href).searchParams.get('p'); if (p) highlight.value = p } catch {}
 });
-
-function chip(row: any): { text: string, cls: string } | null {
-  const lbl = ((row?.label as string) || '').toLowerCase()
-  if (lbl.includes('infusion') || lbl.includes('pi')) return { text: 'PI', cls: 'bg-pink-500/15 text-pink-300 ring-pink-400/30' }
-  if (lbl.includes('barrier')) return { text: 'Barrier', cls: 'bg-blue-500/15 text-blue-300 ring-blue-400/30' }
-  if (lbl.includes('rally')) return { text: 'Rally', cls: 'bg-amber-500/15 text-amber-300 ring-amber-400/30' }
-  if (lbl.includes('amz')) return { text: 'AMZ', cls: 'bg-teal-500/15 text-teal-300 ring-teal-400/30' }
-  if (lbl.includes('spirit link') || lbl.includes('slt') || lbl.includes('link')) return { text: 'SLT', cls: 'bg-emerald-500/15 text-emerald-300 ring-emerald-400/30' }
-  return null
-}
-
 const toc = computed(() => blocks.value.map((b, i) => {
   const base = (b.title || b.type || 'Section') as string;
   const slug = base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -181,47 +265,6 @@ function matchName(name: string): boolean {
   const q = highlight.value.trim().toLowerCase();
   return !!q && name.toLowerCase().includes(q);
 }
-
-function isPairRow(row: any): boolean {
-  const mode = (row?.mode as string) || ''
-  if (mode === 'pair') return true
-  const t = (row?.type as string) || ''
-  const lbl = ((row?.label as string) || '').toLowerCase()
-  return t === 'pair' || lbl.includes('infusion') || lbl === 'pi'
-}
-
-function pairCell(block: any, rowId: string, colId: string): { from: string | null, to: string | null } {
-  const v = (block?.data?.cells?.[rowId]?.[colId])
-  if (v && typeof v === 'object' && !Array.isArray(v)) return { from: v.from || null, to: v.to || null }
-  // Fallback to rows[].cells for older plans
-  const rows = Array.isArray(block?.data?.rows) ? (block.data.rows as any[]) : []
-  const r = rows.find((x: any) => x?.id === rowId)
-  const rv = r?.cells?.[colId]
-  if (rv && typeof rv === 'object' && !Array.isArray(rv)) return { from: rv.from || null, to: rv.to || null }
-  return { from: null, to: null }
-}
-
-function cellList(block: any, rowId: string, colId: string): string[] {
-  const v = (block?.data?.cells?.[rowId]?.[colId]);
-  if (Array.isArray(v)) return v as string[];
-  if (typeof v === 'string' && v) return [v as string];
-  // Fallback: some older plans store cells under rows[].cells
-  const rows = Array.isArray(block?.data?.rows) ? (block.data.rows as any[]) : [];
-  const r = rows.find((x: any) => x?.id === rowId);
-  const rv = r?.cells?.[colId];
-  if (Array.isArray(rv)) return rv as string[];
-  if (typeof rv === 'string' && rv) return [rv as string];
-  return [];
-}
-
-function rowsList(block: any): Array<{ id: string; label: string; fromLabel?: string; toLabel?: string; mode?: string; type?: string }>{
-  const rows = Array.isArray(block?.data?.rows) ? (block.data.rows as any[]) : []
-  if (rows.length) return rows
-  const cells = block?.data?.cells || {}
-  const ids = Object.keys(cells)
-  return ids.map((id: string) => ({ id, label: id }))
-}
-
 function copyLink() {
   navigator.clipboard.writeText(window.location.href);
 
@@ -235,11 +278,82 @@ function copyLink() {
     setTimeout(() => toast.remove(), 300);
   }, 2000);
 }
+
+function getRoleAssignments(block: RaidPlanBlock): Record<string, string[]> {
+  const data = block.data as { assignmentsByRole?: unknown } | undefined;
+  const src = data?.assignmentsByRole;
+  if (!src || typeof src !== 'object' || Array.isArray(src)) return {};
+  const out: Record<string, string[]> = {};
+  for (const [role, value] of Object.entries(src as Record<string, unknown>)) {
+    if (Array.isArray(value)) {
+      out[role] = value.filter((v): v is string => typeof v === 'string');
+    }
+  }
+  return out;
+}
+
+function getGroupsData(block: RaidPlanBlock): { groups: { id: string; title: string; members: string[] }[]; playersPerGroup?: number } {
+  const data = block.data as { groups?: unknown; playersPerGroup?: unknown } | undefined;
+  const rawGroups = Array.isArray(data?.groups) ? data?.groups as { id?: string; title?: string; members?: unknown }[] : [];
+  const groups = rawGroups.map(g => ({
+    id: g.id || g.title || 'group',
+    title: g.title || g.id || 'Group',
+    members: Array.isArray(g.members) ? g.members.filter((m): m is string => typeof m === 'string') : [],
+  }));
+  const playersPerGroup = typeof data?.playersPerGroup === 'number' ? data.playersPerGroup : undefined;
+  return { groups, playersPerGroup };
+}
+
+function getBossAssignmentsData(block: RaidPlanBlock): { assignments: Record<string, string[]>; positionNotes: Record<string, string[]> } {
+  const data = block.data as { assignments?: unknown; positionNotes?: unknown } | undefined;
+  const assignmentsSrc = data?.assignments;
+  const notesSrc = data?.positionNotes;
+  const assignments: Record<string, string[]> = {};
+  const positionNotes: Record<string, string[]> = {};
+
+  if (assignmentsSrc && typeof assignmentsSrc === 'object' && !Array.isArray(assignmentsSrc)) {
+    for (const [key, value] of Object.entries(assignmentsSrc as Record<string, unknown>)) {
+      if (Array.isArray(value)) {
+        assignments[key] = value.filter((v): v is string => typeof v === 'string');
+      }
+    }
+  }
+
+  if (notesSrc && typeof notesSrc === 'object' && !Array.isArray(notesSrc)) {
+    for (const [key, value] of Object.entries(notesSrc as Record<string, unknown>)) {
+      if (Array.isArray(value)) {
+        positionNotes[key] = value.filter((v): v is string => typeof v === 'string');
+      }
+    }
+  }
+
+  return { assignments, positionNotes };
+}
+
+function getBenchList(block: RaidPlanBlock): string[] {
+  const data = block.data as { bench?: unknown } | undefined;
+  const src = data?.bench;
+  if (!Array.isArray(src)) return [];
+  return src.filter((v): v is string => typeof v === 'string');
+}
+
+function getCanvasShapes(block: RaidPlanBlock): CanvasShape[] {
+  const data = block.data as { shapes?: unknown } | undefined;
+  const src = data?.shapes;
+  if (!Array.isArray(src)) return [];
+  return src as CanvasShape[];
+}
+
+function printPage() {
+  if (typeof window !== 'undefined' && window.print) {
+    window.print();
+  }
+}
 </script>
 
 <template>
   <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-slate-100">
-    
+
     <header class="border-b border-slate-700/50 bg-slate-950/90 backdrop-blur-sm px-6 py-6 shadow-lg">
       <div class="max-w-6xl mx-auto">
         <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -284,7 +398,7 @@ function copyLink() {
       </div>
     </header>
 
-    
+
     <div v-if="loading" class="flex items-center justify-center h-96">
       <div class="text-center">
         <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
@@ -292,7 +406,7 @@ function copyLink() {
       </div>
     </div>
 
-    
+
     <div v-else-if="error" class="flex items-center justify-center h-96">
       <div class="text-center max-w-md">
         <div class="text-6xl mb-4">❌</div>
@@ -301,9 +415,9 @@ function copyLink() {
       </div>
     </div>
 
-    
+
     <main v-else class="max-w-6xl mx-auto px-6 py-8">
-      
+
       <nav class="mb-6 p-4 rounded-xl bg-slate-950/60 border border-slate-700/50 backdrop-blur-sm">
         <div class="flex items-center gap-2 mb-3">
           <span class="text-sm font-semibold text-slate-300">📑 Table of Contents</span>
@@ -329,7 +443,7 @@ function copyLink() {
           }"
           :id="blockId(blocks.indexOf(block))"
         >
-          
+
           <div class="mb-4 pb-3 border-b border-slate-700/50 flex items-center justify-between">
             <div class="flex items-center gap-3">
               <h3 class="text-base font-semibold text-slate-100">{{ block.title || block.type }}</h3>
@@ -347,14 +461,14 @@ function copyLink() {
             </button>
           </div>
 
-          
+
           <div class="text-xs text-slate-300">
-            
+
             <div v-if="block.type === 'TEXT'" class="whitespace-pre-wrap">
               {{ block.data?.textContent || 'No content' }}
             </div>
 
-            
+
             <div v-else-if="block.type === 'HEADING'">
               <div :class="[
                 block.data?.headingLevel === 1 ? 'text-xl' :
@@ -365,7 +479,7 @@ function copyLink() {
               </div>
             </div>
 
-            
+
             <div v-else-if="block.type === 'DIVIDER'" class="flex items-center gap-2">
               <div class="flex-1">
                 <div :class="[
@@ -379,7 +493,7 @@ function copyLink() {
               </span>
             </div>
 
-            
+
             <div v-else-if="block.type === 'IMAGE' && block.data?.imageUrl" class="space-y-2">
               <img
                 :src="block.data.imageUrl"
@@ -392,40 +506,40 @@ function copyLink() {
               </div>
             </div>
 
-            
-            
+
+
             <div v-else-if="block.type === 'ROLE_MATRIX'" class="h-[260px] overflow-auto pr-1">
               <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div v-for="role in ['Tanks','Healers','Melee','Ranged']" :key="role" class="rounded border p-2"
-                   :style="{ borderColor: (ROLE_COLORS as any)[role as Role] + '55', backgroundColor: (ROLE_COLORS as any)[role as Role] + '15' }">
+                   :style="{ borderColor: roleColor(role) + '55', backgroundColor: roleColor(role) + '15' }">
                 <div class="text-[11px] font-semibold mb-1"
-                     :style="{ color: (ROLE_COLORS as any)[role as Role] }">{{ role }}</div>
+                     :style="{ color: roleColor(role) }">{{ role }}</div>
                 <ul class="space-y-1">
-                  <li v-for="name in (block.data?.roleAssignments?.[role] || [])" :key="name"
+                  <li v-for="name in (getRoleAssignments(block)[role] || [])" :key="name"
                       class="rounded px-2 py-1"
-                      :style="roster[name]?.color ? { backgroundColor: roster[name].color + '22', border: '1px solid ' + roster[name].color + '55', color: roster[name].color } : {}"
-                      :class="[!roster[name]?.color ? 'bg-slate-800/70' : '', matchName(name) ? 'ring-2 ring-emerald-500/70' : '']">
+                      :style="rosterByName[name]?.color ? { backgroundColor: rosterByName[name].color + '22', border: '1px solid ' + rosterByName[name].color + '55', color: rosterByName[name].color } : {}"
+                      :class="[!rosterByName[name]?.color ? 'bg-slate-800/70' : '', matchName(name) ? 'ring-2 ring-emerald-500/70' : '']">
                   {{ name }}
                   </li>
-                  <li v-if="!(block.data?.roleAssignments?.[role]?.length)" class="text-slate-500 italic">No assignments</li>
+                  <li v-if="!(getRoleAssignments(block)[role]?.length)" class="text-slate-500 italic">No assignments</li>
                 </ul>
               </div>
               </div>
             </div>
 
-            
+
             <div v-else-if="block.type === 'GROUPS_GRID'" class="h-[260px] overflow-auto pr-1">
               <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div v-for="g in (block.data?.groups || [])" :key="g.id" class="rounded border border-slate-800 bg-slate-900/60 p-2">
+              <div v-for="g in getGroupsData(block).groups || []" :key="g.id" class="rounded border border-slate-800 bg-slate-900/60 p-2">
                 <div class="text-[11px] font-semibold text-slate-300 mb-1 flex items-center justify-between">
                   <span>{{ g.title }}</span>
-                  <span class="text-slate-500">{{ (g.members || []).length }}/{{ block.data?.playersPerGroup ?? 5 }}</span>
+                  <span class="text-slate-500">{{ (g.members || []).length }}/{{ getGroupsData(block).playersPerGroup ?? 5 }}</span>
                 </div>
                 <ul class="space-y-1">
                   <li v-for="name in (g.members || [])" :key="name"
                       class="rounded px-2 py-1"
-                      :style="roster[name]?.color ? { backgroundColor: roster[name].color + '22', border: '1px solid ' + roster[name].color + '55', color: roster[name].color } : {}"
-                      :class="[!roster[name]?.color ? 'bg-slate-800/70' : '', matchName(name) ? 'ring-2 ring-emerald-500/70' : '']">
+                      :style="rosterByName[name]?.color ? { backgroundColor: rosterByName[name].color + '22', border: '1px solid ' + rosterByName[name].color + '55', color: rosterByName[name].color } : {}"
+                      :class="[!rosterByName[name]?.color ? 'bg-slate-800/70' : '', matchName(name) ? 'ring-2 ring-emerald-500/70' : '']">
                     {{ name }}
                   </li>
                   <li v-if="!(g.members?.length)" class="text-slate-500 italic">Empty</li>
@@ -434,7 +548,7 @@ function copyLink() {
               </div>
             </div>
 
-            
+
             <div v-else-if="block.type === 'BOSS_GRID'" class="overflow-auto h-[260px]">
               <table class="w-full text-xs border border-slate-800">
                 <thead class="sticky top-0 z-10 bg-slate-900/80 backdrop-blur">
@@ -446,168 +560,49 @@ function copyLink() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="pos in (block.data?.positions || [])" :key="pos.id" class="odd:bg-slate-900/40">
+                  <tr v-for="pos in blockPositions(block)" :key="pos.id" class="odd:bg-slate-900/40">
                     <td class="p-2 align-top">{{ pos.label }}</td>
-                    <td class="p-2 align-top">{{ (pos as any).role || 'Any' }}</td>
+                    <td class="p-2 align-top">{{ pos.role || 'Any' }}</td>
                     <td class="p-2 align-top">
                       <div class="space-y-1">
-                        <div v-for="name in (block.data?.assignments?.[pos.id] || [])" :key="name"
+                        <div v-for="name in (getBossAssignmentsData(block).assignments?.[pos.id] || [])" :key="name"
                              class="rounded px-2 py-1"
-                             :style="roster[name]?.color ? { backgroundColor: roster[name].color + '22', border: '1px solid ' + roster[name].color + '55', color: roster[name].color } : {}"
-                             :class="[!roster[name]?.color ? 'bg-slate-800/70' : '', matchName(name) ? 'ring-2 ring-emerald-500/70' : '']">
+                             :style="rosterByName[name]?.color ? { backgroundColor: rosterByName[name].color + '22', border: '1px solid ' + rosterByName[name].color + '55', color: rosterByName[name].color } : {}"
+                             :class="[!rosterByName[name]?.color ? 'bg-slate-800/70' : '', matchName(name) ? 'ring-2 ring-emerald-500/70' : '']">
                           {{ name }}
                         </div>
-                        <div v-if="!(block.data?.assignments?.[pos.id]?.length)" class="text-slate-500 italic">Unassigned</div>
+                        <div v-if="!(getBossAssignmentsData(block).assignments?.[pos.id]?.length)" class="text-slate-500 italic">Unassigned</div>
                       </div>
                     </td>
                     <td class="p-2 align-top">
-                      <div v-if="(block.data?.positionNotes?.[pos.id]?.length)" class="space-y-0.5">
-                        <div v-for="(note, ni) in (block.data?.positionNotes?.[pos.id] || [])" :key="pos.id + ':' + ni" class="text-[11px] text-slate-300">- {{ note }}</div>
+                      <div v-if="(getBossAssignmentsData(block).positionNotes?.[pos.id]?.length)" class="space-y-0.5">
+                        <div v-for="(note, ni) in (getBossAssignmentsData(block).positionNotes?.[pos.id] || [])" :key="pos.id + ':' + ni" class="text-[11px] text-slate-300">- {{ note }}</div>
                       </div>
                       <div v-else class="text-slate-500 italic">—</div>
                     </td>
                   </tr>
-                  <tr v-if="!(block.data?.positions?.length)" class="text-slate-500">
+                  <tr v-if="!(blockPositions(block).length)" class="text-slate-500">
                     <td colspan="4" class="p-4 text-center">No positions</td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
-            
-            <div v-else-if="block.type === 'COOLDOWN_ROTATION'" class="overflow-auto h-[300px]">
-              <table class="min-w-full text-[11px] border border-slate-800 rota-table">
-                <thead>
-                  <tr class="bg-slate-900/70 sticky top-0">
-                    <th class="border-b border-slate-800 p-1 text-left w-40">{{ block.data?.rowHeaderLabel || 'Cooldown' }}</th>
-                    <th v-for="(col, ci) in (block.data?.columns || [])" :key="col.id" class="border-b border-l border-slate-800 p-1" @mouseenter="hoveredCol[blocks.indexOf(block)] = ci" @mouseleave="hoveredCol[blocks.indexOf(block)] = null" :class="hoveredCol[blocks.indexOf(block)] === ci ? 'bg-slate-800/60' : ''">
-                      <div>{{ col.label }}<span v-if="col.sublabel" class="text-slate-500"> — {{ col.sublabel }}</span></div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="row in rowsList(block)" :key="row.id" class="odd:bg-slate-900/40">
-                    <td class="border-t border-slate-800 p-1">
-                      <span v-if="chip(row)" class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-semibold ring-1 ring-inset mr-1" :class="chip(row)!.cls">{{ chip(row)!.text }}</span>
-                      {{ row.label }}
-                    </td>
-                    <td v-for="(col, ci) in (block.data?.columns || [])" :key="col.id" class="border-t border-l border-slate-800 p-1" @mouseenter="hoveredCol[blocks.indexOf(block)] = ci" @mouseleave="hoveredCol[blocks.indexOf(block)] = null" :class="hoveredCol[blocks.indexOf(block)] === ci ? 'bg-slate-800/30' : ''">
-                      <div class="space-y-1">
-                        <template v-if="!isPairRow(row)">
-                          <div v-for="name in cellList(block, row.id, col.id)" :key="name"
-                               class="rounded px-2 py-1"
-                               :style="roster[name]?.color ? { backgroundColor: roster[name].color + '22', border: '1px solid ' + roster[name].color + '55', color: roster[name].color } : {}"
-                               :class="[!roster[name]?.color ? 'bg-slate-800/70' : '', matchName(name) ? 'ring-2 ring-emerald-500/70' : '']">
-                            {{ name }}
-                          </div>
-                        </template>
-                        <template v-else>
-                          <div class="grid grid-cols-2 gap-1">
-                            <div class="rounded bg-slate-900/40 p-1 min-h-6">
-                              <div class="text-[10px] text-slate-500 mb-0.5">{{ row.fromLabel || 'Priest' }}</div>
-                              <div v-if="pairCell(block, row.id, col.id).from"
-                                   class="rounded px-2 py-1"
-                                   :style="roster[pairCell(block, row.id, col.id).from!]?.color ? { backgroundColor: roster[pairCell(block, row.id, col.id).from!].color + '22', border: '1px solid ' + roster[pairCell(block, row.id, col.id).from!].color + '55', color: roster[pairCell(block, row.id, col.id).from!].color } : {}"
-                                   :class="[!roster[pairCell(block, row.id, col.id).from!]?.color ? 'bg-slate-800/70' : '', matchName(pairCell(block, row.id, col.id).from!) ? 'ring-2 ring-emerald-500/70' : '']">
-                                {{ pairCell(block, row.id, col.id).from }}
-                              </div>
-                              <div v-else>
-                                <template v-if="cellList(block, row.id, col.id).length">
-                                  <div class="rounded px-2 py-1"
-                                       :style="roster[cellList(block, row.id, col.id)[0]]?.color ? { backgroundColor: roster[cellList(block, row.id, col.id)[0]].color + '22', border: '1px solid ' + roster[cellList(block, row.id, col.id)[0]].color + '55', color: roster[cellList(block, row.id, col.id)[0]].color } : {}"
-                                       :class="[!roster[cellList(block, row.id, col.id)[0]]?.color ? 'bg-slate-800/70' : '', matchName(cellList(block, row.id, col.id)[0]) ? 'ring-2 ring-emerald-500/70' : '']">
-                                    {{ cellList(block, row.id, col.id)[0] }}
-                                  </div>
-                                </template>
-                                <div v-else class="text-slate-500 text-[11px]">—</div>
-                              </div>
-                            </div>
-                            <div class="rounded bg-slate-900/40 p-1 min-h-6">
-                              <div class="text-[10px] text-slate-500 mb-0.5">{{ row.toLabel || 'Target' }}</div>
-                              <div v-if="pairCell(block, row.id, col.id).to"
-                                   class="rounded px-2 py-1"
-                                   :style="roster[pairCell(block, row.id, col.id).to!]?.color ? { backgroundColor: roster[pairCell(block, row.id, col.id).to!].color + '22', border: '1px solid ' + roster[pairCell(block, row.id, col.id).to!].color + '55', color: roster[pairCell(block, row.id, col.id).to!].color } : {}"
-                                   :class="[!roster[pairCell(block, row.id, col.id).to!]?.color ? 'bg-slate-800/70' : '', matchName(pairCell(block, row.id, col.id).to!) ? 'ring-2 ring-emerald-500/70' : '']">
-                                {{ pairCell(block, row.id, col.id).to }}
-                              </div>
-                              <div v-else>
-                                <template v-if="cellList(block, row.id, col.id).length > 1">
-                                  <div class="rounded px-2 py-1"
-                                       :style="roster[cellList(block, row.id, col.id)[1]]?.color ? { backgroundColor: roster[cellList(block, row.id, col.id)[1]].color + '22', border: '1px solid ' + roster[cellList(block, row.id, col.id)[1]].color + '55', color: roster[cellList(block, row.id, col.id)[1]].color } : {}"
-                                       :class="[!roster[cellList(block, row.id, col.id)[1]]?.color ? 'bg-slate-800/70' : '', matchName(cellList(block, row.id, col.id)[1]) ? 'ring-2 ring-emerald-500/70' : '']">
-                                    {{ cellList(block, row.id, col.id)[1] }}
-                                  </div>
-                                </template>
-                                <div v-else class="text-slate-500 text-[11px]">—</div>
-                              </div>
-                            </div>
-                          </div>
-                        </template>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
 
-            
-            <div v-else-if="block.type === 'CHECKLIST'" class="space-y-2">
-              <div class="text-[11px] text-slate-400">Checklist</div>
-              <ul class="space-y-1">
-                <li v-for="it in (block.data?.checklistItems || [])" :key="it.id"
-                    class="flex items-center gap-2 rounded border border-slate-800 bg-slate-900/60 px-2 py-1">
-                  <span class="inline-flex h-4 w-4 items-center justify-center rounded border"
-                        :class="it.done ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-300' : 'border-slate-600 text-slate-500'">
-                    {{ it.done ? '✓' : '' }}
-                  </span>
-                  <span :class="it.done ? 'line-through text-slate-400' : 'text-slate-200'">{{ it.label }}</span>
-                </li>
-                <li v-if="!(block.data?.checklistItems?.length)" class="text-slate-500 italic">No items</li>
-              </ul>
-            </div>
-
-            
-            <div v-else-if="block.type === 'INTERRUPT_ROTATION'" class="overflow-auto h-[300px]">
-              <table class="min-w-full text-[11px] border border-slate-800 rota-table">
-                <thead>
-                  <tr class="bg-slate-900/70 sticky top-0">
-                    <th class="border-b border-slate-800 p-1 text-left w-40">{{ block.data?.rowHeaderLabel || 'Target' }}</th>
-                    <th v-for="(col, ci) in (block.data?.columns || [])" :key="col.id" class="border-b border-l border-slate-800 p-1" @mouseenter="hoveredCol[blocks.indexOf(block)] = ci" @mouseleave="hoveredCol[blocks.indexOf(block)] = null" :class="hoveredCol[blocks.indexOf(block)] === ci ? 'bg-slate-800/60' : ''">{{ col.label }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="row in rowsList(block)" :key="row.id" class="odd:bg-slate-900/40">
-                    <td class="border-t border-slate-800 p-1">{{ row.label }}</td>
-                    <td v-for="(col, ci) in (block.data?.columns || [])" :key="col.id" class="border-t border-l border-slate-800 p-1" @mouseenter="hoveredCol[blocks.indexOf(block)] = ci" @mouseleave="hoveredCol[blocks.indexOf(block)] = null" :class="hoveredCol[blocks.indexOf(block)] === ci ? 'bg-slate-800/30' : ''">
-                      <div class="space-y-1">
-                        <div v-for="name in cellList(block, row.id, col.id)" :key="name"
-                             class="rounded px-2 py-1"
-                             :style="roster[name]?.color ? { backgroundColor: roster[name].color + '22', border: '1px solid ' + roster[name].color + '55', color: roster[name].color } : {}"
-                             :class="[!roster[name]?.color ? 'bg-slate-800/70' : '', matchName(name) ? 'ring-2 ring-emerald-500/70' : '']">
-                          {{ name }}
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            
             <div v-else-if="block.type === 'BENCH_ROSTER'">
               <div class="text-[11px] text-slate-400 mb-1">Benched players</div>
               <ul class="space-y-1">
-                <li v-for="name in (block.data?.bench || [])" :key="name"
+                <li v-for="name in getBenchList(block)" :key="name"
                     class="rounded px-2 py-1"
-                    :style="roster[name]?.color ? { backgroundColor: roster[name].color + '22', border: '1px solid ' + roster[name].color + '55', color: roster[name].color } : {}"
-                    :class="[!roster[name]?.color ? 'bg-slate-800/70' : '']">
+                    :style="rosterByName[name]?.color ? { backgroundColor: rosterByName[name].color + '22', border: '1px solid ' + rosterByName[name].color + '55', color: rosterByName[name].color } : {}"
+                    :class="[!rosterByName[name]?.color ? 'bg-slate-800/70' : '']">
                   {{ name }}
                 </li>
-                <li v-if="!(block.data?.bench?.length)" class="text-slate-500 italic">No bench</li>
+                <li v-if="!(getBenchList(block).length)" class="text-slate-500 italic">No bench</li>
               </ul>
             </div>
 
-            
+
             <div v-else-if="block.type === 'FREE_CANVAS'">
               <div class="relative border border-slate-800 rounded bg-slate-900/60 overflow-hidden" :style="canvasBackgroundStyle(block)">
                 <div v-if="canvasBackgroundImage(block)" class="absolute inset-0 pointer-events-none">
@@ -618,7 +613,7 @@ function copyLink() {
                   <div class="absolute inset-x-8 top-1/2 border-t border-dashed border-slate-600/40"></div>
                   <div class="absolute inset-y-8 left-1/2 border-l border-dashed border-slate-600/40"></div>
                 </div>
-                <div v-for="s in (block.data?.shapes || [])" :key="s.id"
+                <div v-for="s in getCanvasShapes(block)" :key="s.id"
                      class="absolute rounded"
                      :style="{ left: (s.x||0)+'px', top: (s.y||0)+'px', width: (s.w||60)+'px', height: (s.h||40)+'px', transform: 'rotate(' + Number(s.rotation||0) + 'deg)', transformOrigin: 'center', backgroundColor: s.type==='rect' ? (s.color || '#64748b') : s.type==='circle' ? (s.color || 'rgba(59,130,246,0.15)') : 'transparent', border: (s.type==='text'||s.type==='timer') ? ('1px dashed ' + (s.color || '#64748b')) : (s.type==='circle' ? ((s.borderWidth || 3) + 'px solid ' + (s.border || '#3b82f6')) : 'none'), borderRadius: (s.type === 'circle' || s.type === 'player' || s.type === 'icon') ? '9999px' : '0' }">
                   <template v-if="s.type === 'text'">
@@ -629,7 +624,7 @@ function copyLink() {
                   </template>
                   <template v-else-if="s.type === 'image'">
                     <div class="w-full h-full overflow-hidden rounded">
-                      <img :src="s.url || ''" alt="" class="w-full h-full" :style="{ objectFit: s.fit || 'contain', opacity: (typeof s.opacity==='number'? s.opacity : 1) }"/>
+                      <img :src="s.url || ''" alt="" class="w-full h-full" :style="canvasImageStyle(s)" />
                     </div>
                   </template>
                   <template v-else-if="s.type === 'marker'">
@@ -675,7 +670,7 @@ function copyLink() {
         </div>
       </div>
 
-      
+
       <div class="mt-16 pt-8 border-t border-slate-700/50 text-center">
         <div class="space-y-3">
           <p class="text-sm text-slate-400">
@@ -692,7 +687,7 @@ function copyLink() {
               📋 Copy Plan Link
             </button>
             <button
-              @click="window.print()"
+              @click="printPage"
               class="px-4 py-2 text-xs rounded-lg bg-slate-800/60 hover:bg-slate-700/60 text-slate-300 transition-colors"
             >
               🖨️ Print Plan

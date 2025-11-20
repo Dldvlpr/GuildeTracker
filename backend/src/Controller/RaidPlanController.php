@@ -5,7 +5,6 @@ namespace App\Controller;
 use App\Entity\RaidPlan;
 use App\Entity\GameGuild;
 use App\Repository\RaidPlanRepository;
-use App\Repository\GameCharacterRepository;
 use App\Repository\GameGuildRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use App\Service\WowClassMapper;
@@ -20,11 +19,13 @@ use JsonException;
 #[Route('/api/raid-plans', name: 'api_raid_plan_')]
 class RaidPlanController extends AbstractController
 {
+    private const MAX_BLOCK_BYTES = 500000; // ~500 KB
+    private const MAX_METADATA_BYTES = 150000; // ~150 KB
+
     public function __construct(
         private EntityManagerInterface $em,
         private RaidPlanRepository $raidPlanRepository,
         private GameGuildRepository $guildRepository,
-        private GameCharacterRepository $gameCharacterRepository,
         private WowClassMapper $classMapper,
     ) {}
 
@@ -83,6 +84,8 @@ class RaidPlanController extends AbstractController
 
         $this->denyAccessUnlessGranted('GUILD_MANAGE', $guild);
 
+        $this->validatePlanPayload($data);
+
         $plan = new RaidPlan();
         $plan->setName($data['name'] ?? 'Untitled Raid Plan');
         $plan->setGuild($guild);
@@ -115,6 +118,8 @@ class RaidPlanController extends AbstractController
         $this->denyAccessUnlessGranted('GUILD_MANAGE', $plan->getGuild());
 
         $data = $this->decodeJsonPayload($request);
+
+        $this->validatePlanPayload($data);
 
         if (isset($data['name'])) {
             $plan->setName($data['name']);
@@ -244,9 +249,51 @@ class RaidPlanController extends AbstractController
         return $data;
     }
 
+    private function validatePlanPayload(array $data): void
+    {
+        $blocks = $data['blocks'] ?? [];
+        if (!is_array($blocks)) {
+            throw new BadRequestHttpException('"blocks" must be an array');
+        }
+
+        if (count($blocks) > 200) {
+            throw new BadRequestHttpException('Too many blocks (max 200)');
+        }
+
+        try {
+            $encodedBlocks = json_encode($blocks, JSON_THROW_ON_ERROR);
+        } catch (JsonException $e) {
+            throw new BadRequestHttpException('Invalid blocks payload', $e);
+        }
+
+        if (strlen($encodedBlocks) > self::MAX_BLOCK_BYTES) {
+            throw new BadRequestHttpException('Blocks payload too large (max ~500 KB)');
+        }
+
+        if (array_key_exists('metadata', $data)) {
+            if (!is_array($data['metadata']) && !is_null($data['metadata'])) {
+                throw new BadRequestHttpException('"metadata" must be an object or null');
+            }
+
+            if (is_array($data['metadata'])) {
+                try {
+                    $encodedMetadata = json_encode($data['metadata'], JSON_THROW_ON_ERROR);
+                } catch (JsonException $e) {
+                    throw new BadRequestHttpException('Invalid metadata payload', $e);
+                }
+
+                if (strlen($encodedMetadata) > self::MAX_METADATA_BYTES) {
+                    throw new BadRequestHttpException('Metadata payload too large (max ~150 KB)');
+                }
+            }
+        }
+    }
+
     
     private function serializePlan(RaidPlan $plan): array
     {
+        $canManage = $this->isGranted('GUILD_MANAGE', $plan->getGuild());
+
         return [
             'id' => $plan->getId(),
             'name' => $plan->getName(),
@@ -261,7 +308,7 @@ class RaidPlanController extends AbstractController
             'bossId' => $plan->getBossId(),
             'raidName' => $plan->getRaidName(),
             'isPublic' => $plan->isPublic(),
-            'shareToken' => $plan->getShareToken(),
+            'shareToken' => $canManage ? $plan->getShareToken() : null,
             'createdAt' => $plan->getCreatedAt()->format('c'),
             'updatedAt' => $plan->getUpdatedAt()->format('c'),
         ];
@@ -273,7 +320,8 @@ class RaidPlanController extends AbstractController
         $blocks = $plan->getBlocks();
 
         $nameById = [];
-        $roster = [];
+        $rosterById = [];
+        $rosterByName = [];
         foreach ($plan->getGuild()->getGameCharacters() as $gc) {
             $id = $gc->getUuidToString();
             $name = $gc->getName();
@@ -284,12 +332,16 @@ class RaidPlanController extends AbstractController
                 $cid = $this->classMapper->getClassIdByName($class);
                 if ($cid) $color = $this->classMapper->getClassColor($cid);
             }
-            $roster[$name] = [
+            $entry = [
+                'id' => $id,
+                'name' => $name,
                 'class' => $class,
                 'spec' => $gc->getClassSpec(),
                 'role' => $gc->getRole(),
                 'color' => $color,
             ];
+            $rosterById[$id] = $entry;
+            $rosterByName[$name] = array_values(array_merge($rosterByName[$name] ?? [], [$entry]));
         }
 
         $transform = function (array $block) use (&$transform, $nameById) {
@@ -420,7 +472,9 @@ class RaidPlanController extends AbstractController
             'raidName' => $plan->getRaidName(),
             'createdAt' => $plan->getCreatedAt()->format('c'),
             'updatedAt' => $plan->getUpdatedAt()->format('c'),
-            'roster' => $roster,
+            // Prefer roster keyed by ID, also expose name-keyed list for compatibility
+            'roster' => $rosterById,
+            'rosterByName' => $rosterByName,
         ];
     }
 }

@@ -11,13 +11,48 @@ import PlanManagerModal from '@/components/PlanManagerModal.vue';
 import SmartAssignModal from '@/components/SmartAssignModal.vue';
 import type { RaidPlanBlock, BlockType } from '@/interfaces/raidPlan.interface.ts';
 import type { Character } from '@/interfaces/game.interface';
-import { Role } from '@/interfaces/game.interface';
+import { Role, CharacterStatus } from '@/interfaces/game.interface';
 import { getCharactersByGuildId } from '@/services/character.service';
 import { getRoleByClassAndSpec } from '@/data/gameData';
 import { createRaidPlan, updateRaidPlan, generateShareLink, revokeShareLink, getRaidPlan, type RaidPlanDTO } from '@/services/raidPlan.service'
 import { getGameGuild } from '@/services/gameGuild.service'
 import type { GameGuild } from '@/interfaces/GameGuild.interface'
 import type { RaidBoss } from '@/data/raidData';
+
+type RoleKey = 'Tanks' | 'Healers' | 'Melee' | 'Ranged';
+
+const RoleMap: Record<RoleKey, Role> = {
+  Tanks: Role.TANKS,
+  Healers: Role.HEALERS,
+  Melee: Role.MELEE,
+  Ranged: Role.RANGED,
+};
+
+type GroupsGridGroup = { id: string; title: string; members: string[] };
+type GroupsGridData = { groupCount?: number; playersPerGroup?: number; groups?: GroupsGridGroup[]; specOverrides?: Record<string, string> };
+type RoleAssignments = Record<RoleKey, string[]>;
+type CooldownColumn = { id: string; label: string; sublabel?: string };
+type CooldownRow = { id: string; label: string; cells?: Record<string, string | null> };
+type InterruptColumn = { id: string; label: string };
+type InterruptRow = { id: string; label: string; cells?: Record<string, string | null> };
+type PlanMetadata = { folder?: string | null } | null | undefined;
+
+type RaidPlanCanvasExpose = {
+  assignToSelected: (characterId: string) => boolean;
+  selectedBlockId: string | null;
+};
+
+type CharacterSidebarExpose = {
+  setRoleFilter?: (role: string) => void;
+};
+
+declare global {
+  interface Window {
+    __raid_onDocClick?: (e: MouseEvent) => void;
+    __raid_onDocKey?: (e: KeyboardEvent) => void;
+    ClipboardItem?: typeof ClipboardItem;
+  }
+}
 
 const planName = ref('My Raid Plan');
 const planRaidName = ref<string>('');
@@ -27,6 +62,7 @@ const guildId = ref<string | null>(null);
 const characters = ref<Character[]>([]);
 const loadingChars = ref(false);
 const charsError = ref<string | null>(null);
+const guildLoading = ref(true);
 
 let nextId = 1;
 let bootstrapToken = 0;
@@ -37,6 +73,12 @@ const versionsKey = ref<string>('');
 const history: RaidPlanBlock[][] = [];
 const historySignatures: string[] = [];
 const HISTORY_LIMIT = 50;
+const HISTORY_BYTE_LIMIT = 400_000;
+const HISTORY_DEBOUNCE_MS = 200;
+let lastHistoryAt = 0;
+let historyTooLargeWarned = false;
+const DRAFT_BYTE_LIMIT = 400_000;
+let draftTooLargeWarned = false;
 let historyIndex = -1;
 let historyMuteDepth = 0;
 let autosaveTimer: number | null = null;
@@ -44,7 +86,7 @@ const showHistory = ref(false);
 const showTemplates = ref(false);
 const saving = ref(false);
 const lastSavedAt = ref<number | null>(null);
-const canvasRef = ref<any>(null);
+const canvasRef = ref<(InstanceType<typeof RaidPlanCanvas> & RaidPlanCanvasExpose) | null>(null);
   const toolsMenuOpen = ref(false);
   const toolsMenuRef = ref<HTMLElement | null>(null);
 const showHelp = ref(false);
@@ -55,11 +97,19 @@ const templateName = ref('');
 const showBossLibrary = ref(false);
 const shareOpen = ref(false)
 const shareUrl = ref('')
+const shareToken = ref<string | null>(null)
 const planId = ref<number | null>(null)
 const planIsPublic = ref(false)
 
 function planIdKey(gid: string) {
   return `raidPlan:planId:${gid}`
+}
+
+const frontOrigin = import.meta.env.VITE_FRONT_URL || (typeof window !== 'undefined' ? window.location.origin : '')
+const FRONT_BASE = frontOrigin.replace(/\/$/, '')
+
+function buildShareUrl(token: string): string {
+  return `${FRONT_BASE}/raid-plan/${token}`
 }
 
 function resolveGuildId(param: unknown): string | null {
@@ -77,11 +127,11 @@ const showSmartAssign = ref(false)
 
 // Permissions
 const guild = ref<GameGuild | null>(null)
-const myRole = computed(() => guild.value?.myRole || 'GM')
-const canEdit = computed(() => myRole.value === 'GM' || myRole.value === 'Officer')
+const myRole = computed(() => guild.value?.myRole || null)
+const canEdit = computed(() => !guildLoading.value && (myRole.value === 'GM' || myRole.value === 'Officer'))
 
 function openPlanManager() {
-  if (!guildId.value) return
+  if (!guildId.value || guildLoading.value) return
   showPlanManager.value = true
 }
 
@@ -93,6 +143,9 @@ function resetHistory() {
   history.length = 0
   historySignatures.length = 0
   historyIndex = -1
+  lastHistoryAt = 0
+  historyTooLargeWarned = false
+  draftTooLargeWarned = false
   pushHistorySnapshot(true)
 }
 
@@ -101,10 +154,19 @@ function handleLoadPlan(p: RaidPlanDTO, opts?: { silent?: boolean }) {
   planName.value = p.name
   planRaidName.value = p.raidName || ''
   planIsPublic.value = Boolean(p.isPublic)
-  if (!planIsPublic.value) {
+  shareToken.value = p.shareToken || null
+  if (planIsPublic.value && shareToken.value) {
+    shareUrl.value = buildShareUrl(shareToken.value)
+  } else {
     shareUrl.value = ''
   }
-  try { planFolder.value = (p.metadata as any)?.folder || '' } catch { planFolder.value = '' }
+  try {
+    const meta = p.metadata as PlanMetadata;
+    const folder = meta && typeof meta === 'object' ? meta.folder : null;
+    planFolder.value = typeof folder === 'string' ? folder : ''
+  } catch {
+    planFolder.value = ''
+  }
   runWithoutHistory(() => {
     blocks.value = JSON.parse(JSON.stringify(p.blocks))
   })
@@ -120,9 +182,10 @@ async function loadPlanFromServer(id: number, token?: number) {
     const plan = await getRaidPlan(id)
     if (token && token !== bootstrapToken) return
     handleLoadPlan(plan, { silent: true })
-  } catch (e: any) {
+  } catch (e: unknown) {
     if (token && token !== bootstrapToken) return
-    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: e?.message || 'Failed to load plan from server' } }))
+    const message = e instanceof Error ? e.message : 'Failed to load plan from server';
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message } }))
     if (guildId.value) {
       localStorage.removeItem(planIdKey(guildId.value))
     }
@@ -134,61 +197,68 @@ async function loadPlanFromServer(id: number, token?: number) {
 
 async function bootstrapGuildContext(id: string) {
   const token = ++bootstrapToken
-  guildId.value = id
-  makeKeys(id)
-  shareUrl.value = ''
-  planIsPublic.value = false
-  planName.value = 'My Raid Plan'
-  planRaidName.value = ''
-  planFolder.value = ''
-
-  let storedPlanId: number | null = null
+  guildLoading.value = true
   try {
-    const stored = localStorage.getItem(planIdKey(id))
-    if (stored) {
-      const parsed = parseInt(stored, 10)
-      if (Number.isFinite(parsed)) storedPlanId = parsed
-    }
-  } catch {}
+    guildId.value = id
+    makeKeys(id)
+    shareUrl.value = ''
+    shareToken.value = null
+    planIsPublic.value = false
+    planName.value = 'My Raid Plan'
+    planRaidName.value = ''
+    planFolder.value = ''
 
-  planId.value = storedPlanId
-  runWithoutHistory(() => {
-    blocks.value = []
-  })
-  loadDraft()
-  recalcNextId()
-  resetHistory()
+    let storedPlanId: number | null = null
+    try {
+      const stored = localStorage.getItem(planIdKey(id))
+      if (stored) {
+        const parsed = parseInt(stored, 10)
+        if (Number.isFinite(parsed)) storedPlanId = parsed
+      }
+    } catch {}
 
-  loadingChars.value = true
-  charsError.value = null
+    planId.value = storedPlanId
+    runWithoutHistory(() => {
+      blocks.value = []
+    })
+    loadDraft()
+    recalcNextId()
+    resetHistory()
 
-  try {
-    const g = await getGameGuild(id)
-    if (token !== bootstrapToken) return
-    if (g.ok) {
-      guild.value = g.data
-    } else {
+    loadingChars.value = true
+    charsError.value = null
+
+    try {
+      const g = await getGameGuild(id)
+      if (token !== bootstrapToken) return
+      if (g.ok) {
+        guild.value = g.data
+      } else {
+        guild.value = null
+      }
+    } catch {
+      if (token !== bootstrapToken) return
       guild.value = null
     }
-  } catch {
-    if (token !== bootstrapToken) return
-    guild.value = null
-  }
 
-  const res = await getCharactersByGuildId(id).catch((e) => ({ ok: false, error: e?.message || 'Network error' } as const))
-  if (token !== bootstrapToken) return
-  loadingChars.value = false
-  if (!res.ok) {
-    characters.value = generateMockRoster()
-    charsError.value = res.error || 'Using local mock roster'
-  } else {
-    characters.value = res.data
-    charsError.value = null
-  }
-
-  if (planId.value != null) {
-    await loadPlanFromServer(planId.value, token)
+    const res = await getCharactersByGuildId(id).catch((e) => ({ ok: false, error: e?.message || 'Network error' } as const))
     if (token !== bootstrapToken) return
+    loadingChars.value = false
+    if (!res.ok) {
+      characters.value = generateMockRoster()
+      charsError.value = res.error || 'Using local mock roster'
+      window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'warning', message: `Roster unavailable: ${charsError.value}` } }))
+    } else {
+      characters.value = res.data
+      charsError.value = null
+    }
+
+    if (planId.value != null) {
+      await loadPlanFromServer(planId.value, token)
+      if (token !== bootstrapToken) return
+    }
+  } finally {
+    if (token === bootstrapToken) guildLoading.value = false
   }
 }
 
@@ -202,6 +272,7 @@ function handleCreateNew() {
   planFolder.value = ''
   planIsPublic.value = false
   shareUrl.value = ''
+  shareToken.value = null
   runWithoutHistory(() => {
     blocks.value = []
   })
@@ -239,6 +310,23 @@ function pushHistorySnapshot(force = false) {
   if (!force && historySignatures[historyIndex] === serialized) {
     return;
   }
+
+  if (!force) {
+    const now = Date.now();
+    if (now - lastHistoryAt < HISTORY_DEBOUNCE_MS) {
+      return;
+    }
+  }
+
+  if (serialized.length > HISTORY_BYTE_LIMIT) {
+    if (!historyTooLargeWarned) {
+      window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'warning', message: 'History snapshot skipped: plan too large (limit ~400 KB)' } }))
+      historyTooLargeWarned = true;
+    }
+    return;
+  }
+
+  lastHistoryAt = Date.now();
 
   const snapshot = JSON.parse(serialized);
 
@@ -281,7 +369,16 @@ function saveDraftNow() {
   if (!draftKey.value) return;
   saving.value = true;
   const payload = { planName: planName.value, blocks: cloneBlocks(), ts: Date.now() };
-  localStorage.setItem(draftKey.value, JSON.stringify(payload));
+  const serialized = JSON.stringify(payload);
+  if (serialized.length > DRAFT_BYTE_LIMIT) {
+    if (!draftTooLargeWarned) {
+      window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'warning', message: 'Draft not saved: payload too large (limit ~400 KB)' } }))
+      draftTooLargeWarned = true;
+    }
+    saving.value = false;
+    return;
+  }
+  localStorage.setItem(draftKey.value, serialized);
   saving.value = false;
   lastSavedAt.value = Date.now();
 }
@@ -303,22 +400,33 @@ async function saveToDatabase() {
       })
       planId.value = created.id
       planIsPublic.value = Boolean(created.isPublic)
-      if (!planIsPublic.value) shareUrl.value = ''
+      shareToken.value = created.shareToken || null
+      if (planIsPublic.value && shareToken.value) {
+        shareUrl.value = buildShareUrl(shareToken.value)
+      } else {
+        shareUrl.value = ''
+      }
       localStorage.setItem(planIdKey(guildId.value), String(created.id))
       window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: 'Raid plan created' } }))
     } else {
       const updated: RaidPlanDTO = await updateRaidPlan(planId.value, {
         name: planName.value || 'Untitled Raid Plan',
         blocks: cloneBlocks(),
-        raidName: planRaidName.value || null,
+        raidName: planRaidName.value || undefined,
         metadata: { folder: planFolder.value || null },
       })
       planIsPublic.value = Boolean(updated.isPublic)
-      if (!planIsPublic.value) shareUrl.value = ''
+      shareToken.value = updated.shareToken || shareToken.value
+      if (planIsPublic.value && shareToken.value) {
+        shareUrl.value = buildShareUrl(shareToken.value)
+      } else {
+        shareUrl.value = ''
+      }
       window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: 'Raid plan saved' } }))
     }
-  } catch (e: any) {
-    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: e?.message || 'Failed to save plan' } }))
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Failed to save plan';
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message } }))
   }
 }
 
@@ -328,10 +436,18 @@ async function ensureShareLink(): Promise<string | null> {
     await saveToDatabase()
   }
   if (planId.value == null) return null
-  const { shareUrl: url } = await generateShareLink(planId.value)
-  shareUrl.value = url
+  if (planIsPublic.value && shareUrl.value) {
+    return shareUrl.value
+  }
+  if (planIsPublic.value && !shareUrl.value && shareToken.value) {
+    shareUrl.value = buildShareUrl(shareToken.value)
+    return shareUrl.value
+  }
+  const { shareUrl: url, shareToken: token } = await generateShareLink(planId.value)
+  shareToken.value = token || shareToken.value
+  shareUrl.value = url || (shareToken.value ? buildShareUrl(shareToken.value) : '')
   planIsPublic.value = true
-  return url
+  return shareUrl.value || null
 }
 
 async function openShare() {
@@ -344,8 +460,9 @@ async function openShare() {
     const url = await ensureShareLink()
     if (!url) return
     shareOpen.value = true
-  } catch (e: any) {
-    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: e?.message || 'Failed to generate share link' } }))
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Failed to generate share link';
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message } }))
   }
 }
 
@@ -363,8 +480,9 @@ async function previewPublic() {
     const url = await ensureShareLink()
     if (!url) return
     window.open(url, '_blank', 'noopener')
-  } catch (e: any) {
-    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: e?.message || 'Failed to open preview' } }))
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Failed to open preview';
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message } }))
   }
 }
 
@@ -374,9 +492,11 @@ async function handleRevokeShare() {
     await revokeShareLink(planId.value)
     planIsPublic.value = false
     shareUrl.value = ''
+    shareToken.value = null
     window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: 'Public link revoked' } }))
-  } catch (e: any) {
-    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: e?.message || 'Failed to revoke link' } }))
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Failed to revoke link';
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message } }))
   }
 }
 
@@ -407,8 +527,8 @@ function getVersions(): VersionEntry[] {
   try {
     const txt = localStorage.getItem(versionsKey.value);
     if (!txt) return [];
-    const arr = JSON.parse(txt) as any[];
-    return Array.isArray(arr) ? arr : [];
+    const arr = JSON.parse(txt);
+    return Array.isArray(arr) ? (arr as VersionEntry[]) : [];
   } catch { return []; }
 }
 
@@ -473,8 +593,9 @@ async function quickStartCreate(p?: 'raid40' | 'raid25' | 'raid20' | 'raid10') {
     if (!planName.value.trim()) planName.value = 'New Raid Plan'
     await saveToDatabase()
     window.scrollTo({ top: 0, behavior: 'smooth' })
-  } catch (e: any) {
-    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: e?.message || 'Failed to create plan' } }))
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Failed to create plan';
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message } }))
   }
 }
 
@@ -717,6 +838,7 @@ function resetToOnboarding() {
   planFolder.value = ''
   planIsPublic.value = false
   shareUrl.value = ''
+  shareToken.value = null
   runWithoutHistory(() => {
     blocks.value = []
   })
@@ -743,21 +865,23 @@ onMounted(async () => {
   const onDocKey = (e: KeyboardEvent) => {
     if (e.key === 'Escape' && toolsMenuOpen.value) toolsMenuOpen.value = false
   }
-  document.addEventListener('click', onDocClick)
-  document.addEventListener('keydown', onDocKey)
-  ;(window as any).__raid_onDocClick = onDocClick
-  ;(window as any).__raid_onDocKey = onDocKey
+  document.addEventListener('click', onDocClick);
+  document.addEventListener('keydown', onDocKey);
+  (window as Window).__raid_onDocClick = onDocClick;
+  (window as Window).__raid_onDocKey = onDocKey;
 
   const initialGuildId = currentRouteGuildId()
   if (initialGuildId) {
     await bootstrapGuildContext(initialGuildId)
+  } else {
+    guildLoading.value = false
   }
 });
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKey);
-  const onDocClick = (window as any).__raid_onDocClick as ((e: MouseEvent) => void) | undefined
-  const onDocKey = (window as any).__raid_onDocKey as ((e: KeyboardEvent) => void) | undefined
+  const onDocClick = (window as Window).__raid_onDocClick
+  const onDocKey = (window as Window).__raid_onDocKey
   if (onDocClick) document.removeEventListener('click', onDocClick)
   if (onDocKey) document.removeEventListener('keydown', onDocKey)
 });
@@ -790,6 +914,42 @@ function recalcNextId() {
   nextId = maxId + 1;
 }
 
+function groupsFromBlock(block: RaidPlanBlock): GroupsGridGroup[] {
+  const data = block.data as GroupsGridData | undefined;
+  return Array.isArray(data?.groups) ? data.groups : [];
+}
+
+function benchFromBlock(block: RaidPlanBlock): string[] {
+  const bench = (block.data as { bench?: unknown } | undefined)?.bench;
+  return Array.isArray(bench) ? bench.map((id) => String(id)) : [];
+}
+
+function roleAssignmentsFromBlock(block: RaidPlanBlock): RoleAssignments | null {
+  const ra = (block.data as { roleAssignments?: unknown } | undefined)?.roleAssignments;
+  if (ra && typeof ra === 'object') return ra as RoleAssignments;
+  return null;
+}
+
+function cooldownColumnsFromBlock(block: RaidPlanBlock): CooldownColumn[] {
+  const cols = (block.data as { columns?: unknown } | undefined)?.columns;
+  return Array.isArray(cols) ? (cols as CooldownColumn[]) : [];
+}
+
+function cooldownRowsFromBlock(block: RaidPlanBlock): CooldownRow[] {
+  const rows = (block.data as { rows?: unknown } | undefined)?.rows;
+  return Array.isArray(rows) ? (rows as CooldownRow[]) : [];
+}
+
+function interruptColumnsFromBlock(block: RaidPlanBlock): InterruptColumn[] {
+  const cols = (block.data as { columns?: unknown } | undefined)?.columns;
+  return Array.isArray(cols) ? (cols as InterruptColumn[]) : [];
+}
+
+function interruptRowsFromBlock(block: RaidPlanBlock): InterruptRow[] {
+  const rows = (block.data as { rows?: unknown } | undefined)?.rows;
+  return Array.isArray(rows) ? (rows as InterruptRow[]) : [];
+}
+
 function loadTemplate(b: RaidPlanBlock[]) {
   runWithoutHistory(() => {
     blocks.value = JSON.parse(JSON.stringify(b));
@@ -799,62 +959,47 @@ function loadTemplate(b: RaidPlanBlock[]) {
   recalcNextId();
 }
 
-function generateMockRoster() {
+function generateMockRoster(): Character[] {
   const now = Date.now();
-  const mk = (id: number, name: string, cls: string, spec: string | undefined, role: any) => ({
+  const mk = (id: number, name: string, cls: string, spec: string | undefined, role: Role) => ({
     id: `mock-${now}-${id}`,
     name,
     class: cls,
     spec,
     role,
-    status: 'active',
+    status: CharacterStatus.ACTIVE,
     createdAt: new Date(now).toISOString(),
-  });
-  return [
-    mk(1, 'Thorin', 'Warrior', 'Protection', 'Tanks'),
-    mk(2, 'Aegwyn', 'Paladin', 'Holy', 'Healers'),
-    mk(3, 'Lirien', 'Priest', 'Discipline', 'Healers'),
-    mk(4, 'Gromm', 'Warrior', 'Arms', 'Melee'),
-    mk(5, 'Fenris', 'Rogue', 'Assassination', 'Melee'),
-    mk(6, 'Sylva', 'Hunter', 'Marksmanship', 'Ranged'),
-    mk(7, 'Dalar', 'Mage', 'Frost', 'Ranged'),
-    mk(8, 'Elwyn', 'Druid', 'Restoration', 'Healers'),
-    mk(9, 'Voljin', 'Shaman', 'Enhancement', 'Melee'),
-    mk(10, 'Tyrande', 'Priest', 'Holy', 'Healers'),
-    mk(11, 'Rexx', 'Hunter', 'Beast Mastery', 'Ranged'),
-    mk(12, 'Vale', 'Warlock', 'Destruction', 'Ranged'),
-    mk(13, 'Jaina', 'Mage', 'Arcane', 'Ranged'),
-    mk(14, 'Uther', 'Paladin', 'Protection', 'Tanks'),
-    mk(15, 'Brox', 'Warrior', 'Fury', 'Melee'),
-    mk(16, 'Kael', 'Mage', 'Fire', 'Ranged'),
-    mk(17, 'Velen', 'Priest', 'Shadow', 'Ranged'),
-    mk(18, 'Malf', 'Druid', 'Feral', 'Melee'),
-    mk(19, 'Andu', 'Paladin', 'Retribution', 'Melee'),
-    mk(20, 'Medivh', 'Mage', 'Frost', 'Ranged'),
-  ] as unknown as Character[];
-}
+  } satisfies Character);
 
-function getAllAssignedIds(): Set<string> {
-  const ids = new Set<string>();
-  for (const b of blocks.value) {
-    if (b.type === 'GROUPS_GRID') {
-      for (const g of (b.data?.groups ?? []) as any[]) {
-        (g.members ?? []).forEach((id: string) => ids.add(id));
-      }
-    }
-    if (b.type === 'ROLE_MATRIX') {
-      const ra = b.data?.roleAssignments as any;
-      if (ra) Object.values(ra).flat().forEach((id: any) => ids.add(String(id)));
-    }
-  }
-  return ids;
+  return [
+    mk(1, 'Thorin', 'Warrior', 'Protection', Role.TANKS),
+    mk(2, 'Aegwyn', 'Paladin', 'Holy', Role.HEALERS),
+    mk(3, 'Lirien', 'Priest', 'Discipline', Role.HEALERS),
+    mk(4, 'Gromm', 'Warrior', 'Arms', Role.MELEE),
+    mk(5, 'Fenris', 'Rogue', 'Assassination', Role.MELEE),
+    mk(6, 'Sylva', 'Hunter', 'Marksmanship', Role.RANGED),
+    mk(7, 'Dalar', 'Mage', 'Frost', Role.RANGED),
+    mk(8, 'Elwyn', 'Druid', 'Restoration', Role.HEALERS),
+    mk(9, 'Voljin', 'Shaman', 'Enhancement', Role.MELEE),
+    mk(10, 'Tyrande', 'Priest', 'Holy', Role.HEALERS),
+    mk(11, 'Rexx', 'Hunter', 'Beast Mastery', Role.RANGED),
+    mk(12, 'Vale', 'Warlock', 'Destruction', Role.RANGED),
+    mk(13, 'Jaina', 'Mage', 'Arcane', Role.RANGED),
+    mk(14, 'Uther', 'Paladin', 'Protection', Role.TANKS),
+    mk(15, 'Brox', 'Warrior', 'Fury', Role.MELEE),
+    mk(16, 'Kael', 'Mage', 'Fire', Role.RANGED),
+    mk(17, 'Velen', 'Priest', 'Shadow', Role.RANGED),
+    mk(18, 'Malf', 'Druid', 'Feral', Role.MELEE),
+    mk(19, 'Andu', 'Paladin', 'Retribution', Role.MELEE),
+    mk(20, 'Medivh', 'Mage', 'Frost', Role.RANGED),
+  ];
 }
 
 const benchedIds = computed<Set<string>>(() => {
   const set = new Set<string>();
   for (const b of blocks.value) {
     if (b.type === 'BENCH_ROSTER') {
-      for (const id of ((b.data as any)?.bench ?? []) as string[]) set.add(String(id));
+      for (const id of benchFromBlock(b)) set.add(id);
     }
   }
   return set;
@@ -874,10 +1019,11 @@ function computeSummary() {
 
   for (const b of blocks.value) {
     if (b.type === 'ROLE_MATRIX') {
-      const ra = (b.data?.roleAssignments ?? {}) as Record<Role, string[]>;
-      (['Tanks','Healers','Melee','Ranged'] as Role[]).forEach((rr) => {
+      const ra = roleAssignmentsFromBlock(b);
+      (['Tanks','Healers','Melee','Ranged'] as RoleKey[]).forEach((rr) => {
         for (const id of (ra?.[rr] ?? [])) {
-          roleByChar.set(String(id), rr);
+          const roleEnum = RoleMap[rr];
+          roleByChar.set(String(id), roleEnum);
         }
       });
     }
@@ -928,13 +1074,32 @@ function buildMissingText(t: number, h: number, dps: number): string | null {
 function ensureGroupsBlock(groupCount: number, size: number) {
   const existing = blocks.value.find(b => b.type === 'GROUPS_GRID');
   if (existing) {
-    (existing.data as any).groupCount = groupCount;
-    (existing.data as any).playersPerGroup = size;
-    (existing.data as any).groups = Array.from({ length: groupCount }).map((_, i) => ({ id: String(i + 1), title: `Group ${i + 1}`, members: (existing.data as any).groups?.[i]?.members || [] }));
-    updateBlock(existing);
+    const currentGroups = groupsFromBlock(existing);
+    const groups = Array.from({ length: groupCount }).map((_, i) => ({
+      id: String(i + 1),
+      title: `Group ${i + 1}`,
+      members: currentGroups[i]?.members ?? [],
+    }));
+    const updated: RaidPlanBlock = {
+      ...existing,
+      data: { ...(existing.data || {}), groupCount, playersPerGroup: size, groups },
+    };
+    updateBlock(updated);
     return;
   }
-  const base: RaidPlanBlock = { id: String(nextId++), type: 'GROUPS_GRID', colStart: 1, colSpan: 12, row: 0, title: 'Groups', data: { groupCount, playersPerGroup: size, groups: Array.from({ length: groupCount }).map((_, i) => ({ id: String(i + 1), title: `Group ${i + 1}`, members: [] })) } };
+  const base: RaidPlanBlock = {
+    id: String(nextId++),
+    type: 'GROUPS_GRID',
+    colStart: 1,
+    colSpan: 12,
+    row: 0,
+    title: 'Groups',
+    data: {
+      groupCount,
+      playersPerGroup: size,
+      groups: Array.from({ length: groupCount }).map((_, i) => ({ id: String(i + 1), title: `Group ${i + 1}`, members: [] as string[] })),
+    },
+  };
   blocks.value.push(base);
 }
 
@@ -963,20 +1128,21 @@ function copyMarkdown() {
   for (const b of blocks.value) {
     if (b.type === 'GROUPS_GRID') {
       lines.push(`\n## Groups`);
-      for (const g of (b.data?.groups ?? []) as any[]) {
-        const names = (g.members ?? []).map((id: string) => characters.value.find(c => c.id === id)?.name || 'Unknown');
+      for (const g of groupsFromBlock(b)) {
+        const names = (g.members ?? []).map((id) => characters.value.find(c => c.id === id)?.name || 'Unknown');
         lines.push(`- ${g.title}: ${names.join(', ')}`);
       }
     }
     if (b.type === 'COOLDOWN_ROTATION') {
       lines.push(`\n## Cooldown Rotation`);
-      const cols = (b.data?.columns ?? []) as any[];
-      const rows = (b.data?.rows ?? []) as any[];
+      const cols = cooldownColumnsFromBlock(b);
+      const rows = cooldownRowsFromBlock(b);
       lines.push(`| CD | ${cols.map(c => c.label).join(' | ')} |`);
       lines.push(`|${Array(cols.length + 1).fill('---').join('|')}|`);
       for (const r of rows) {
         const cells = cols.map(c => {
-          const id = r.cells?.[c.id]; const name = characters.value.find(cc => cc.id === id)?.name || '';
+          const id = r.cells?.[c.id];
+          const name = id ? (characters.value.find(cc => cc.id === id)?.name || '') : '';
           return name || '—';
         });
         lines.push(`| ${r.label} | ${cells.join(' | ')} |`);
@@ -984,13 +1150,14 @@ function copyMarkdown() {
     }
     if (b.type === 'INTERRUPT_ROTATION') {
       lines.push(`\n## Interrupt Rotation`);
-      const cols = (b.data?.columns ?? []) as any[];
-      const rows = (b.data?.rows ?? []) as any[];
+      const cols = interruptColumnsFromBlock(b);
+      const rows = interruptRowsFromBlock(b);
       lines.push(`| Target | ${cols.map(c => c.label).join(' | ')} |`);
       lines.push(`|${Array(cols.length + 1).fill('---').join('|')}|`);
       for (const r of rows) {
         const cells = cols.map(c => {
-          const id = r.cells?.[c.id]; const name = characters.value.find(cc => cc.id === id)?.name || '';
+          const id = r.cells?.[c.id];
+          const name = id ? (characters.value.find(cc => cc.id === id)?.name || '') : '';
           return name || '—';
         });
         lines.push(`| ${r.label} | ${cells.join(' | ')} |`);
@@ -1016,7 +1183,7 @@ function renderExportCanvas(): HTMLCanvasElement {
   const rowHeight = 28;
   const padding = 16;
   let rows = 2; // header lines
-  for (const b of groupsBlocks) rows += ((b.data as any)?.groups?.length || 0) + 1; // title + groups
+  for (const b of groupsBlocks) rows += groupsFromBlock(b).length + 1; // title + groups
   const height = Math.max(200, rows * rowHeight + padding * 2);
   const canvas = document.createElement('canvas');
   canvas.width = width; canvas.height = height;
@@ -1032,8 +1199,8 @@ function renderExportCanvas(): HTMLCanvasElement {
   for (const b of groupsBlocks) {
     ctx.fillStyle = '#94a3b8'; ctx.font = 'bold 14px system-ui, sans-serif'; ctx.fillText('Groups', padding, y); y += rowHeight;
     ctx.font = '12px system-ui, sans-serif'; ctx.fillStyle = '#e5e7eb';
-    for (const g of (b.data as any).groups as any[]) {
-      const names = (g.members ?? []).map((id: string) => characters.value.find(c => c.id === id)?.name || 'Unknown').join(', ');
+    for (const g of groupsFromBlock(b)) {
+      const names = (g.members ?? []).map((id) => characters.value.find(c => c.id === id)?.name || 'Unknown').join(', ');
       ctx.fillText(`${g.title}: ${names}`, padding, y);
       y += rowHeight;
     }
@@ -1043,19 +1210,41 @@ function renderExportCanvas(): HTMLCanvasElement {
 
 async function copyImage() {
   const canvas = renderExportCanvas();
-  if ((navigator as any).clipboard && (window as any).ClipboardItem) {
-    const blob: Blob = await new Promise(res => canvas.toBlob(b => res(b!), 'image/png'));
-    const item = new (window as any).ClipboardItem({ 'image/png': blob });
-    await (navigator as any).clipboard.write([item]);
+  try {
+    const clipboardItemCtor = window.ClipboardItem;
+    if (navigator.clipboard && clipboardItemCtor) {
+      const blob: Blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((b) => {
+          if (b) resolve(b);
+          else reject(new Error('Failed to render image'));
+        }, 'image/png');
+      });
+      const item = new clipboardItemCtor({ 'image/png': blob });
+      await navigator.clipboard.write([item]);
+      return;
+    }
+  } catch {
+    // Fallback handled below
   }
+  downloadPng(canvas);
 }
 
-function downloadPng() {
-  const canvas = renderExportCanvas();
+function downloadPng(existing?: HTMLCanvasElement) {
+  const canvas = existing || renderExportCanvas();
   const a = document.createElement('a');
   a.href = canvas.toDataURL('image/png');
   a.download = `${planName.value.replace(/\s+/g,'_')}.png`;
   a.click();
+}
+
+function copyShareLink() {
+  if (!shareUrl.value) return;
+  try {
+    navigator.clipboard?.writeText(shareUrl.value);
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'success', message: 'Link copied' } }))
+  } catch {
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type: 'error', message: 'Copy failed' } }))
+  }
 }
 
 const groupTargets = computed(() => {
@@ -1068,8 +1257,8 @@ const groupTargets = computed(() => {
   }
 });
 
-const sidebarRef = ref<any>(null);
-function setRosterFilter(r: any) {
+const sidebarRef = ref<(InstanceType<typeof CharacterSidebar> & CharacterSidebarExpose) | null>(null);
+function setRosterFilter(r: string) {
   sidebarRef.value?.setRoleFilter?.(r);
 }
 
@@ -1165,6 +1354,7 @@ function applyBossData(boss: RaidBoss) {
     title: 'Boss Header',
     colStart: 1,
     colSpan: 12,
+    row: 0,
     data: {
       headingLevel: 1,
       headingText: `${boss.name} - ${boss.raid}`,
@@ -1178,6 +1368,7 @@ function applyBossData(boss: RaidBoss) {
     title: 'Resources',
     colStart: 1,
     colSpan: 12,
+    row: 0,
     data: {
       textContent: `📖 Guide: ${boss.wowheadUrl}\n\nExpansion: ${boss.expansion}\nNPC ID: ${boss.npcId}`,
     },
@@ -1190,6 +1381,7 @@ function applyBossData(boss: RaidBoss) {
     title: `${boss.name} - Positions`,
     colStart: 1,
     colSpan: 6,
+    row: 0,
     data: {
       positions: [
         { id: 'pos1', label: 'Tank 1', accepts: ['Tanks'] },
@@ -1210,6 +1402,7 @@ function applyBossData(boss: RaidBoss) {
     title: `${boss.name} - Cooldowns`,
     colStart: 7,
     colSpan: 6,
+    row: 0,
     data: {
       columns: [
         { id: 't1', label: '0:30', sublabel: 'Phase 1' },
@@ -1232,7 +1425,7 @@ function applyBossData(boss: RaidBoss) {
 
 <template>
   <div class="flex h-screen flex-col bg-slate-900 text-slate-100">
-    
+
     <!-- Header redesigné - Organisation claire et ergonomique -->
     <header class="relative z-40 border-b border-slate-800 bg-slate-950/90 backdrop-blur-sm shadow-lg">
       <!-- Ligne 1: Titre et actions principales -->
@@ -1460,11 +1653,11 @@ function applyBossData(boss: RaidBoss) {
       </div>
     </div>
 
-    
 
-    
+
+
     <div class="relative flex flex-1 overflow-hidden">
-      
+
       <aside v-if="showLeftPanel" class="relative w-72 border-r border-slate-800 bg-slate-950/60 p-3 overflow-y-auto space-y-4">
         <BlockSidebar @add-block="addBlock" />
         <section v-if="blockTemplates.length">
@@ -1478,7 +1671,7 @@ function applyBossData(boss: RaidBoss) {
         </section>
       </aside>
 
-      
+
       <main class="flex-1 p-4 overflow-auto">
         <RaidPlanCanvas
           ref="canvasRef"
@@ -1492,7 +1685,7 @@ function applyBossData(boss: RaidBoss) {
         />
       </main>
 
-      
+
       <aside v-if="showRightPanel" class="relative w-80 border-l border-slate-800 bg-slate-950/60 p-3 overflow-y-auto">
         <CharacterSidebar ref="sidebarRef" :characters="sidebarCharacters" :loading="loadingChars" :error="charsError" @quick-assign="(c) => canvasRef?.assignToSelected?.(c.id)" />
       </aside>
@@ -1566,12 +1759,12 @@ function applyBossData(boss: RaidBoss) {
       </template>
     </BaseModal>
 
-    
+
     <BaseModal v-model="showTemplates" title="Templates" size="lg">
       <TemplatesPanel :current-name="planName" :blocks="blocks" @close="showTemplates = false" @load="loadTemplate" />
     </BaseModal>
 
-    
+
     <BaseModal v-model="showSaveTemplate" title="Save Block as Template" size="md">
       <div class="space-y-4">
         <div>
@@ -1596,7 +1789,7 @@ function applyBossData(boss: RaidBoss) {
       </template>
     </BaseModal>
 
-    
+
     <BaseModal v-model="showHelp" title="Raid Planner Guide" size="lg">
       <div class="space-y-5 text-sm">
         <section>
@@ -1673,19 +1866,19 @@ function applyBossData(boss: RaidBoss) {
       </template>
     </BaseModal>
 
-    
+
     <BossLibraryModal
       v-model="showBossLibrary"
       @select-boss="applyBossData"
     />
 
-    
+
     <BaseModal v-model="shareOpen" title="Share raid plan (read-only)" size="md">
       <div class="space-y-3">
         <p class="text-sm text-slate-300">Anyone with this link can view the plan. They cannot edit it.</p>
         <div class="flex items-center gap-2">
           <input :value="shareUrl" readonly class="flex-1 bg-slate-900/80 border border-slate-700 rounded-md px-2 py-1 text-sm" />
-          <button class="px-2 py-1 text-sm rounded bg-white/10 hover:bg-white/15" @click="navigator.clipboard.writeText(shareUrl)">Copy</button>
+          <button class="px-2 py-1 text-sm rounded bg-white/10 hover:bg-white/15" @click="copyShareLink">Copy</button>
           <a :href="shareUrl" target="_blank" class="px-2 py-1 text-sm rounded bg-emerald-600 hover:bg-emerald-500">Open</a>
         </div>
         <div class="flex items-center justify-between text-xs text-slate-400">
@@ -1706,14 +1899,14 @@ function applyBossData(boss: RaidBoss) {
     </BaseModal>
 
 
-    <PlanManagerModal
-      v-if="showPlanManager && guildId"
-      :guild-id="guildId"
-      :current-plan-id="planId"
-      @close="showPlanManager = false"
-      @load="handleLoadPlan"
-      @create-new="handleCreateNew"
-      @deleted-current="resetToOnboarding"
+  <PlanManagerModal
+    v-if="showPlanManager && guildId"
+    :guild-id="guildId || ''"
+    :current-plan-id="planId"
+    @close="showPlanManager = false"
+    @load="handleLoadPlan"
+    @create-new="handleCreateNew"
+    @deleted-current="resetToOnboarding"
     />
   </div>
 </template>
