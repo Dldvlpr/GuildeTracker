@@ -8,3 +8,4 @@ idea
 /var/
 /vendor/
 ###< symfony/framework-bundle ###
+certs/

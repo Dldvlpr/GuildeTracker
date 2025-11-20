@@ -27,8 +27,8 @@ export interface CreateRaidPlanInput {
   blocks: RaidPlanBlock[];
   metadata?: Record<string, any>;
   isTemplate?: boolean;
-  bossId?: string;
-  raidName?: string;
+  bossId?: string | null;
+  raidName?: string | null;
 }
 
 export interface UpdateRaidPlanInput {
@@ -36,8 +36,8 @@ export interface UpdateRaidPlanInput {
   blocks?: RaidPlanBlock[];
   metadata?: Record<string, any>;
   isTemplate?: boolean;
-  bossId?: string;
-  raidName?: string;
+  bossId?: string | null;
+  raidName?: string | null;
 }
 
 

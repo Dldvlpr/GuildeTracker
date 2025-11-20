@@ -98,7 +98,7 @@ defineExpose({ setRoleFilter })
       <div
         v-for="c in filtered"
         :key="c.id"
-        class="flex items-center justify-between rounded-md border border-slate-700 bg-slate-900/70 px-2 py-1"
+        class="flex items-center justify-between rounded-md border border-slate-700 bg-slate-900/70 px-2 py-1 cursor-pointer active:cursor-grabbing"
         draggable="true"
         @dragstart="onDragStart($event, c)"
         title="Drag to assign — double‑click to quick assign to selected block"

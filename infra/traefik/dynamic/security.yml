@@ -16,7 +16,7 @@ http:
           style-src 'self' 'unsafe-inline';
           script-src 'self';
           font-src 'self' data:;
-          connect-src 'self' https://discord.com https://*.discordapp.com https://*.blizzard.com;
+          connect-src 'self' https://discord.com https://*.discordapp.com https://*.blizzard.com {{ env "TRAEFIK_CSP_CONNECT_SRC" }};
           frame-ancestors 'none';
     guildforge-csp-report-only:
       headers:
@@ -41,38 +41,52 @@ http:
 
   routers:
     oauth-discord:
-      rule: Host(`api.mondomaine.fr`) && PathPrefix(`/connect/discord`)
+      rule: Host(`{{ env "TRAEFIK_API_HOST" }}`) && PathPrefix(`/connect/discord`)
       entryPoints:
         - websecure
       middlewares:
         - guildforge-secure-headers
         - guildforge-oauth-rate-limit
-      tls:
-        certResolver: letsencrypt
+      tls: {}
       service: backend-api
     oauth-blizzard:
-      rule: Host(`api.mondomaine.fr`) && PathPrefix(`/api/oauth/blizzard`)
+      rule: Host(`{{ env "TRAEFIK_API_HOST" }}`) && PathPrefix(`/api/oauth/blizzard`)
       entryPoints:
         - websecure
       middlewares:
         - guildforge-secure-headers
         - guildforge-oauth-rate-limit
-      tls:
-        certResolver: letsencrypt
+      tls: {}
       service: backend-api
     api-general:
-      rule: Host(`api.mondomaine.fr`) && PathPrefix(`/api`)
+      rule: Host(`{{ env "TRAEFIK_API_HOST" }}`) && PathPrefix(`/api`)
       entryPoints:
         - websecure
       middlewares:
         - guildforge-secure-headers
         - guildforge-api-rate-limit
-      tls:
-        certResolver: letsencrypt
+      tls: {}
       service: backend-api
+    frontend:
+      rule: Host(`{{ env "TRAEFIK_FRONT_HOST" }}`)
+      entryPoints:
+        - websecure
+      middlewares:
+        - guildforge-secure-headers
+      tls: {}
+      service: frontend
 
   services:
     backend-api:
       loadBalancer:
         servers:
-          - url: "http://backend:8080"
+          - url: '{{ env "TRAEFIK_BACKEND_API_URL" }}'
+    frontend:
+      loadBalancer:
+        servers:
+          - url: '{{ env "TRAEFIK_FRONTEND_URL" }}'
+
+tls:
+  certificates:
+    - certFile: '{{ env "TRAEFIK_TLS_CERT_FILE" }}'
+      keyFile: '{{ env "TRAEFIK_TLS_KEY_FILE" }}'

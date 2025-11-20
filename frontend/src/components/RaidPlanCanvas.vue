@@ -988,12 +988,19 @@ function updateRow(block: RaidPlanBlock, rowId: string, patch: Record<string, an
   updateBlockData(block, { rows: nextRows })
 }
 
-function isPairRow(row: any): boolean {
+function getRowMode(row: any): 'pair' | 'single' {
   const mode = (row?.mode as string) || ''
-  if (mode === 'pair') return true
-  const t = (row?.type as string) || ''
+  if (mode === 'pair') return 'pair'
+  if (mode === 'single') return 'single'
+  const t = ((row?.type as string) || '').toLowerCase()
   const lbl = ((row?.label as string) || '').toLowerCase()
-  return t === 'pair' || lbl.includes('infusion') || lbl === 'pi'
+  if (t === 'pair') return 'pair'
+  if (lbl.includes('infusion') || lbl === 'pi' || lbl.includes('barrier') || lbl.includes('shield')) return 'pair'
+  return 'single'
+}
+
+function isPairRow(row: any): boolean {
+  return getRowMode(row) === 'pair'
 }
 
 type PairCell = { from: string | null; to: string | null }

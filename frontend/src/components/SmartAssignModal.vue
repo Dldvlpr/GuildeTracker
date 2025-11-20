@@ -4,7 +4,7 @@ import BaseModal from './ui/BaseModal.vue'
 import type { RaidPlanBlock } from '@/interfaces/raidPlan.interface'
 import type { Character } from '@/interfaces/game.interface'
 import { getRoleByClassAndSpec, getSpecOptions, isValidRole } from '@/data/gameData'
-import type { Role } from '@/interfaces/game.interface'
+import { Role } from '@/interfaces/game.interface'
 
 type TargetKind = 'ROLE_MATRIX' | 'GROUPS_GRID'
 
@@ -33,8 +33,13 @@ const options = reactive({
   benchExclusive: true,
 })
 
-// Role targets for role matrix
-const targets = reactive<{ Tanks: number; Healers: number; Melee: number; Ranged: number }>({ Tanks: 2, Healers: 4, Melee: 7, Ranged: 7 })
+// Role targets pour la matrice
+const targets = reactive<Record<Role, number>>({
+  [Role.TANKS]: 2,
+  [Role.HEALERS]: 4,
+  [Role.MELEE]: 7,
+  [Role.RANGED]: 7,
+})
 
 watch(() => props.modelValue, (v) => {
   if (v) initDefaults()
@@ -85,11 +90,10 @@ function deriveRole(c: Character, preferPrimary: boolean): Role | null {
 function normalizeRole(r: unknown): Role | null {
   if (!r || typeof r !== 'string') return null
   const s = r.toLowerCase()
-  if (s === 'tanks' || s === 'tank') return 'Tanks'
-  if (s === 'healers' || s === 'healer') return 'Healers'
-  if (s === 'melee') return 'Melee'
-  if (s === 'ranged') return 'Ranged'
-  // Accept exact Role values
+  if (s === 'tanks' || s === 'tank') return Role.TANKS
+  if (s === 'healers' || s === 'healer') return Role.HEALERS
+  if (s === 'melee') return Role.MELEE
+  if (s === 'ranged') return Role.RANGED
   if (isValidRole(r)) return r as Role
   return null
 }
@@ -97,10 +101,10 @@ function normalizeRole(r: unknown): Role | null {
 function roleMatrixAssignments(block: RaidPlanBlock): Record<Role, string[]> {
   const ra = (block.data?.roleAssignments ?? {}) as Record<Role, string[]>
   return {
-    Tanks: [...(ra.Tanks || [])],
-    Healers: [...(ra.Healers || [])],
-    Melee: [...(ra.Melee || [])],
-    Ranged: [...(ra.Ranged || [])],
+    [Role.TANKS]: [...(ra[Role.TANKS] || [])],
+    [Role.HEALERS]: [...(ra[Role.HEALERS] || [])],
+    [Role.MELEE]: [...(ra[Role.MELEE] || [])],
+    [Role.RANGED]: [...(ra[Role.RANGED] || [])],
   } as Record<Role, string[]>
 }
 
@@ -137,23 +141,28 @@ function computePreview() {
   if (targetKind.value === 'ROLE_MATRIX') {
     // Fill missing counts per role
     const ra = roleMatrixAssignments(tgt)
-    const already = new Set<string>([...ra.Tanks, ...ra.Healers, ...ra.Melee, ...ra.Ranged].map(String))
+    const already = new Set<string>([...ra[Role.TANKS], ...ra[Role.HEALERS], ...ra[Role.MELEE], ...ra[Role.RANGED]].map(String))
     const need: Record<Role, number> = {
-      Tanks: Math.max(0, targets.Tanks - ra.Tanks.length),
-      Healers: Math.max(0, targets.Healers - ra.Healers.length),
-      Melee: Math.max(0, targets.Melee - ra.Melee.length),
-      Ranged: Math.max(0, targets.Ranged - ra.Ranged.length),
+      [Role.TANKS]: Math.max(0, targets[Role.TANKS] - ra[Role.TANKS].length),
+      [Role.HEALERS]: Math.max(0, targets[Role.HEALERS] - ra[Role.HEALERS].length),
+      [Role.MELEE]: Math.max(0, targets[Role.MELEE] - ra[Role.MELEE].length),
+      [Role.RANGED]: Math.max(0, targets[Role.RANGED] - ra[Role.RANGED].length),
     }
-    const roleBuckets: Record<Role, Character[]> = { Tanks: [], Healers: [], Melee: [], Ranged: [] } as any
+    const roleBuckets: Record<Role, Character[]> = {
+      [Role.TANKS]: [],
+      [Role.HEALERS]: [],
+      [Role.MELEE]: [],
+      [Role.RANGED]: [],
+    }
     for (const c of eligible) {
       if (options.avoidDuplicates && already.has(c.id)) continue
       const r = deriveRole(c, options.preferPrimary)
       if (r && roleBuckets[r]) roleBuckets[r].push(c)
     }
     const byName = (a: Character, b: Character) => (a.name || '').localeCompare(b.name || '')
-    ;(['Tanks','Healers','Melee','Ranged'] as Role[]).forEach((r) => roleBuckets[r].sort(byName))
+    ;([Role.TANKS, Role.HEALERS, Role.MELEE, Role.RANGED] as Role[]).forEach((r) => roleBuckets[r].sort(byName))
     let added = 0
-    for (const r of (['Tanks','Healers','Melee','Ranged'] as Role[])) {
+    for (const r of [Role.TANKS, Role.HEALERS, Role.MELEE, Role.RANGED] as Role[]) {
       const take = roleBuckets[r].slice(0, need[r]).map(c => c.id)
       ra[r] = [...ra[r], ...take]
       added += take.length
@@ -171,9 +180,12 @@ function computePreview() {
     for (const g of groups) for (const id of (g.members || [])) already.add(String(id))
     const pool = eligible.filter(c => !already.has(c.id))
     const byName = (a: Character, b: Character) => (a.name || '').localeCompare(b.name || '')
-    const Tanks = pool.filter(c => roleMap.get(c.id) === 'Tanks').sort(byName)
-    const Healers = pool.filter(c => roleMap.get(c.id) === 'Healers').sort(byName)
-    const DPS = pool.filter(c => ['Melee','Ranged'].includes(roleMap.get(c.id) as any)).sort(byName)
+    const Tanks = pool.filter(c => roleMap.get(c.id) === Role.TANKS).sort(byName)
+    const Healers = pool.filter(c => roleMap.get(c.id) === Role.HEALERS).sort(byName)
+    const DPS = pool.filter(c => {
+      const r = roleMap.get(c.id)
+      return r === Role.MELEE || r === Role.RANGED
+    }).sort(byName)
     // Distribute: 1 pass for Tanks, 1 pass for Healers, then fill with DPS
     let added = 0
     const takeFrom = (arr: Character[] | null, g: any) => {

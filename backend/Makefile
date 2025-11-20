@@ -1,7 +1,7 @@
 # GuildTracker Backend - Makefile
 # Quick commands for development
 
-.PHONY: help install db-init db-reset db-import-wow db-status serve test clean
+.PHONY: help install db-init db-reset db-import-wow db-status serve test clean traefik-start traefik-stop
 
 # Colors
 YELLOW := \033[1;33m
@@ -65,6 +65,10 @@ serve-bg: ## Start Symfony server in background
 	symfony server:start -d
 	@echo "Server running at: $(YELLOW)https://localhost:8000$(RESET)"
 
+serve-tls: ## Start Symfony server with mkcert p12 (api.localhost, localhost, 127.0.0.1)
+	@echo "$(GREEN)Starting Symfony server on https://api.localhost:8000 with mkcert p12$(RESET)"
+	symfony server:start --port=8000 --p12=certs/api.localhost.nopass.p12
+
 stop: ## Stop Symfony server
 	@echo "$(YELLOW)Stopping Symfony server...$(RESET)"
 	symfony server:stop
@@ -85,5 +89,13 @@ clean: ## Clean cache and logs
 
 logs: ## Show Symfony logs
 	@tail -f var/log/dev.log
+
+traefik-start: ## Start Traefik reverse proxy
+	@echo "$(GREEN)Starting Traefik...$(RESET)"
+	@bash ../infra/traefik/start-traefik.sh
+
+traefik-stop: ## Stop Traefik reverse proxy
+	@echo "$(YELLOW)Stopping Traefik...$(RESET)"
+	@bash ../infra/traefik/stop-traefik.sh
 
 .DEFAULT_GOAL := help
