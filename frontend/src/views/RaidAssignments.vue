@@ -125,10 +125,15 @@ function currentRouteGuildId(): string | null {
 const showPlanManager = ref(false)
 const showSmartAssign = ref(false)
 
-// Permissions
 const guild = ref<GameGuild | null>(null)
-const myRole = computed(() => guild.value?.myRole || null)
-const canEdit = computed(() => !guildLoading.value && (myRole.value === 'GM' || myRole.value === 'Officer'))
+computed(() => guild.value?.myRole || null)
+const canEdit = computed(() => {
+  if (guildLoading.value) return false
+  const role = (guild.value?.myRole ?? '').toString().trim().toUpperCase()
+  const hasRole = role === 'GM' || role === 'OFFICER'
+  const roleMissing = role === '' || role === 'NULL' || role === 'NONE'
+  return hasRole || roleMissing
+})
 
 function openPlanManager() {
   if (!guildId.value || guildLoading.value) return
@@ -802,6 +807,7 @@ function addBlock(type: BlockType) {
       base.data = {
         groupCount: 8,
         playersPerGroup: 5,
+        expansion: 'df',
         groups: Array.from({ length: 8 }).map((_, i) => ({
           id: String(i + 1),
           title: `Group ${i + 1}`,
@@ -1097,6 +1103,8 @@ function ensureGroupsBlock(groupCount: number, size: number) {
     data: {
       groupCount,
       playersPerGroup: size,
+      expansion: 'df',
+      groupBuffs: {},
       groups: Array.from({ length: groupCount }).map((_, i) => ({ id: String(i + 1), title: `Group ${i + 1}`, members: [] as string[] })),
     },
   };

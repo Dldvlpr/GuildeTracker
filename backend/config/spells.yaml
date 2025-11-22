@@ -1,0 +1,441 @@
+spells:
+  ###########################################################
+  # HASTE / HEROISM-LIKE (RAID-WIDE HASTE CDs)
+  ###########################################################
+
+  - key: bloodlust
+    id: 2825
+    name: Bloodlust
+    class: SHAMAN
+    category: haste_raid
+    expansions: [tbc, wotlk, cata, mop, wod, legion, bfa, sl, df, tww]
+
+  - key: heroism
+    id: 32182
+    name: Heroism
+    class: SHAMAN
+    category: haste_raid
+    expansions: [tbc, wotlk, cata, mop, wod, legion, bfa, sl, df, tww]
+
+  - key: time_warp
+    id: 80353
+    name: Time Warp
+    class: MAGE
+    category: haste_raid
+    expansions: [cata, mop, wod, legion, bfa, sl, df, tww]
+
+  - key: fury_of_the_aspects
+    id: 390386
+    name: Fury of the Aspects
+    class: EVOKER
+    category: haste_raid
+    expansions: [df, tww]
+
+  ###########################################################
+  # PRIMARY STATS / INTEL / ALL-STAT / STAMINA
+  ###########################################################
+
+  - key: arcane_intellect
+    id: 1459
+    name: Arcane Intellect
+    class: MAGE
+    category: primary_stats
+    expansions: [classic, tbc, wotlk, cata, mop, wod, legion, bfa, sl, df, tww]
+
+  - key: mark_of_the_wild
+    id: 1126
+    name: Mark of the Wild
+    class: DRUID
+    category: primary_stats
+    expansions: [classic, tbc, wotlk, cata, mop, wod, sl, df, tww]
+
+  - key: blessing_of_kings
+    id: 20217
+    name: Blessing of Kings
+    class: PALADIN
+    category: primary_stats
+    expansions: [classic, tbc, wotlk, cata, mop, wod]
+
+  - key: legacy_of_the_emperor
+    id: 115921
+    name: Legacy of the Emperor
+    class: MONK
+    category: primary_stats
+    expansions: [mop, wod]
+
+  - key: power_word_fortitude
+    id: 21562
+    name: "Power Word: Fortitude"
+    class: PRIEST
+    category: stamina
+    expansions: [classic, tbc, wotlk, cata, mop, wod, legion, bfa, sl, df, tww]
+
+  - key: commanding_shout
+    id: 469
+    name: Commanding Shout
+    class: WARRIOR
+    category: stamina
+    # Remplacé par Rallying Cry comme CD raid à partir de BfA
+    expansions: [tbc, wotlk, cata, mop, wod, legion]
+
+  - key: blood_pact
+    id: 6307
+    name: Blood Pact
+    class: WARLOCK
+    category: stamina
+    expansions: [classic, tbc, wotlk, cata, mop]
+
+  ###########################################################
+  # ATTACK POWER / STRENGTH-AGILITY STYLE BUFFS
+  ###########################################################
+
+  - key: battle_shout
+    id: 6673
+    name: Battle Shout
+    class: WARRIOR
+    category: attack_power
+    expansions: [classic, tbc, wotlk, cata, mop, wod, legion, bfa, sl, df, tww]
+
+  - key: horn_of_winter
+    id: 57330
+    name: Horn of Winter
+    class: DEATHKNIGHT
+    category: attack_power
+    expansions: [wotlk, cata, mop, wod, legion]
+
+  - key: trueshot_aura
+    id: 19506
+    name: Trueshot Aura
+    class: HUNTER
+    category: attack_power
+    expansions: [classic, tbc, wotlk, cata, mop]
+
+  - key: blessing_of_might
+    id: 19740
+    name: Blessing of Might
+    class: PALADIN
+    category: attack_power
+    expansions: [classic, tbc, wotlk, cata, mop, wod]
+
+  ###########################################################
+  # CRITICAL STRIKE & SIMILAR
+  ###########################################################
+
+  - key: leader_of_the_pack
+    id: 17007
+    name: Leader of the Pack
+    class: DRUID
+    category: crit
+    expansions: [classic, tbc, wotlk, cata]
+
+  - key: legacy_of_the_white_tiger
+    id: 116781
+    name: Legacy of the White Tiger
+    class: MONK
+    category: crit
+    expansions: [mop, wod]
+
+  ###########################################################
+  # MAGIC / SPELLPOWER AURAS
+  ###########################################################
+
+  - key: demonic_pact
+    id: 48090
+    name: Demonic Pact
+    class: WARLOCK
+    category: spell_power
+    expansions: [wotlk, cata, mop]
+
+  ###########################################################
+  # MAGIC / PHYSICAL DAMAGE TAKEN DEBUFFS
+  ###########################################################
+
+  - key: chaos_brand
+    id: 255260
+    name: Chaos Brand
+    class: DEMONHUNTER
+    category: magic_vulnerability
+    expansions: [bfa, sl, df, tww]
+
+  - key: hunters_mark_raid
+    id: 257284
+    name: Hunter's Mark
+    class: HUNTER
+    category: execute_phase_damage
+    expansions: [bfa, sl, df, tww]
+
+  ###########################################################
+  # PALADIN AURAS / RAID EXTERNALS
+  ###########################################################
+
+  - key: devotion_aura
+    id: 465
+    name: Devotion Aura
+    class: PALADIN
+    category: raid_defensive
+    expansions: [classic, tbc, wotlk, cata, mop, wod, legion, bfa, sl, df, tww]
+
+  ###########################################################
+  # PRIEST SECONDARY BUFFS (CLASSIC-WOTLK)
+  ###########################################################
+
+  - key: divine_spirit
+    id: 14752
+    name: Divine Spirit
+    class: PRIEST
+    category: spirit
+    expansions: [classic, tbc, wotlk]
+
+  ###########################################################
+  # ROGUE EXTERNALS
+  ###########################################################
+
+  - key: tricks_of_the_trade
+    id: 57934
+    name: Tricks of the Trade
+    class: ROGUE
+    category: external_damage_buff
+    expansions: [wotlk, cata, mop, wod, legion, bfa, sl, df]
+
+  ###########################################################
+  # WARRIOR RAID CDs
+  ###########################################################
+
+  - key: rallying_cry
+    id: 97462
+    name: Rallying Cry
+    class: WARRIOR
+    category: raid_defensive
+    expansions: [cata, mop, wod, legion, bfa, sl, df, tww]
+
+  ###########################################################
+  # ---------------------------------------------------------
+  # SHAMAN – RAID TOTEMS (BUFFS, REGEN, DEF, CDs, RESISTS)
+  # ---------------------------------------------------------
+  ###########################################################
+
+  ###########################################################
+  # BUFFS PHYSIQUES / MELEE (CLASSIC → CATA)
+  ###########################################################
+
+  - key: shaman_strength_of_earth_totem
+    id: 8075           # Strength of Earth Totem
+    name: Strength of Earth Totem
+    class: SHAMAN
+    type: totem
+    category: physical_stats
+    description: Strength & Agility buff pour tout le raid/melee (selon patch)
+    expansions: [classic, tbc, wotlk, cata]
+
+  - key: shaman_grace_of_air_totem
+    id: 25359          # Grace of Air Totem (Rank 3)
+    name: Grace of Air Totem
+    class: SHAMAN
+    type: totem
+    category: agility
+    description: Agility buff (melee/ranged dps, tank esquive)
+    expansions: [classic, tbc, wotlk]
+
+  - key: shaman_windfury_totem
+    id: 8512           # Windfury Totem (aura / buff de haste melee)
+    name: Windfury Totem
+    class: SHAMAN
+    type: totem
+    category: melee_haste
+    description: Haste melee / swings supplémentaires pour les melees du groupe/raid
+    expansions: [classic, tbc, wotlk, cata]
+
+  - key: shaman_flametongue_totem
+    id: 8227           # Flametongue Totem
+    name: Flametongue Totem
+    class: SHAMAN
+    type: totem
+    category: spell_power
+    description: Spell damage / healing buff (caster & healers)
+    expansions: [classic, tbc, wotlk, cata]
+
+  ###########################################################
+  # BUFFS CASTERS / HASTE MAGIQUE
+  ###########################################################
+
+  - key: shaman_wrath_of_air_totem
+    id: 2895           # Wrath of Air Totem
+    name: Wrath of Air Totem
+    class: SHAMAN
+    type: totem
+    category: spell_haste
+    description: Spell haste (caster/heal) raid-wide
+    expansions: [tbc, wotlk, cata]
+
+  ###########################################################
+  # RÉDUCTION DÉGÂTS PHYSIQUES / ARMURE
+  ###########################################################
+
+  - key: shaman_stoneskin_totem
+    id: 8071           # Stoneskin Totem
+    name: Stoneskin Totem
+    class: SHAMAN
+    type: totem
+    category: physical_defense
+    description: Réduction dégâts mêlée / bonus armure raid
+    expansions: [classic, tbc, wotlk, cata]
+
+  ###########################################################
+  # REGEN MANA / HEAL DE GROUPE PERSISTANT
+  ###########################################################
+
+  - key: shaman_mana_spring_totem
+    id: 10497          # Mana Spring Totem (Rank 4)
+    name: Mana Spring Totem
+    class: SHAMAN
+    type: totem
+    category: mana_regen
+    description: Regen mana passive pour caster/heals du groupe/raid
+    expansions: [classic, tbc, wotlk, cata]
+
+  - key: shaman_mana_tide_totem
+    id: 16190          # Mana Tide Totem
+    name: Mana Tide Totem
+    class: SHAMAN
+    type: totem
+    category: mana_regen_cd
+    description: Gros CD de regen mana raid (resto)
+    expansions: [tbc, wotlk, cata, mop, wod, legion, bfa, sl, df, tww]
+
+  - key: shaman_healing_stream_totem
+    id: 5394           # Healing Stream Totem
+    name: Healing Stream Totem
+    class: SHAMAN
+    type: totem
+    category: sustained_healing
+    description: Totem de heal périodique sur les membres du raid
+    expansions: [classic, tbc, wotlk, cata, mop, wod, legion, bfa, sl, df, tww]
+
+  ###########################################################
+  # TOTEMS DE RÉSISTANCE (CLASSIC → WOTLK) + FUSION CATA
+  ###########################################################
+
+  - key: shaman_fire_resistance_totem
+    id: 8184           # Fire Resistance Totem
+    name: Fire Resistance Totem
+    class: SHAMAN
+    type: totem
+    category: resistance_fire
+    description: +Fire resistance raid (Ragnaros, MC, BWL, etc.)
+    expansions: [classic, tbc, wotlk]
+
+  - key: shaman_frost_resistance_totem
+    id: 8181           # Frost Resistance Totem
+    name: Frost Resistance Totem
+    class: SHAMAN
+    type: totem
+    category: resistance_frost
+    description: +Frost resistance raid (Sapphiron, etc.)
+    expansions: [classic, tbc, wotlk]
+
+  - key: shaman_nature_resistance_totem
+    id: 10595          # Nature Resistance Totem
+    name: Nature Resistance Totem
+    class: SHAMAN
+    type: totem
+    category: resistance_nature
+    description: +Nature resistance raid (Huhuran, etc.)
+    expansions: [classic, tbc, wotlk]
+
+  - key: shaman_elemental_resistance_totem
+    id: 8184           # Elemental Resistance Totem (Cata)
+    name: Elemental Resistance Totem
+    class: SHAMAN
+    type: totem
+    category: resistance_elemental
+    description: Fusion des totems de résistance feu/froid/nature pour le raid
+    expansions: [cata]
+
+  ###########################################################
+  # UTILITY RAID – ANTI-FEAR / ANTI-SORT
+  ###########################################################
+
+  - key: shaman_tremor_totem
+    id: 8143           # Tremor Totem
+    name: Tremor Totem
+    class: SHAMAN
+    type: totem
+    category: anti_fear
+    description: Remove/immune Fear, Charm, Sleep périodiquement pour le raid stack
+    expansions: [classic, tbc, wotlk, cata, mop, wod, legion, bfa, sl, df, tww]
+
+  - key: shaman_grounding_totem
+    id: 8177           # Grounding Totem
+    name: Grounding Totem
+    class: SHAMAN
+    type: totem
+    category: anti_spell
+    description: Absorbe/redirige un sort hostile (gros outil strat en raid/PvP)
+    expansions: [classic, tbc, wotlk, cata, mop, wod, legion, bfa, sl, df, tww]
+
+  - key: shaman_tranquil_air_totem
+    id: 25908          # Tranquil Air Totem
+    name: Tranquil Air Totem
+    class: SHAMAN
+    type: totem
+    category: threat_reduction
+    description: Réduction de menace de groupe (équivalent Salvation côté Horde)
+    expansions: [classic, tbc]
+
+  - key: shaman_poison_cleansing_totem
+    id: 8166           # Poison Cleansing Totem
+    name: Poison Cleansing Totem
+    class: SHAMAN
+    type: totem
+    category: raid_cleansing
+    description: Supprime périodiquement les poisons du groupe/raid
+    expansions: [classic, tbc]
+
+  - key: shaman_cleansing_totem
+    id: 8170           # Cleansing Totem (fusion poison+disease en WotLK)
+    name: Cleansing Totem
+    class: SHAMAN
+    type: totem
+    category: raid_cleansing
+    description: Supprime périodiquement poisons + diseases du groupe/raid
+    expansions: [wotlk]
+
+  ###########################################################
+  # GROS CDs RAID (CATA → TWW)
+  ###########################################################
+
+  - key: shaman_spirit_link_totem
+    id: 98008          # Spirit Link Totem
+    name: Spirit Link Totem
+    class: SHAMAN
+    type: totem
+    category: raid_defensive_cd
+    description: Réduction dégâts + répartition des PV, gros CD de stack heal
+    expansions: [cata, mop, wod, legion, bfa, sl, df, tww]
+
+  - key: shaman_healing_tide_totem
+    id: 108280         # Healing Tide Totem
+    name: Healing Tide Totem
+    class: SHAMAN
+    type: totem
+    category: raid_healing_cd
+    description: Heal de raid massif sur 10s (totem de tide)
+    expansions: [mop, wod, legion, bfa, sl, df, tww]
+
+  - key: shaman_stormlash_totem
+    id: 120668         # Stormlash Totem
+    name: Stormlash Totem
+    class: SHAMAN
+    type: totem
+    category: raid_damage_cd
+    description: CD de burst raid – ajoute des dégâts Nature aux attaques et sorts alliés
+    expansions: [mop, wod, legion, bfa, sl, df, tww]
+
+  - key: shaman_capacitor_totem
+    id: 108269         # Capacitor Totem
+    name: Capacitor Totem
+    class: SHAMAN
+    type: totem
+    category: raid_cc
+    description: Stun AoE après un délai (control de pack en raid/MM+)
+    expansions: [mop, wod, legion, bfa, sl, df, tww]

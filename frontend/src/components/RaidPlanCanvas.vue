@@ -8,6 +8,8 @@ import { getSpecOptions, getRoleByClassAndSpec } from '@/data/gameData';
 import { getClassColor } from '@/utils/classColors';
 import { CANVAS_MAPS } from '@/data/canvasMaps';
 import { RAID_MARKER_ICONS } from '@/data/raidMarkers';
+import { RAID_BUFFS, type RaidBuff } from '@/data/raidBuffs';
+import { spellIconUrl } from '@/utils/wowIcons';
 
 const props = defineProps<{
   blocks: RaidPlanBlock[];
@@ -32,6 +34,85 @@ const resizing = ref(false);
 const showGridOverlay = ref(false);
 const canvasMaps = CANVAS_MAPS;
 const raidMarkerIcons = RAID_MARKER_ICONS;
+const raidBuffs = RAID_BUFFS;
+const expansionOptions = [
+  { value: 'classic', label: 'Classic' },
+  { value: 'tbc', label: 'TBC' },
+  { value: 'wotlk', label: 'WotLK' },
+  { value: 'cata', label: 'Cata' },
+  { value: 'mop', label: 'MoP' },
+  { value: 'wod', label: 'WoD' },
+  { value: 'legion', label: 'Legion' },
+  { value: 'bfa', label: 'BfA' },
+  { value: 'sl', label: 'SL' },
+  { value: 'df', label: 'DF' },
+  { value: 'tww', label: 'TWW' },
+];
+const hoveredBuff = ref<{ groupId: string; key: string } | null>(null);
+
+function filterBuffsByExpansion(expansion?: string | null): RaidBuff[] {
+  const exp = (expansion || '').toLowerCase();
+  return raidBuffs.filter((b) => {
+    if (!b.expansions || b.expansions.length === 0) return true;
+    return b.expansions.map((e) => e.toLowerCase()).includes(exp || 'df');
+  });
+}
+
+function buffsForGroup(block: RaidPlanBlock, group: { id?: string; members?: string[] }): RaidBuff[] {
+  const exp = (block.data as any)?.expansion || 'df';
+  const ids = group.members || [];
+  const classes = new Set(
+    ids
+      .map((id) => getCharacterById(id)?.class?.toUpperCase())
+      .filter((x): x is string => !!x)
+  );
+  const selected = group.id ? ((block.data as any)?.groupBuffs?.[group.id] as string[] | undefined) : undefined;
+  if (!selected || !selected.length) return [];
+  return selected
+    .map((key) => filterBuffsByExpansion(exp).find((b) => b.key === key))
+    .filter((b): b is RaidBuff => !!b && (!b.class || classes.has(b.class)));
+}
+
+function groupBuffsMap(block: RaidPlanBlock): Record<string, string[]> {
+  const map = ((block.data as any)?.groupBuffs || {}) as Record<string, string[]>;
+  return map;
+}
+
+function addGroupBuff(block: RaidPlanBlock, groupId: string, buffKey: string) {
+  if (!buffKey) return;
+  const map = { ...groupBuffsMap(block) };
+  const list = new Set(map[groupId] || []);
+  list.add(buffKey);
+  map[groupId] = Array.from(list);
+  updateBlockData(block, { groupBuffs: map });
+}
+
+function removeGroupBuff(block: RaidPlanBlock, groupId: string, buffKey: string) {
+  const map = { ...groupBuffsMap(block) };
+  map[groupId] = (map[groupId] || []).filter((k) => k !== buffKey);
+  updateBlockData(block, { groupBuffs: map });
+}
+
+function availableBuffs(block: RaidPlanBlock, groupId: string, members: string[]): RaidBuff[] {
+  const exp = (block.data as any)?.expansion || 'df';
+  const selected = new Set(groupBuffsMap(block)[groupId] || []);
+  const cls = new Set(
+    (members || [])
+      .map((id) => getCharacterById(id)?.class?.toUpperCase())
+      .filter((x): x is string => !!x)
+  );
+  return filterBuffsByExpansion(exp).filter((b) => {
+    if (selected.has(b.key)) return false;
+    if (b.class && !cls.has(b.class)) return false;
+    return true;
+  });
+}
+
+function buffIconUrl(buff: RaidBuff): string {
+  const icon = buff.iconFile;
+  if (icon) return spellIconUrl(icon);
+  return spellIconUrl('inv_misc_questionmark');
+}
 const genericAssignmentTokens = {
   boss: [
     { id: 'boss-tank', label: 'Boss Tank', role: 'Tanks', tint: '#0ea5e9' },
@@ -952,46 +1033,63 @@ function removeRotationRow(block: RaidPlanBlock, rowId: string) {
   updateBlockData(block, { rows: nextRows, cells })
 }
 
+function normalizeRowMode(value: unknown): 'pair' | 'single' | undefined {
+  if (value === 'pair' || value === true) return 'pair'
+  if (value === 'single' || value === false) return 'single'
+  if (typeof value === 'string') {
+    const v = value.toLowerCase()
+    if (v === 'pair') return 'pair'
+    if (v === 'single') return 'single'
+  }
+  return undefined
+}
+
 function updateRow(block: RaidPlanBlock, rowId: string, patch: Record<string, any>) {
+  const normalizedPatch = { ...patch }
+  if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'mode')) {
+    normalizedPatch.mode = normalizeRowMode(normalizedPatch.mode) ?? 'single'
+  }
   const rows = (block.data?.rows ?? []) as any[]
   const prev = rows.find((r: any) => r.id === rowId)
-  const nextRows = rows.map((r: any) => r.id === rowId ? { ...r, ...patch } : r)
+  const nextRows = rows.map((r: any) => r.id === rowId ? { ...r, ...normalizedPatch } : r)
 
   // If switching mode, convert existing cell shapes accordingly
-  if (patch.hasOwnProperty('mode') && prev && prev.mode !== patch.mode) {
-    const nextMode = patch.mode as string
-    const cells = ensureCells(block)
-    const rowCells = cells[rowId] ?? (cells[rowId] = {})
-    for (const colId of Object.keys(rowCells)) {
-      const cur = rowCells[colId]
-      if (nextMode === 'pair') {
-        if (Array.isArray(cur)) {
-          const from = cur[0] || null
-          const to = cur[1] || null
-          rowCells[colId] = { from, to } as any
-        } else if (typeof cur === 'string') {
-          rowCells[colId] = { from: cur, to: null } as any
-        }
-      } else {
-        // list/single mode
-        if (cur && typeof cur === 'object' && !Array.isArray(cur)) {
-          const from = (cur as any).from || null
-          const to = (cur as any).to || null
-          rowCells[colId] = [from, to].filter(Boolean) as any
+  if (normalizedPatch.hasOwnProperty('mode') && prev) {
+    const nextMode = normalizeRowMode(normalizedPatch.mode)
+    const prevMode = normalizeRowMode(prev.mode) ?? getRowMode(prev)
+    if (nextMode && prevMode !== nextMode) {
+      const cells = ensureCells(block)
+      const rowCells = cells[rowId] ?? (cells[rowId] = {})
+      for (const colId of Object.keys(rowCells)) {
+        const cur = rowCells[colId]
+        if (nextMode === 'pair') {
+          if (Array.isArray(cur)) {
+            const from = cur[0] || null
+            const to = cur[1] || null
+            rowCells[colId] = { from, to } as any
+          } else if (typeof cur === 'string') {
+            rowCells[colId] = { from: cur, to: null } as any
+          }
+        } else {
+          // list/single mode
+          if (cur && typeof cur === 'object' && !Array.isArray(cur)) {
+            const from = (cur as any).from || null
+            const to = (cur as any).to || null
+            rowCells[colId] = [from, to].filter(Boolean) as any
+          }
         }
       }
+      updateBlockData(block, { rows: nextRows, cells })
+      return
     }
-    updateBlockData(block, { rows: nextRows, cells })
-    return
   }
 
   updateBlockData(block, { rows: nextRows })
 }
 
 function getRowMode(row: any): 'pair' | 'single' {
-  const mode = (row?.mode as string) || ''
-  if (mode === 'pair') return 'pair'
-  if (mode === 'single') return 'single'
+  const explicit = normalizeRowMode((row as any)?.mode)
+  if (explicit) return explicit
   const t = ((row?.type as string) || '').toLowerCase()
   const lbl = ((row?.label as string) || '').toLowerCase()
   if (t === 'pair') return 'pair'
@@ -1127,6 +1225,12 @@ function removeChecklistItem(block: RaidPlanBlock, itemId: string) {
 
 function getCharacterById(id: string): Character | undefined {
   return props.characters?.find((c) => c.id === id);
+}
+
+function startCharacterDrag(e: DragEvent, charId: string) {
+  if (!e.dataTransfer) return
+  e.dataTransfer.setData('text/plain', String(charId))
+  e.dataTransfer.effectAllowed = 'copyMove'
 }
 
 function charColorById(id: string): string {
@@ -1429,6 +1533,24 @@ function addPosition(block: RaidPlanBlock) {
   updateBlockData(block, { positions });
 }
 
+function applyBossPreset(block: RaidPlanBlock, preset: 'tanks-heals' | 'soaks') {
+  const presetPositions = preset === 'tanks-heals'
+    ? [
+      { id: 'mt1', label: 'MT1', accepts: ['Tanks'] },
+      { id: 'mt2', label: 'MT2', accepts: ['Tanks'] },
+      { id: 'heal-mt', label: 'Healers MT', accepts: ['Healers'] },
+      { id: 'heal-raid', label: 'Healers Raid', accepts: ['Healers'] },
+      { id: 'heal-cds', label: 'Heal CDs', accepts: ['Healers'] },
+    ]
+    : [
+      { id: 'soak-1', label: 'Soak 1', accepts: ['Tanks', 'Healers', 'Melee', 'Ranged'] },
+      { id: 'soak-2', label: 'Soak 2', accepts: ['Tanks', 'Healers', 'Melee', 'Ranged'] },
+      { id: 'soak-3', label: 'Soak 3', accepts: ['Tanks', 'Healers', 'Melee', 'Ranged'] },
+    ]
+
+  updateBlockData(block, { positions: presetPositions, assignments: {}, positionNotes: {} })
+}
+
 function updatePositionLabel(block: RaidPlanBlock, positionId: string, label: string) {
   const positions = ((block.data?.positions ?? []) as any[]).map((p) => (p.id === positionId ? { ...p, label } : p));
   updateBlockData(block, { positions });
@@ -1465,6 +1587,12 @@ function removePositionNote(block: RaidPlanBlock, positionId: string, index: num
   list.splice(index, 1);
   notes[positionId] = list;
   updateBlockData(block, { positionNotes: notes });
+}
+
+function assignmentNames(block: RaidPlanBlock, posId: string): string[] {
+  const assignments = (block.data?.assignments as Record<string, string[]> | undefined) || {}
+  const ids = assignments[posId] ?? []
+  return ids.map((id) => getCharacterById(id)?.name || 'Unknown')
 }
 
 function assignToSelected(characterId: string) {
@@ -1875,7 +2003,9 @@ defineExpose({ assignToSelected, selectedBlockId });
                       <div
                         v-for="cid in (block.data?.roleAssignments?.[role] ?? [])"
                         :key="cid"
-                        class="flex items-center justify-between rounded px-2 py-1"
+                        class="flex items-center justify-between rounded px-2 py-1 cursor-grab active:cursor-grabbing"
+                        :draggable="!props.readonly"
+                        @dragstart="startCharacterDrag($event, cid)"
                         :style="{
                           backgroundColor: charColorById(cid) + '22',
                           border: '1px solid ' + charColorById(cid) + '55'
@@ -1916,6 +2046,16 @@ defineExpose({ assignToSelected, selectedBlockId });
                   <span class="px-1.5 py-0.5 rounded border" :style="{ borderColor: (ROLE_COLORS as any)['Healers'] + '66', backgroundColor: (ROLE_COLORS as any)['Healers'] + '22' }">✚ H</span>
                   <span class="px-1.5 py-0.5 rounded border" :style="{ borderColor: (ROLE_COLORS as any)['Melee'] + '66', backgroundColor: (ROLE_COLORS as any)['Melee'] + '22' }">⚔️ M</span>
                   <span class="px-1.5 py-0.5 rounded border" :style="{ borderColor: (ROLE_COLORS as any)['Ranged'] + '66', backgroundColor: (ROLE_COLORS as any)['Ranged'] + '22' }">🏹 R</span>
+                  <div class="flex items-center gap-1 ml-2">
+                    <span class="text-slate-500">Extension</span>
+                    <select
+                      class="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[11px]"
+                      :value="(block.data as any)?.expansion || 'df'"
+                      @change="updateBlockData(block, { expansion: ($event.target as HTMLSelectElement).value })"
+                    >
+                      <option v-for="exp in expansionOptions" :key="exp.value" :value="exp.value">{{ exp.label }}</option>
+                    </select>
+                  </div>
                 </div>
                 <div class="h-[260px] overflow-auto pr-1">
                   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
@@ -1952,7 +2092,9 @@ defineExpose({ assignToSelected, selectedBlockId });
                       <div
                         v-for="cid in g.members"
                         :key="cid"
-                        class="flex items-center justify-between rounded px-2 py-1"
+                        class="flex items-center justify-between rounded px-2 py-1 cursor-grab active:cursor-grabbing"
+                        :draggable="!props.readonly"
+                        @dragstart="startCharacterDrag($event, cid)"
                         :style="{
                           backgroundColor: charColorById(cid) + '22',
                           border: '1px solid ' + charColorById(cid) + '55'
@@ -1975,6 +2117,44 @@ defineExpose({ assignToSelected, selectedBlockId });
                         </div>
                       </div>
                       <div v-if="!g.members.length" class="text-[11px] text-slate-500 text-center py-1">Drag players here</div>
+                    </div>
+                    <div class="flex items-center gap-1 mt-2 text-[11px] text-slate-400">
+                      <select
+                        class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs hover:border-emerald-500/60"
+                        @change="(e: Event) => { const key = (e.target as HTMLSelectElement).value; addGroupBuff(block, g.id, key); (e.target as HTMLSelectElement).value = ''; }"
+                      >
+                        <option value="">+ Buff</option>
+                        <option v-for="buff in availableBuffs(block, g.id, g.members || [])" :key="buff.key" :value="buff.key">
+                          {{ buff.name }} ({{ buff.class || 'All' }})
+                        </option>
+                      </select>
+                    </div>
+                    <div v-if="buffsForGroup(block, g).length" class="mt-2 flex flex-wrap gap-2">
+                      <div
+                        v-for="buff in buffsForGroup(block, g)"
+                        :key="buff.key"
+                        class="relative group"
+                        @mouseenter="hoveredBuff = { groupId: g.id, key: buff.key }"
+                        @mouseleave="hoveredBuff = null"
+                      >
+                        <img
+                          :src="buffIconUrl(buff)"
+                          :alt="buff.name"
+                          class="h-8 w-8 rounded-md border border-slate-800 bg-slate-900 object-cover shadow"
+                        />
+                        <button
+                          class="absolute -top-1 -right-1 text-[11px] leading-none bg-slate-900 text-red-300 rounded px-1 opacity-0 group-hover:opacity-100 shadow border border-slate-700"
+                          title="Supprimer"
+                          @click.stop="removeGroupBuff(block, g.id, buff.key)"
+                        >✕</button>
+                        <div
+                          v-if="hoveredBuff && hoveredBuff.groupId === g.id && hoveredBuff.key === buff.key"
+                          class="absolute left-1/2 top-full z-20 mt-1 -translate-x-1/2 w-48 rounded-md border border-slate-800 bg-slate-900/95 p-2 text-[11px] text-slate-200 shadow-xl"
+                        >
+                          <div class="font-semibold">{{ buff.name }}</div>
+                          <div class="text-slate-400">{{ buff.description || buff.category || '' }}</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                   </div>
@@ -2066,7 +2246,9 @@ defineExpose({ assignToSelected, selectedBlockId });
                                  }">
                             <div v-if="row.cells?.[col.id]" class="flex items-center gap-1">
                               <span
-                                class="px-2 py-0.5 rounded text-[11px] font-medium truncate"
+                                class="px-2 py-0.5 rounded text-[11px] font-medium truncate cursor-grab active:cursor-grabbing"
+                                :draggable="!props.readonly"
+                                @dragstart="startCharacterDrag($event, row.cells[col.id])"
                                 :style="{
                                   backgroundColor: charColorById(row.cells[col.id]) + '22',
                                   color: charColorById(row.cells[col.id]),
@@ -2160,7 +2342,16 @@ defineExpose({ assignToSelected, selectedBlockId });
                             <div class="min-h-8 rounded bg-slate-900/40 px-2 py-1 flex items-center justify-between"
                                  @dragover.prevent
                                  @drop.prevent="(e: DragEvent) => { const id = e.dataTransfer?.getData('text/plain'); if (!id) return; const rows = ((block.data?.rows ?? []) as any[]).map((r: any) => ({ ...r, data: { ...(r.data || {}) } })); for (const r of rows) { for (const key of Object.keys(r.data || {})) { if (r.data[key] === id) r.data[key] = null } } const rr = rows.find((r: any) => r.id === row.id); if (rr) { rr.data[col.id] = id } updateBlockData(block, { rows }) }">
-                              <span class="truncate" :style="{ borderLeft: row.data?.[col.id] ? '4px solid ' + charColorById(row.data[col.id]) : undefined }">{{ getCharacterById(row.data?.[col.id])?.name || '—' }}</span>
+                              <span
+                                v-if="row.data?.[col.id]"
+                                class="truncate cursor-grab active:cursor-grabbing"
+                                :draggable="!props.readonly"
+                                @dragstart="startCharacterDrag($event, row.data[col.id])"
+                                :style="{ borderLeft: row.data?.[col.id] ? '4px solid ' + charColorById(row.data[col.id]) : undefined }"
+                              >
+                                {{ getCharacterById(row.data?.[col.id])?.name || '—' }}
+                              </span>
+                              <span v-else class="truncate text-slate-500">—</span>
                               <button v-if="row.data?.[col.id]" class="text-[11px] text-red-400 hover:text-red-300" @click.stop="row.data[col.id] = null; updateBlockData(block, { rows: block.data?.rows })">✕</button>
                             </div>
                           </template>
@@ -2307,8 +2498,21 @@ defineExpose({ assignToSelected, selectedBlockId });
               <div v-else-if="block.type === 'BOSS_GRID'" class="space-y-2">
                 <div class="flex items-center justify-between gap-2">
                   <div class="text-[11px] text-slate-400">Define boss positions and assign players</div>
-                  <div class="flex items-center gap-1">
+                  <div class="flex items-center gap-1 flex-wrap">
                     <button class="text-[11px] px-2 py-1 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="addPosition(block)">+ Add position</button>
+                    <button class="text-[11px] px-2 py-1 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="applyBossPreset(block, 'tanks-heals')" title="MT/Healers preset">Preset MT/Heals</button>
+                    <button class="text-[11px] px-2 py-1 rounded-md border border-slate-700 hover:bg-slate-800" @click.stop="applyBossPreset(block, 'soaks')" title="Soak positions preset">Preset Soaks</button>
+                  </div>
+                </div>
+                <div class="flex flex-wrap gap-2 text-[11px]" v-if="(block.data?.positions?.length)">
+                  <div
+                    v-for="pos in (block.data?.positions ?? [])"
+                    :key="pos.id"
+                    class="px-2 py-1 rounded border border-slate-700 bg-slate-900/50"
+                  >
+                    <span class="font-semibold text-slate-200">{{ pos.label }}:</span>
+                    <span class="text-slate-300" v-if="assignmentNames(block, pos.id).length">{{ assignmentNames(block, pos.id).join(', ') }}</span>
+                    <span class="text-slate-500" v-else>—</span>
                   </div>
                 </div>
                 <div class="overflow-auto h-[260px]">
@@ -2347,7 +2551,14 @@ defineExpose({ assignToSelected, selectedBlockId });
                           <div class="min-h-10 rounded bg-slate-900/40 p-1 space-y-1"
                                @dragover.prevent
                                @drop.prevent="onDropToPosition(block, pos.id, $event)">
-                            <div v-for="cid in (block.data?.assignments?.[pos.id] ?? [])" :key="cid" class="flex items-center justify-between rounded px-2 py-1" :style="{ backgroundColor: charColorById(cid) + '22', border: '1px solid ' + charColorById(cid) + '55' }">
+                            <div
+                              v-for="cid in (block.data?.assignments?.[pos.id] ?? [])"
+                              :key="cid"
+                              class="flex items-center justify-between rounded px-2 py-1 cursor-grab active:cursor-grabbing"
+                              :draggable="!props.readonly"
+                              @dragstart="startCharacterDrag($event, cid)"
+                              :style="{ backgroundColor: charColorById(cid) + '22', border: '1px solid ' + charColorById(cid) + '55' }"
+                            >
                               <div class="truncate font-medium" :style="{ color: charColorById(cid) }">{{ getCharacterById(cid)?.name ?? 'Unknown' }}</div>
                               <button class="text-red-400 hover:text-red-300" @click.stop="removeFromPosition(block, pos.id, cid)" title="Remove">✕</button>
                             </div>
@@ -2355,7 +2566,12 @@ defineExpose({ assignToSelected, selectedBlockId });
                           </div>
                         </td>
                         <td class="p-2 align-top border-l border-slate-700">
-                          <input class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[11px]" :value="(((block.data?.positionNotes||{}) as any)[pos.id]?.[0] || '')" @input="(function(ev){ const txt=(ev.target as HTMLInputElement).value; const notes=Object.assign({}, (block.data?.positionNotes||{})); notes[pos.id]= txt? [txt]: []; updateBlockData(block,{ positionNotes: notes }) })($event)" placeholder="Notes (optional)"/>
+                          <textarea
+                            class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[11px] min-h-[64px] resize-y"
+                            :value="(((block.data?.positionNotes||{}) as any)[pos.id]?.[0] || '')"
+                            @input="updatePositionNote(block, pos.id, 0, ($event.target as HTMLTextAreaElement).value)"
+                            placeholder="Notes (optional)"
+                          />
                         </td>
                         <td class="p-2 align-top border-l border-slate-700">
                           <button class="text-red-400 hover:text-red-300" title="Remove position" @click.stop="removePosition(block, pos.id)">✕</button>
@@ -2671,7 +2887,9 @@ defineExpose({ assignToSelected, selectedBlockId });
                   <div
                     v-for="cid in (block.data?.bench ?? [])"
                     :key="cid"
-                    class="flex items-center justify-between rounded bg-slate-800/70 px-2 py-1"
+                    class="flex items-center justify-between rounded bg-slate-800/70 px-2 py-1 cursor-grab active:cursor-grabbing"
+                    :draggable="!props.readonly"
+                    @dragstart="startCharacterDrag($event, cid)"
                   >
                     <div class="truncate">{{ getCharacterById(cid)?.name ?? 'Unknown' }}</div>
                     <button class="text-red-400 hover:text-red-300" @click.stop="updateBlockData(block, { bench: (block.data?.bench ?? []).filter((x: string) => x !== cid) })" title="Remove">✕</button>
@@ -2786,7 +3004,13 @@ defineExpose({ assignToSelected, selectedBlockId });
                             <div class="grid grid-cols-2 gap-1">
                               <div class="rounded bg-slate-900/40 p-1 min-h-8" @dragover.prevent @drop.prevent="(e: DragEvent) => dropToPairCell(block, row.id, col.id, 'from', e)">
                                 <div class="text-[10px] text-slate-500 mb-0.5">Priest</div>
-                                <div v-if="getPairCell(block, row.id, col.id).from" class="flex items-center justify-between rounded bg-slate-800/70 px-2 py-1" :style="{ borderLeft: '3px solid ' + charColorById(getPairCell(block, row.id, col.id).from!) }">
+                                <div
+                                  v-if="getPairCell(block, row.id, col.id).from"
+                                  class="flex items-center justify-between rounded bg-slate-800/70 px-2 py-1 cursor-grab active:cursor-grabbing"
+                                  :draggable="!props.readonly"
+                                  @dragstart="startCharacterDrag($event, getPairCell(block, row.id, col.id).from!)"
+                                  :style="{ borderLeft: '3px solid ' + charColorById(getPairCell(block, row.id, col.id).from!) }"
+                                >
                                   <div class="truncate">{{ getCharacterById(getPairCell(block, row.id, col.id).from!)?.name ?? 'Unknown' }}</div>
                                   <button class="text-red-400 hover:text-red-300" @click.stop="clearPair(block, row.id, col.id, 'from')">✕</button>
                                 </div>
@@ -2794,7 +3018,13 @@ defineExpose({ assignToSelected, selectedBlockId });
                               </div>
                               <div class="rounded bg-slate-900/40 p-1 min-h-8" @dragover.prevent @drop.prevent="(e: DragEvent) => dropToPairCell(block, row.id, col.id, 'to', e)">
                                 <div class="text-[10px] text-slate-500 mb-0.5">Target</div>
-                                <div v-if="getPairCell(block, row.id, col.id).to" class="flex items-center justify-between rounded bg-slate-800/70 px-2 py-1" :style="{ borderLeft: '3px solid ' + charColorById(getPairCell(block, row.id, col.id).to!) }">
+                                <div
+                                  v-if="getPairCell(block, row.id, col.id).to"
+                                  class="flex items-center justify-between rounded bg-slate-800/70 px-2 py-1 cursor-grab active:cursor-grabbing"
+                                  :draggable="!props.readonly"
+                                  @dragstart="startCharacterDrag($event, getPairCell(block, row.id, col.id).to!)"
+                                  :style="{ borderLeft: '3px solid ' + charColorById(getPairCell(block, row.id, col.id).to!) }"
+                                >
                                   <div class="truncate">{{ getCharacterById(getPairCell(block, row.id, col.id).to!)?.name ?? 'Unknown' }}</div>
                                   <button class="text-red-400 hover:text-red-300" @click.stop="clearPair(block, row.id, col.id, 'to')">✕</button>
                                 </div>
@@ -2804,7 +3034,14 @@ defineExpose({ assignToSelected, selectedBlockId });
                           </template>
                           <template v-else>
                             <div class="min-h-9 rounded bg-slate-900/40 p-1 transition-all" @dragover.prevent @drop.prevent="(e: DragEvent) => { const id = e.dataTransfer?.getData('text/plain'); if (!id) return; const cells = ensureCells(block); const rowCells = cells[row.id] ?? (cells[row.id] = {}); rowCells[col.id] = [id]; updateBlockData(block, { cells }) }">
-                              <div v-for="cid in getCell(block, row.id, col.id)" :key="cid" class="flex items-center justify-between rounded bg-slate-800/70 px-2 py-1" :style="{ borderLeft: '3px solid ' + charColorById(cid) }">
+                              <div
+                                v-for="cid in getCell(block, row.id, col.id)"
+                                :key="cid"
+                                class="flex items-center justify-between rounded bg-slate-800/70 px-2 py-1 cursor-grab active:cursor-grabbing"
+                                :draggable="!props.readonly"
+                                @dragstart="startCharacterDrag($event, cid)"
+                                :style="{ borderLeft: '3px solid ' + charColorById(cid) }"
+                              >
                                 <div class="truncate">{{ getCharacterById(cid)?.name ?? 'Unknown' }}</div>
                                 <button class="text-red-400 hover:text-red-300" @click.stop="removeFromCell(block, row.id, col.id, cid)" title="Remove">✕</button>
                               </div>
@@ -2856,7 +3093,14 @@ defineExpose({ assignToSelected, selectedBlockId });
                             @dragover.prevent
                             @drop.prevent="(e: DragEvent) => dropToCell(block, row.id, col.id, e)"
                           >
-                            <div v-for="cid in getCell(block, row.id, col.id)" :key="cid" class="flex items-center justify-between rounded bg-slate-800/70 px-2 py-1" :style="{ borderLeft: '3px solid ' + charColorById(cid) }">
+                            <div
+                              v-for="cid in getCell(block, row.id, col.id)"
+                              :key="cid"
+                              class="flex items-center justify-between rounded bg-slate-800/70 px-2 py-1 cursor-grab active:cursor-grabbing"
+                              :draggable="!props.readonly"
+                              @dragstart="startCharacterDrag($event, cid)"
+                              :style="{ borderLeft: '3px solid ' + charColorById(cid) }"
+                            >
                               <div class="truncate">{{ getCharacterById(cid)?.name ?? 'Unknown' }}</div>
                               <button class="text-red-400 hover:text-red-300" @click.stop="removeFromCell(block, row.id, col.id, cid)" title="Remove">✕</button>
                             </div>

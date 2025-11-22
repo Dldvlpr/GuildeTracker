@@ -50,4 +50,11 @@ services:
             $blizzardClientId: '%env(OAUTH_BNET_CLIENT_ID)%'
             $blizzardClientSecret: '%env(OAUTH_BNET_CLIENT_SECRET)%'
 
+    App\Command\FetchBlizzardSpellsCommand:
+        arguments:
+            $blizzardRegion: '%env(BLIZZARD_REGION)%'
+            $blizzardLocale: '%env(BLIZZARD_LOCALE)%'
+            $blizzardClientId: '%env(OAUTH_BNET_CLIENT_ID)%'
+            $blizzardClientSecret: '%env(OAUTH_BNET_CLIENT_SECRET)%'
+            $defaultSourcePath: '%kernel.project_dir%/config/spells.yaml'
 
